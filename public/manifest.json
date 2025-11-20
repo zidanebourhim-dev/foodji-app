@@ -1,0 +1,22 @@
+{
+  "name": "Foodji - L'éruption des saveurs",
+  "short_name": "Foodji",
+  "theme_color": "#151e32",
+  "background_color": "#151e32",
+  "display": "standalone",
+  "orientation": "portrait",
+  "scope": "/",
+  "start_url": "/",
+  "icons": [
+    {
+      "src": "/foodji.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/foodji.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
