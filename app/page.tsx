@@ -4,8 +4,8 @@
 import { useState, useEffect } from 'react';
 
 // --- CONFIGURATION ---
-const PHONE_NUMBER_RESTO = "212600000000"; 
-const PHONE_NUMBER_LIVREUR = "212600000000"; 
+const PHONE_NUMBER_RESTO = "+212668197671"; 
+const PHONE_NUMBER_LIVREUR = "+212654859675"; 
 
 const COLORS = {
   bg: "bg-[#151e32]", 
