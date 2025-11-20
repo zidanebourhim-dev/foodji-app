@@ -1,3 +1,4 @@
+/* eslint-disable react/no-unescaped-entities */
 'use client';
 import { useState, useEffect } from 'react';
 
@@ -12,14 +13,12 @@ const COLORS = {
   textAccent: "text-[#a31d24]", 
 };
 
-// --- DATA UPSELL (Ce qu'on propose en plus) ---
+// --- DATA UPSELL ---
 const UPSELL_ITEMS = [
-  { name: "Soda 33cl", price: 10, emoji: "🥤" },
+  { name: "Soda 33cl", price: 12, emoji: "🥤" },
   { name: "Frites", price: 15, emoji: "🍟" },
-  { name: "Eau Minérale", price: 6, emoji: "💧" }
 ];
 
-// --- TEXTE BANNIÈRE PROMO ---
 const PROMO_TEXT = "🔥 OFFRE DU MOMENT : Livraison offerte dès 150 DH !";
 
 // --- LISTES D'OPTIONS ---
@@ -165,12 +164,10 @@ export default function Home() {
   const [status, setStatus] = useState({ isOpen: true, closeAt: null, openAt: null });
   const [isLocating, setIsLocating] = useState(false);
   const [finalTotal, setFinalTotal] = useState(0);
-  
-  // --- ETATS ADDITIONNELS ---
   const [customizingItem, setCustomizingItem] = useState(null); 
   const [selectedOptions, setSelectedOptions] = useState([]); 
-  const [showUpsell, setShowUpsell] = useState(false); // Pour la fenêtre de suggestion
-  const [toast, setToast] = useState(null); // Pour la notification verte
+  const [showUpsell, setShowUpsell] = useState(false); 
+  const [toast, setToast] = useState(null); 
 
   useEffect(() => {
     const checkStatus = () => setStatus(getRestaurantStatus());
@@ -187,7 +184,6 @@ export default function Home() {
     }
   }, []);
 
-  // --- NOTIFICATIONS (TOAST) ---
   const showToast = (message) => {
     setToast(message);
     setTimeout(() => setToast(null), 3000);
@@ -201,7 +197,7 @@ export default function Home() {
     setIsLocating(true);
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const link = `http://googleusercontent.com/maps.google.com/4{position.coords.latitude},${position.coords.longitude}`;
+        const link = `http://googleusercontent.com/maps.google.com/?q=${position.coords.latitude},${position.coords.longitude}`;
         setUser(prev => ({ ...prev, locationLink: link, address: prev.address || "📍 Position GPS OK" }));
         setIsLocating(false);
       },
@@ -276,16 +272,12 @@ export default function Home() {
     setCart([...cart, cartItem]);
     setCustomizingItem(null);
     showToast(`"${item.name}" ajouté au panier !`);
-
-    // --- DÉCLENCHEMENT DE L'UPSELL ---
-    // Si on ajoute un "gros" plat (pas un side, pas une boisson) et qu'on n'est pas déjà dans l'upsell
-    const isMainDish = item.price > 20; // Règle simple : si > 20dh c'est un plat
+    const isMainDish = item.price > 20; 
     if (isMainDish) {
-        setTimeout(() => setShowUpsell(true), 500); // Petite pause pour que ce soit fluide
+        setTimeout(() => setShowUpsell(true), 500); 
     }
   };
 
-  // Fonction pour ajouter un produit Upsell rapidement
   const addUpsellItem = (uItem) => {
       const cartItem = {
           name: uItem.name,
@@ -296,7 +288,7 @@ export default function Home() {
       };
       setCart(prev => [...prev, cartItem]);
       showToast(`+ ${uItem.name} ajouté !`);
-      setShowUpsell(false); // Fermer l'upsell après ajout
+      setShowUpsell(false); 
   };
 
   const removeFromCart = (indexToRemove) => setCart(cart.filter((_, index) => index !== indexToRemove));
@@ -380,20 +372,17 @@ export default function Home() {
   return (
     <div className={`min-h-screen ${COLORS.bg} text-white font-sans pb-24 selection:bg-red-900 relative`}>
       
-      {/* --- NOTIFICATION TOAST --- */}
       {toast && (
           <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[200] bg-green-500 text-white px-6 py-3 rounded-full shadow-2xl font-bold animate-bounce-slight flex items-center gap-2">
               <span>✅</span> {toast}
           </div>
       )}
 
-      {/* --- MODALE UPSELL --- */}
       {showUpsell && (
           <div className="fixed inset-0 z-[160] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
               <div className={`${COLORS.bgLight} p-6 rounded-2xl border border-white/10 max-w-sm w-full text-center`}>
                   <h3 className="text-xl font-bold text-white mb-1">Un petit supplément ? 😋</h3>
                   <p className="text-sm text-gray-400 mb-6">Complétez votre repas avec ceci :</p>
-                  
                   <div className="grid grid-cols-3 gap-3 mb-6">
                       {UPSELL_ITEMS.map((uItem) => (
                           <button key={uItem.name} onClick={() => addUpsellItem(uItem)} className="bg-[#151e32] p-3 rounded-xl border border-white/5 hover:border-[#a31d24] transition group">
@@ -403,13 +392,11 @@ export default function Home() {
                           </button>
                       ))}
                   </div>
-                  
                   <button onClick={() => setShowUpsell(false)} className="text-gray-500 text-sm hover:text-white underline">Non merci, je continue</button>
               </div>
           </div>
       )}
 
-      {/* --- POP-UP CONFIGURATEUR --- */}
       {customizingItem && (
          <div className="fixed inset-0 z-[150] bg-black/90 backdrop-blur-sm flex items-end sm:items-center justify-center animate-fade-in">
             <div className={`bg-[#1f2b45] w-full max-w-md p-6 rounded-t-3xl sm:rounded-2xl border-t-2 sm:border-2 border-[#a31d24] shadow-2xl flex flex-col max-h-[90vh]`}>
@@ -427,30 +414,27 @@ export default function Home() {
          </div>
       )}
 
-      {/* --- POP-UP FERMETURE --- */}
       {showClosedMessage && (
         <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-[#1f2b45] border-2 border-[#a31d24] p-8 rounded-2xl text-center max-w-sm shadow-2xl transform scale-110"><div className="text-6xl mb-4 animate-bounce">🚫</div><h3 className="text-2xl font-bold text-[#a31d24] mb-4">Oups, c'est fermé !</h3><p className="text-gray-300 text-lg mb-8 leading-relaxed font-medium">On sait qu'on te manque mais fallait venir plus tôt...<br/><span className="text-white font-bold text-xl block mt-2">NE POUSSEZ PAS ! 😤</span><span className="text-sm text-gray-400 block mt-2">Un peu de patience, on ouvre bientôt.</span></p><button onClick={() => setShowClosedMessage(false)} className="bg-white text-black px-6 py-3 rounded-full font-bold hover:bg-gray-200 w-full">D'accord, à demain ❤️</button></div>
+            <div className="bg-[#1f2b45] border-2 border-[#a31d24] p-8 rounded-2xl text-center max-w-sm shadow-2xl transform scale-110"><div className="text-6xl mb-4 animate-bounce">🚫</div><h3 className="text-2xl font-bold text-[#a31d24] mb-4">Oups, c&apos;est fermé !</h3><p className="text-gray-300 text-lg mb-8 leading-relaxed font-medium">On sait qu&apos;on te manque mais fallait venir plus tôt...<br/><span className="text-white font-bold text-xl block mt-2">NE POUSSEZ PAS ! 😤</span><span className="text-sm text-gray-400 block mt-2">Un peu de patience, on ouvre bientôt.</span></p><button onClick={() => setShowClosedMessage(false)} className="bg-white text-black px-6 py-3 rounded-full font-bold hover:bg-gray-200 w-full">D&apos;accord, à demain ❤️</button></div>
         </div>
       )}
 
-      {/* --- VUE SUCCÈS --- */}
       {view === 'success' && (
           <div className="fixed inset-0 z-[50] bg-[#151e32] flex flex-col items-center justify-center p-6 text-center animate-fade-in">
               <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center text-4xl mb-6 shadow-[0_0_30px_rgba(34,197,94,0.5)]">🎉</div>
               <h2 className="text-3xl font-bold text-white mb-2">Commande Envoyée !</h2>
-              <p className="text-gray-400 mb-8">Merci, on s'occupe de tout.</p>
+              <p className="text-gray-400 mb-8">Merci, on s&apos;occupe de tout.</p>
               {orderMethod === 'livraison' && (
                   <div className="w-full max-w-sm bg-[#1f2b45] p-6 rounded-2xl border border-white/10 mb-6">
                       <p className="text-sm text-gray-300 mb-4">Pour aider le livreur à arriver plus vite, envoyez-lui votre position 👇</p>
                       <button onClick={sendToDriver} className="w-full bg-[#007acc] text-white py-4 rounded-xl font-bold text-lg shadow-lg hover:scale-[1.02] transition flex items-center justify-center gap-2"><span>🛵 Envoyer infos au Livreur</span></button>
                   </div>
               )}
-              <button onClick={() => {setCart([]); setView('home');}} className="text-gray-500 hover:text-white underline">Retour à l'accueil</button>
+              <button onClick={() => {setCart([]); setView('home');}} className="text-gray-500 hover:text-white underline">Retour à l&apos;accueil</button>
           </div>
       )}
 
-      {/* --- ACCUEIL --- */}
       {view === 'home' && (
         <div className={`flex flex-col items-center justify-center h-screen p-4 text-center ${COLORS.bg} relative overflow-hidden`}>
           <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-transparent to-black opacity-60 pointer-events-none"></div>
@@ -470,7 +454,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* --- PROFIL --- */}
       {view === 'profile' && (
         <div className="p-4 max-w-md mx-auto min-h-screen">
           <header className="flex justify-between items-center mb-8 mt-4"><button onClick={() => setView('home')} className="text-gray-400 font-bold hover:text-white transition">← ACCUEIL</button><h2 className="text-2xl font-bold text-white">Mon Espace</h2><div className="w-8"></div></header>
@@ -487,14 +470,10 @@ export default function Home() {
         </div>
       )}
 
-      {/* --- MENU --- */}
       {view === 'menu' && (
         <div className="max-w-md mx-auto min-h-screen flex flex-col">
           <header className={`${COLORS.bg}/95 backdrop-blur-lg sticky top-0 z-20 border-b border-white/5 pt-4 pb-0`}>
-             {/* BANNIÈRE PROMO */}
-            <div className="bg-gradient-to-r from-[#a31d24] to-[#ff5722] text-white text-xs font-bold text-center py-2 px-4 animate-pulse">
-                {PROMO_TEXT}
-            </div>
+            <div className="bg-gradient-to-r from-[#a31d24] to-[#ff5722] text-white text-xs font-bold text-center py-2 px-4 animate-pulse">{PROMO_TEXT}</div>
             <div className="flex justify-between items-center px-4 mb-4 mt-2"><button onClick={() => setView('home')} className="text-gray-400 text-sm font-bold hover:text-white">← RETOUR</button><span className="font-bold text-xl tracking-tighter">FOODJI</span><div className="w-16 text-right"><button onClick={() => setView('cart')} className="relative p-2"><span className="text-2xl">🛒</span>{cart.length > 0 && <span className={`absolute top-0 right-0 ${COLORS.accent} text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold`}>{cart.length}</span>}</button></div></div><div className="flex overflow-x-auto pb-0 px-4 gap-6 no-scrollbar">{categories.map((cat) => (<button key={cat.title} onClick={() => setActiveCategory(cat.title)} className={`whitespace-nowrap pb-3 text-sm font-bold border-b-2 transition-all duration-300 ${activeCategory === cat.title ? 'border-[#a31d24] text-white scale-105' : 'border-transparent text-gray-500 hover:text-gray-300'}`}>{cat.title}</button>))}</div>
           </header>
           <div className="p-4 space-y-4 flex-grow overflow-y-auto bg-gradient-to-b from-transparent to-black/20"><h3 className="text-xl font-bold text-white mb-2 mt-2 flex items-center"><span className="w-1 h-6 bg-[#a31d24] mr-3 rounded-full"></span>{activeCategory}</h3>
@@ -508,7 +487,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* --- PANIER & CHECKOUT --- */}
       {(view === 'cart' || view === 'checkout') && (
         <div className="p-4 max-w-md mx-auto min-h-screen">
           <header className="flex justify-between items-center mb-6 mt-2"><button onClick={() => setView(view === 'checkout' ? 'cart' : 'menu')} className="text-gray-400 font-bold hover:text-white">← RETOUR</button><h2 className="text-2xl font-bold text-white">{view === 'cart' ? 'Mon Panier' : 'Validation'}</h2><div className="w-8"></div></header>
@@ -522,7 +500,7 @@ export default function Home() {
                </div>
              ))}
              <div className="mt-4"><label className="block text-xs font-bold text-gray-500 mb-1">COMMENTAIRE / PRÉCISIONS</label><input type="text" name="comment" value={user.comment || ''} onChange={handleInputChange} placeholder="Ex: Sans oignons, code porte..." className={`w-full ${COLORS.bgLight} border border-white/10 rounded-xl p-4 text-white outline-none focus:border-[#a31d24] transition-colors`}/></div>
-             <div className="mt-4 p-4 rounded-xl bg-white/5 border border-white/5"><div className="flex justify-between text-gray-400 mb-2"><span>Nombre d'articles</span><span>{cart.length}</span></div><div className="flex justify-between text-2xl font-bold text-white pt-4 border-t border-white/10"><span>Total Panier</span><span className={COLORS.textAccent}>{cartTotal} DH</span></div></div>
+             <div className="mt-4 p-4 rounded-xl bg-white/5 border border-white/5"><div className="flex justify-between text-gray-400 mb-2"><span>Nombre d&apos;articles</span><span>{cart.length}</span></div><div className="flex justify-between text-2xl font-bold text-white pt-4 border-t border-white/10"><span>Total Panier</span><span className={COLORS.textAccent}>{cartTotal} DH</span></div></div>
              <button onClick={() => setView('checkout')} className={`w-full ${COLORS.accent} text-white py-4 rounded-xl font-bold text-lg shadow-lg mt-4 hover:scale-[1.02] transition transform`}>Choisir mode de livraison →</button>
            </div>
           )}
