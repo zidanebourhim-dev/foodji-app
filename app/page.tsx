@@ -1,4 +1,5 @@
 /* eslint-disable react/no-unescaped-entities */
+/* eslint-disable @next/next/no-img-element */
 'use client';
 import { useState, useEffect } from 'react';
 
@@ -27,7 +28,8 @@ const VIANDES_TACOS = ["Poulet", "Viande hachée", "Nuggets", "Crispy", "Cordon 
 const GARNITURES_PIZZA = ["Viande hachée", "Poulet", "Cannibale", "Fruits de mer", "Charcuterie", "4 fromages", "Thon", "Végétarienne", "Pepperoni", "Salami", "Surprenez-moi !"];
 const TYPES_PATES = ["Spaghetti", "Penne", "Tagliatelle"];
 
-const SCHEDULE = {
+// --- HORAIRES (CORRECTION TYPE) ---
+const SCHEDULE: Record<number, { day: string; open: number | null; close: number | null }> = {
   0: { day: "Dimanche", open: 18, close: 1 },
   1: { day: "Lundi",    open: 12, close: 1 },
   2: { day: "Mardi",    open: 12, close: 1 },
@@ -37,6 +39,7 @@ const SCHEDULE = {
   6: { day: "Samedi",   open: 18, close: 1 },
 };
 
+// --- DONNÉES DU MENU ---
 const categories = [
   {
     title: "🌮 Tacos",
@@ -131,23 +134,31 @@ const getRestaurantStatus = () => {
   const now = new Date();
   const day = now.getDay(); 
   const hour = now.getHours(); 
+
   const prevDay = (day === 0) ? 6 : day - 1;
   const prevSchedule = SCHEDULE[prevDay];
-  if (prevSchedule.open !== null && prevSchedule.close < prevSchedule.open && hour < prevSchedule.close) {
+  
+  if (prevSchedule.open !== null && prevSchedule.close !== null && prevSchedule.close < prevSchedule.open && hour < prevSchedule.close) {
     return { isOpen: true, closeAt: prevSchedule.close, openAt: null };
   }
+
   const todaySchedule = SCHEDULE[day];
   if (todaySchedule.open === null) return { isOpen: false, closeAt: null, openAt: "Demain" };
-  const isLateNightShift = todaySchedule.close < todaySchedule.open; 
-  if (isLateNightShift) {
-    if (hour >= todaySchedule.open) return { isOpen: true, closeAt: todaySchedule.close, openAt: null };
-  } else {
-    if (hour >= todaySchedule.open && hour < todaySchedule.close) return { isOpen: true, closeAt: todaySchedule.close, openAt: null };
+
+  const isLateNightShift = (todaySchedule.close !== null) && (todaySchedule.close < todaySchedule.open);
+  
+  if (todaySchedule.close !== null) {
+      if (isLateNightShift) {
+        if (hour >= todaySchedule.open) return { isOpen: true, closeAt: todaySchedule.close, openAt: null };
+      } else {
+        if (hour >= todaySchedule.open && hour < todaySchedule.close) return { isOpen: true, closeAt: todaySchedule.close, openAt: null };
+      }
   }
+  
   return { isOpen: false, closeAt: null, openAt: todaySchedule.open };
 };
 
-const isValidMoroccanPhone = (phone) => {
+const isValidMoroccanPhone = (phone: string) => {
   const cleanPhone = phone.replace(/\s/g, '');
   const regex = /^(05|06|07)\d{8}$/;
   return regex.test(cleanPhone);
@@ -156,18 +167,20 @@ const isValidMoroccanPhone = (phone) => {
 export default function Home() {
   const [view, setView] = useState('home'); 
   const [activeCategory, setActiveCategory] = useState(categories[0].title);
-  const [cart, setCart] = useState([]); 
+  const [cart, setCart] = useState<any[]>([]); 
   const [user, setUser] = useState({ name: '', phone: '', address: '', points: 0, comment: '', locationLink: '' });
   const [usePoints, setUsePoints] = useState(false);
   const [orderMethod, setOrderMethod] = useState('livraison'); 
   const [showClosedMessage, setShowClosedMessage] = useState(false);
-  const [status, setStatus] = useState({ isOpen: true, closeAt: null, openAt: null });
+  const [status, setStatus] = useState<{isOpen: boolean, closeAt: number | null, openAt: any}>({ isOpen: true, closeAt: null, openAt: null });
   const [isLocating, setIsLocating] = useState(false);
   const [finalTotal, setFinalTotal] = useState(0);
-  const [customizingItem, setCustomizingItem] = useState(null); 
-  const [selectedOptions, setSelectedOptions] = useState([]); 
+  
+  // --- ETATS ADDITIONNELS ---
+  const [customizingItem, setCustomizingItem] = useState<any>(null); 
+  const [selectedOptions, setSelectedOptions] = useState<string[]>([]); 
   const [showUpsell, setShowUpsell] = useState(false); 
-  const [toast, setToast] = useState(null); 
+  const [toast, setToast] = useState<string | null>(null); 
 
   useEffect(() => {
     const checkStatus = () => setStatus(getRestaurantStatus());
@@ -184,7 +197,7 @@ export default function Home() {
     }
   }, []);
 
-  const showToast = (message) => {
+  const showToast = (message: string) => {
     setToast(message);
     setTimeout(() => setToast(null), 3000);
   };
@@ -208,7 +221,7 @@ export default function Home() {
     );
   };
 
-  const initiateAddToCart = (item, variation) => {
+  const initiateAddToCart = (item: any, variation: any) => {
     if (item.logic) {
       setCustomizingItem({ item, variation, phase: 'logic', previousOptions: [] });
       setSelectedOptions([]);
@@ -220,7 +233,7 @@ export default function Home() {
     }
   };
 
-  const handleOptionToggle = (option, maxLimit) => {
+  const handleOptionToggle = (option: string, maxLimit: number) => {
     if (selectedOptions.includes(option)) {
       setSelectedOptions(selectedOptions.filter(o => o !== option));
     } else {
@@ -261,7 +274,7 @@ export default function Home() {
       }
   };
 
-  const addToCart = (item, variation, options = []) => {
+  const addToCart = (item: any, variation: any, options: string[] = []) => {
     const cartItem = {
       name: item.name,
       price: variation.price,
@@ -278,7 +291,7 @@ export default function Home() {
     }
   };
 
-  const addUpsellItem = (uItem) => {
+  const addUpsellItem = (uItem: any) => {
       const cartItem = {
           name: uItem.name,
           price: uItem.price,
@@ -291,19 +304,19 @@ export default function Home() {
       setShowUpsell(false); 
   };
 
-  const removeFromCart = (indexToRemove) => setCart(cart.filter((_, index) => index !== indexToRemove));
+  const removeFromCart = (indexToRemove: number) => setCart(cart.filter((_, index) => index !== indexToRemove));
   
   const cartTotal = cart.reduce((sum, item) => sum + item.price, 0);
   const deliveryFee = (orderMethod === 'livraison' && cartTotal < 45) ? 5 : 0;
   const discount = usePoints ? Math.min(user.points, cartTotal) : 0;
   const currentFinalPrice = cartTotal + deliveryFee - discount;
 
-  const handleInputChange = (e) => {
+  const handleInputChange = (e: any) => {
     const { name, value } = e.target;
     setUser({ ...user, [name]: value });
   };
 
-  const saveUserData = (newData) => {
+  const saveUserData = (newData: any) => {
     setUser(newData);
     localStorage.setItem('foodji_account', JSON.stringify(newData));
   };
@@ -405,7 +418,7 @@ export default function Home() {
                     <button onClick={() => setCustomizingItem(null)} className="text-gray-400 hover:text-white font-bold text-xl">✕</button>
                 </div>
                 <div className="grid grid-cols-2 gap-3 mb-6 overflow-y-auto flex-grow">
-                    {rules.list.map((opt) => (
+                    {rules.list.map((opt: string) => (
                         <button key={opt} onClick={() => handleOptionToggle(opt, rules.max)} className={`p-3 rounded-lg text-sm font-bold transition-all border flex justify-between items-center text-left ${selectedOptions.includes(opt) ? 'bg-[#a31d24] border-[#a31d24] text-white' : 'bg-[#151e32] border-gray-700 text-gray-300 hover:border-gray-500'}`}><span>{opt}</span>{selectedOptions.includes(opt) && <span>✓</span>}</button>
                     ))}
                 </div>
