@@ -6,6 +6,11 @@ import { useState, useEffect } from 'react';
 // --- CONFIGURATION ---
 const PHONE_NUMBER_RESTO = "+212668197671"; 
 const PHONE_NUMBER_LIVREUR = "+212668197671"; 
+const SECRET_CODE = "FOODJI"; 
+
+// Coordonnées de Sala Al Jadida pour la sécurité
+const RESTO_COORDS = { lat: 34.0037, lng: -6.7237 }; 
+const MAX_DELIVERY_DISTANCE_KM = 15; // Rayon de livraison autorisé
 
 const COLORS = {
   bg: "bg-[#151e32]", 
@@ -130,6 +135,17 @@ const categories = [
   }
 ];
 
+// --- FONCTION CALCUL DISTANCE (Haversine) ---
+const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371; // Rayon de la terre en km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+};
+
 const getRestaurantStatus = () => {
   const now = new Date();
   const day = now.getDay(); 
@@ -141,12 +157,10 @@ const getRestaurantStatus = () => {
   }
   const todaySchedule = SCHEDULE[day];
   if (todaySchedule.open === null) return { isOpen: false, closeAt: null, openAt: "Demain" };
-  
   let isLateNightShift = false;
   if (todaySchedule.close !== null && todaySchedule.open !== null) {
     isLateNightShift = todaySchedule.close < todaySchedule.open;
   }
-
   if (todaySchedule.open !== null && todaySchedule.close !== null) {
     if (isLateNightShift) {
         if (hour >= todaySchedule.open) return { isOpen: true, closeAt: todaySchedule.close, openAt: null };
@@ -163,7 +177,6 @@ const isValidMoroccanPhone = (phone: string) => {
   return regex.test(cleanPhone);
 };
 
-// --- GÉNÉRATION CODE (Minute + Fin Tel) ---
 const generateSecureCode = (phone: string) => {
     const now = new Date();
     const minutes = String(now.getMinutes()).padStart(2, '0');
@@ -228,7 +241,19 @@ export default function Home() {
     setIsLocating(true);
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const link = `http://googleusercontent.com/maps.google.com/?q=${position.coords.latitude},${position.coords.longitude}`;
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+
+        // VÉRIFICATION DE LA DISTANCE
+        const distance = calculateDistance(lat, lng, RESTO_COORDS.lat, RESTO_COORDS.lng);
+        
+        if (distance > MAX_DELIVERY_DISTANCE_KM) {
+            alert(`Désolé, vous êtes à ${distance.toFixed(1)}km. Nous ne livrons pas au-delà de ${MAX_DELIVERY_DISTANCE_KM}km.`);
+            setIsLocating(false);
+            return;
+        }
+
+        const link = `http://googleusercontent.com/maps.google.com/?q=${lat},${lng}`;
         setUser(prev => ({ ...prev, locationLink: link, address: prev.address || "📍 Position GPS récupérée" }));
         setIsLocating(false);
       },
@@ -374,9 +399,7 @@ export default function Home() {
         return;
     }
 
-    // GÉNÉRATION DU CODE (Minute + 2 derniers chiffres)
     const uniqueCode = generateSecureCode(user.phone);
-
     const amountEligibleForPoints = cartTotal - discount; 
     const earnedPoints = parseFloat((amountEligibleForPoints * 0.05).toFixed(1));
     
@@ -389,17 +412,16 @@ export default function Home() {
     if (orderMethod === 'emporter') methodLabel = "🛍️ Je passe la récupérer";
     if (orderMethod === 'sur_place') methodLabel = "🍽️ Sur Place";
 
-    let message = `*NOUVELLE COMMANDE FOODJI* 🌋\n`;
-    message += `---------------------------\n`;
-    // LE CODE EST AJOUTÉ ICI EXPLICITEMENT
-    message += `🔐 *CODE FIDÉLITÉ : ${uniqueCode}*\n`;
-    message += `(À écrire sur le ticket)\n`;
+    let message = `🔐 *CODE FIDÉLITÉ : ${uniqueCode}*\n`;
+    message += `*NOUVELLE COMMANDE FOODJI* 🌋\n`;
     message += `---------------------------\n`;
     message += `📌 *Type :* ${methodLabel}\n`;
     message += `👤 *Client :* ${user.name}\n`;
     message += `📞 *Tél :* ${user.phone}\n`;
-    if (orderMethod === 'livraison') message += `📍 *Adresse :* ${user.address}\n`;
-    if (user.locationLink) message += `🗺️ *GPS :* ${user.locationLink}\n`;
+    if (orderMethod === 'livraison') {
+        message += `📍 *Adresse :* ${user.address}\n`;
+        // PAS DE LIEN GPS POUR LE RESTO
+    }
     if (user.comment) message += `💬 *Note :* ${user.comment}\n`;
     message += `🏆 *Fidélité :* ${pointsAfterUsage} pts (En attente : +${earnedPoints})\n`;
     message += `---------------------------\n`;
@@ -428,6 +450,7 @@ export default function Home() {
     message += `👤 *Client :* ${user.name}\n`;
     message += `📞 *Tél :* ${user.phone}\n`;
     message += `📍 *Adresse :* ${user.address}\n`;
+    // LIEN GPS POUR LE LIVREUR SEULEMENT
     if (user.locationLink) message += `🗺️ *GPS :* ${user.locationLink}\n`;
     if (user.comment) message += `💬 *Note :* ${user.comment}\n`;
     message += `---------------------------\n`;
@@ -528,6 +551,7 @@ export default function Home() {
                           <div className="flex justify-between text-xl font-black mt-2"><span>TOTAL</span><span>{finalTotal} DH</span></div>
                       </div>
                       <p className="text-xs mt-4">Merci de votre visite !</p>
+                      <p className="text-xs mt-1 font-bold">Code Points : {user.pendingCode}</p> 
                   </div>
                   <button onClick={handlePrint} className="w-full bg-black text-white py-3 rounded-lg font-bold mt-4 no-print">🖨️ Imprimer</button>
               </div>
@@ -680,14 +704,8 @@ export default function Home() {
                      {usePoints && discount > 0 && (<div className="flex justify-between text-[#4ade80] mb-1 font-bold"><span>Réduction Fidélité</span><span>-{discount} DH</span></div>)}
                      <div className="flex justify-between text-2xl font-bold text-white pt-4 border-t border-white/10 mt-2"><span>Total à Payer</span><span className={COLORS.textAccent}>{currentFinalPrice} DH</span></div>
                 </div>
-                <button 
-                    onClick={sendToResto} 
-                    disabled={!canOrder || !status.isOpen} 
-                    className={`w-full py-4 rounded-xl font-bold text-lg shadow-[0_0_20px_rgba(37,211,102,0.2)] flex items-center justify-center gap-3 transition-all transform 
-                    ${(!canOrder || !status.isOpen) ? 'bg-gray-700 cursor-not-allowed text-gray-500 opacity-50' : 'bg-[#25D366] text-white hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(37,211,102,0.4)]'}`}
-                >
-                    <span className="text-2xl">📱</span>
-                    <span>{!status.isOpen ? 'Fermé (Voir horaires)' : (canOrder ? 'Confirmer la commande' : 'Info Manquante')}</span>
+                <button onClick={sendToResto} disabled={!canOrder} className={`w-full py-4 rounded-xl font-bold text-lg shadow-[0_0_20px_rgba(37,211,102,0.2)] flex items-center justify-center gap-3 transition-all transform ${(!canOrder) ? 'bg-gray-700 cursor-not-allowed text-gray-500 opacity-50' : 'bg-[#25D366] text-white hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(37,211,102,0.4)]'}`}>
+                    <span className="text-2xl">📱</span><span>{canOrder ? 'Confirmer la commande' : 'Info Manquante'}</span>
                 </button>
             </div>
           )}
