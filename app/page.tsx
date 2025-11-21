@@ -141,10 +141,12 @@ const getRestaurantStatus = () => {
   }
   const todaySchedule = SCHEDULE[day];
   if (todaySchedule.open === null) return { isOpen: false, closeAt: null, openAt: "Demain" };
+  
   let isLateNightShift = false;
   if (todaySchedule.close !== null && todaySchedule.open !== null) {
     isLateNightShift = todaySchedule.close < todaySchedule.open;
   }
+
   if (todaySchedule.open !== null && todaySchedule.close !== null) {
     if (isLateNightShift) {
         if (hour >= todaySchedule.open) return { isOpen: true, closeAt: todaySchedule.close, openAt: null };
@@ -161,13 +163,12 @@ const isValidMoroccanPhone = (phone: string) => {
   return regex.test(cleanPhone);
 };
 
-// --- GÉNÉRATION DU CODE SÉCURISÉ ---
-// Minute (2 chiffres) + 2 derniers chiffres du téléphone
+// --- GÉNÉRATION CODE (Minute + Fin Tel) ---
 const generateSecureCode = (phone: string) => {
     const now = new Date();
     const minutes = String(now.getMinutes()).padStart(2, '0');
-    const lastTwoDigits = phone.trim().slice(-2); // Prend les 2 derniers
-    return `${minutes}${lastTwoDigits}`;
+    const lastTwo = phone ? phone.trim().slice(-2) : '00';
+    return `#${minutes}${lastTwo}`;
 };
 
 const cleanPhoneForLink = (p: string) => p.replace('+', '');
@@ -346,7 +347,6 @@ export default function Home() {
   };
 
   const validatePointsCode = () => {
-      // Comparaison avec le code stocké dans la session du client
       if (inputCode === user.pendingCode) {
           const newPoints = user.points + user.pendingPoints;
           saveUserData({ ...user, points: newPoints, pendingPoints: 0, pendingCode: '' }); 
@@ -390,6 +390,10 @@ export default function Home() {
     if (orderMethod === 'sur_place') methodLabel = "🍽️ Sur Place";
 
     let message = `*NOUVELLE COMMANDE FOODJI* 🌋\n`;
+    message += `---------------------------\n`;
+    // LE CODE EST AJOUTÉ ICI EXPLICITEMENT
+    message += `🔐 *CODE FIDÉLITÉ : ${uniqueCode}*\n`;
+    message += `(À écrire sur le ticket)\n`;
     message += `---------------------------\n`;
     message += `📌 *Type :* ${methodLabel}\n`;
     message += `👤 *Client :* ${user.name}\n`;
@@ -495,7 +499,7 @@ export default function Home() {
               <div className={`${COLORS.bgLight} p-6 rounded-2xl border border-white/10 max-w-sm w-full text-center`}>
                   <h3 className="text-xl font-bold text-white mb-4">Valider mes points 🎁</h3>
                   <p className="text-sm text-gray-400 mb-4">Entrez le code présent sur votre ticket :</p>
-                  <input type="text" className="w-full p-3 rounded-lg bg-black/30 border border-gray-600 text-white text-center text-xl tracking-widest mb-4" placeholder="Ex: 4288" value={inputCode} onChange={(e) => setInputCode(e.target.value)} />
+                  <input type="text" className="w-full p-3 rounded-lg bg-black/30 border border-gray-600 text-white text-center text-xl tracking-widest mb-4 uppercase" placeholder="#CODE" value={inputCode} onChange={(e) => setInputCode(e.target.value)} />
                   <button onClick={validatePointsCode} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold mb-3">Valider</button>
                   <button onClick={() => setShowCodeInput(false)} className="text-gray-500 text-sm underline">Annuler</button>
               </div>
