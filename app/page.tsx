@@ -4,8 +4,8 @@
 import { useState, useEffect } from 'react';
 
 // --- CONFIGURATION ---
-const PHONE_NUMBER_RESTO = "212668197671"; 
-const PHONE_NUMBER_LIVREUR = "212668197671"; 
+const PHONE_NUMBER_RESTO = "+212668197671"; 
+const PHONE_NUMBER_LIVREUR = "+212668197671"; 
 const SECRET_CODE = "FOODJI"; 
 
 // --- SONS (Liens MP3 courts) ---
