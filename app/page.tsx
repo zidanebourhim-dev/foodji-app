@@ -8,13 +8,9 @@ const PHONE_NUMBER_RESTO = "+212668197671";
 const PHONE_NUMBER_LIVREUR = "+212668197671"; 
 const SECRET_CODE = "FOODJI"; 
 
-// --- SONS (Liens MP3 courts) ---
-const SOUND_ADD = "https://cdn.pixabay.com/audio/2024/09/12/audio_43c970a0e0.mp3"; // Petit "Pop"
-const SOUND_SUCCESS = "https://cdn.pixabay.com/audio/2021/08/09/audio_0e8731548b.mp3"; // "Cha-ching"
-
 const COLORS = {
-  bg: "bg-slate-900", // Base sombre
-  bgLight: "bg-[#1f2b45]/80", // Transparence pour l'effet de verre
+  bg: "bg-[#151e32]", 
+  bgLight: "bg-[#1f2b45]", 
   accent: "bg-[#a31d24]", 
   textAccent: "text-[#a31d24]", 
 };
@@ -146,10 +142,12 @@ const getRestaurantStatus = () => {
   }
   const todaySchedule = SCHEDULE[day];
   if (todaySchedule.open === null) return { isOpen: false, closeAt: null, openAt: "Demain" };
+  
   let isLateNightShift = false;
   if (todaySchedule.close !== null && todaySchedule.open !== null) {
     isLateNightShift = todaySchedule.close < todaySchedule.open;
   }
+
   if (todaySchedule.open !== null && todaySchedule.close !== null) {
     if (isLateNightShift) {
         if (hour >= todaySchedule.open) return { isOpen: true, closeAt: todaySchedule.close, openAt: null };
@@ -175,10 +173,11 @@ const generateUniqueCode = () => {
     return result;
 };
 
-export default function Home() {
-  // --- INTRO SPLASH SCREEN ---
-  const [loading, setLoading] = useState(true);
+// Fonction helper pour nettoyer le numéro pour le lien WhatsApp
+const cleanPhoneForLink = (p: string) => p.replace('+', '');
 
+export default function Home() {
+  const [loading, setLoading] = useState(true);
   const [view, setView] = useState('home'); 
   const [activeCategory, setActiveCategory] = useState(categories[0].title);
   const [cart, setCart] = useState<any[]>([]); 
@@ -197,20 +196,12 @@ export default function Home() {
   const [showCodeInput, setShowCodeInput] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
 
-  // --- EFFET CHARGEMENT (SPLASH) ---
   useEffect(() => {
     const timer = setTimeout(() => {
       setLoading(false);
-    }, 2500); // L'intro dure 2.5 secondes
+    }, 2500);
     return () => clearTimeout(timer);
   }, []);
-
-  // --- FONCTIONS SONORES ---
-  const playSound = (url: string) => {
-    const audio = new Audio(url);
-    audio.volume = 0.5;
-    audio.play().catch(e => console.log("Audio blocked", e));
-  };
 
   useEffect(() => {
     const checkStatus = () => setStatus(getRestaurantStatus());
@@ -240,7 +231,7 @@ export default function Home() {
     setIsLocating(true);
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const link = `https://www.google.com/maps?q=${position.coords.latitude},${position.coords.longitude}`;
+        const link = `http://googleusercontent.com/maps.google.com/?q=${position.coords.latitude},${position.coords.longitude}`;
         setUser(prev => ({ ...prev, locationLink: link, address: prev.address || "📍 Position GPS récupérée" }));
         setIsLocating(false);
       },
@@ -326,11 +317,7 @@ export default function Home() {
     };
     setCart([...cart, cartItem]);
     setCustomizingItem(null);
-    
-    // Son & Toast
-    playSound(SOUND_ADD);
     showToast(`"${item.name}" ajouté au panier !`);
-    
     const isMainDish = item.price > 20; 
     if (isMainDish) {
         setTimeout(() => setShowUpsell(true), 500); 
@@ -346,7 +333,6 @@ export default function Home() {
           id: Math.random()
       };
       setCart(prev => [...prev, cartItem]);
-      playSound(SOUND_ADD);
       showToast(`+ ${uItem.name} ajouté !`);
       setShowUpsell(false); 
   };
@@ -367,12 +353,11 @@ export default function Home() {
       if (inputCode.toUpperCase() === SECRET_CODE) {
           const newPoints = user.points + user.pendingPoints;
           saveUserData({ ...user, points: newPoints, pendingPoints: 0, pendingCode: '' }); 
-          playSound(SOUND_SUCCESS);
           showToast(`Félicitations ! +${user.pendingPoints} points !`);
           setShowCodeInput(false);
           setInputCode('');
       } else {
-          alert("Code incorrect. Vérifiez votre ticket.");
+          alert("Code incorrect.");
       }
   };
 
@@ -430,10 +415,10 @@ export default function Home() {
     if (usePoints && discount > 0) message += `\n💎 Points utilisés : -${discount} DH`;
     message += `\n\n💰 *TOTAL À PAYER : ${currentFinalPrice} DH*`;
     
-    const url = `https://wa.me/${PHONE_NUMBER_RESTO}?text=${encodeURIComponent(message)}`;
+    // UTILISATION DE LA FONCTION DE NETTOYAGE POUR L'URL
+    const url = `https://wa.me/${cleanPhoneForLink(PHONE_NUMBER_RESTO)}?text=${encodeURIComponent(message)}`;
     window.open(url, '_blank');
 
-    playSound(SOUND_SUCCESS); // Son de succès !
     setView('success');
   };
 
@@ -448,7 +433,7 @@ export default function Home() {
     message += `---------------------------\n`;
     message += `💰 *A ENCAISSER : ${finalTotal} DH*\n`;
     
-    const url = `https://wa.me/${PHONE_NUMBER_LIVREUR}?text=${encodeURIComponent(message)}`;
+    const url = `https://wa.me/${cleanPhoneForLink(PHONE_NUMBER_LIVREUR)}?text=${encodeURIComponent(message)}`;
     window.open(url, '_blank');
   };
 
@@ -456,13 +441,11 @@ export default function Home() {
   const isAddressNeeded = orderMethod === 'livraison';
   const canOrder = user.name && isValidMoroccanPhone(user.phone) && (!isAddressNeeded || user.address);
 
-  // --- RENDU INTRO (SPLASH) ---
   if (loading) {
       return (
           <div className="fixed inset-0 bg-[#151e32] flex flex-col items-center justify-center z-[999]">
               <img src="/foodji.png" alt="Logo" className="w-48 h-48 mb-6 animate-pulse drop-shadow-2xl" />
               <div className="text-[#a31d24] font-bold tracking-[0.3em] text-sm animate-bounce">CHARGEMENT...</div>
-              {/* Petite animation de barre */}
               <div className="w-32 h-1 bg-gray-800 mt-4 rounded-full overflow-hidden">
                   <div className="h-full bg-[#a31d24] animate-progress"></div>
               </div>
@@ -484,7 +467,6 @@ export default function Home() {
           #receipt-print { position: absolute; left: 0; top: 0; width: 100%; color: black; background: white; }
           .no-print { display: none; }
         }
-        /* Animation de fond "Lava" */
         @keyframes lava {
             0% { background-position: 0% 50%; }
             50% { background-position: 100% 50%; }
@@ -497,7 +479,6 @@ export default function Home() {
         }
       `}</style>
 
-      {/* --- ARRIÈRE PLAN ANIMÉ --- */}
       <div className="fixed inset-0 bg-animated -z-10"></div>
 
       {toast && <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[200] bg-green-500 text-white px-6 py-3 rounded-full shadow-2xl font-bold animate-bounce-slight flex items-center gap-2"><span>✅</span> {toast}</div>}
@@ -548,7 +529,6 @@ export default function Home() {
                       </div>
                       <p className="text-xs mt-4">Merci de votre visite !</p>
                       <p className="text-xs mt-1">Code Points : {user.pendingCode}</p> 
-                      {/* Affiche le code sur le ticket du client pour qu'il puisse le rentrer plus tard */}
                   </div>
                   <button onClick={handlePrint} className="w-full bg-black text-white py-3 rounded-lg font-bold mt-4 no-print">🖨️ Imprimer</button>
               </div>
@@ -604,6 +584,7 @@ export default function Home() {
 
       {view === 'home' && (
         <div className={`flex flex-col items-center justify-center h-screen p-4 text-center ${COLORS.bg} relative overflow-hidden`}>
+          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-transparent to-black opacity-60 pointer-events-none"></div>
           <button onClick={() => setView('profile')} className={`absolute top-6 right-6 ${COLORS.bgLight} backdrop-blur-md px-4 py-2 rounded-full flex items-center border border-white/10 z-10 hover:bg-white/10 transition`}>
              <span className="mr-2 text-lg">👤</span>
              <span className="font-bold text-sm text-gray-200">{user.name ? user.name : 'Compte'}</span>
@@ -629,7 +610,7 @@ export default function Home() {
             <h3 className={`text-lg font-bold ${COLORS.textAccent} mb-6`}>Mes Coordonnées</h3>
             <div className="space-y-5">
               <div className="group"><label className="block text-xs font-bold text-gray-500 mb-1">NOM</label><input type="text" name="name" value={user.name} onChange={handleInputChange} className={`w-full ${COLORS.bg} border border-gray-700 rounded-lg p-3 text-white outline-none focus:border-[#a31d24] transition-colors`}/></div>
-              <div className="group"><label className="block text-xs font-bold text-gray-500 mb-1">TÉLÉPHONE</label><input type="tel" name="phone" value={user.phone} onChange={handleInputChange} className={`w-full ${COLORS.bg} p-4 rounded-lg text-white border outline-none transition ${user.phone && !isValidMoroccanPhone(user.phone) ? 'border-red-500' : 'border-gray-700 focus:border-[#a31d24]'}`}/></div>
+              <div className="group"><label className="block text-xs font-bold text-gray-500 mb-1">TÉLÉPHONE</label><input type="tel" name="phone" value={user.phone} onChange={handleInputChange} placeholder="06..." className={`w-full ${COLORS.bg} p-4 rounded-lg text-white border outline-none transition ${user.phone && !isValidMoroccanPhone(user.phone) ? 'border-red-500' : 'border-gray-700 focus:border-[#a31d24]'}`}/></div>
               <div className="group"><label className="block text-xs font-bold text-gray-500 mb-1">ADRESSE</label><textarea name="address" value={user.address} onChange={handleInputChange} placeholder="Adresse de livraison" className={`w-full ${COLORS.bg} p-4 rounded-lg text-white border border-gray-700 focus:border-[#a31d24] outline-none h-24 transition`}/></div>
               <button onClick={() => saveUserData(user)} className={`w-full py-4 rounded-lg font-bold transition mt-2 bg-gray-700 text-white hover:bg-gray-600`}>Enregistrer</button>
             </div>
@@ -700,8 +681,14 @@ export default function Home() {
                      {usePoints && discount > 0 && (<div className="flex justify-between text-[#4ade80] mb-1 font-bold"><span>Réduction Fidélité</span><span>-{discount} DH</span></div>)}
                      <div className="flex justify-between text-2xl font-bold text-white pt-4 border-t border-white/10 mt-2"><span>Total à Payer</span><span className={COLORS.textAccent}>{currentFinalPrice} DH</span></div>
                 </div>
-                <button onClick={sendToResto} disabled={!canOrder} className={`w-full py-4 rounded-xl font-bold text-lg shadow-[0_0_20px_rgba(37,211,102,0.2)] flex items-center justify-center gap-3 transition-all transform ${(!canOrder) ? 'bg-gray-700 cursor-not-allowed text-gray-500 opacity-50' : 'bg-[#25D366] text-white hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(37,211,102,0.4)]'}`}>
-                    <span className="text-2xl">📱</span><span>{canOrder ? 'Confirmer la commande' : 'Info Manquante'}</span>
+                <button 
+                    onClick={sendToResto} 
+                    disabled={!canOrder || !status.isOpen} 
+                    className={`w-full py-4 rounded-xl font-bold text-lg shadow-[0_0_20px_rgba(37,211,102,0.2)] flex items-center justify-center gap-3 transition-all transform 
+                    ${(!canOrder || !status.isOpen) ? 'bg-gray-700 cursor-not-allowed text-gray-500 opacity-50' : 'bg-[#25D366] text-white hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(37,211,102,0.4)]'}`}
+                >
+                    <span className="text-2xl">📱</span>
+                    <span>{!status.isOpen ? 'Fermé (Voir horaires)' : (canOrder ? 'Confirmer la commande' : 'Info Manquante')}</span>
                 </button>
             </div>
           )}
