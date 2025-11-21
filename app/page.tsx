@@ -3,6 +3,26 @@
 'use client';
 import { useState, useEffect } from 'react';
 
+// --- TYPES (POUR EVITER LES ERREURS DE BUILD) ---
+type Variation = {
+  size: string;
+  price: number;
+};
+
+type MenuItem = {
+  name: string;
+  desc: string;
+  image?: string; // Optionnel
+  logic?: string; // Optionnel
+  hasSauce?: boolean; // Optionnel
+  variations: Variation[];
+};
+
+type Category = {
+  title: string;
+  items: MenuItem[];
+};
+
 // --- CONFIGURATION ---
 const PHONE_NUMBER_RESTO = "+212668197671"; 
 const PHONE_NUMBER_LIVREUR = "+212668197671"; 
@@ -40,92 +60,92 @@ const SCHEDULE: Record<number, { day: string; open: number | null; close: number
 };
 
 // --- DONNÉES DU MENU ---
-const categories = [
+const categories: Category[] = [
   {
     title: "🌮 Tacos",
     items: [
-      { name: "Tacos Mixte", desc: "Composez votre mélange.", logic: "tacos_mixte", hasSauce: true, variations: [{size: "L", price: 42}, {size: "XL", price: 76}, {size: "XXL", price: 112}] },
-      { name: "Tacos Le Taj Mahal", desc: "Viande hachée, Cordon bleu, Nuggets.", hasSauce: true, variations: [{size: "L", price: 34}, {size: "XL", price: 54}, {size: "XXL", price: 96}] },
-      { name: "Tacos Crispy", desc: "Poulet pané croustillant.", hasSauce: true, variations: [{size: "L", price: 42}, {size: "XL", price: 76}, {size: "XXL", price: 112}] },
-      { name: "Tacos Viande hachée", desc: "", hasSauce: true, variations: [{size: "L", price: 39}, {size: "XL", price: 72}, {size: "XXL", price: 104}] },
-      { name: "Tacos Cordon Bleu", desc: "", hasSauce: true, variations: [{size: "L", price: 39}, {size: "XL", price: 72}, {size: "XXL", price: 104}] },
-      { name: "Tacos Nuggets", desc: "", hasSauce: true, variations: [{size: "L", price: 39}, {size: "XL", price: 72}, {size: "XXL", price: 104}] },
+      { name: "Tacos Mixte", desc: "Composez votre mélange.", image: "", logic: "tacos_mixte", hasSauce: true, variations: [{size: "L", price: 42}, {size: "XL", price: 76}, {size: "XXL", price: 112}] },
+      { name: "Tacos Le Taj Mahal", desc: "Viande hachée, Cordon bleu, Nuggets.", image: "", hasSauce: true, variations: [{size: "L", price: 34}, {size: "XL", price: 54}, {size: "XXL", price: 96}] },
+      { name: "Tacos Crispy", desc: "Poulet pané croustillant.", image: "", hasSauce: true, variations: [{size: "L", price: 42}, {size: "XL", price: 76}, {size: "XXL", price: 112}] },
+      { name: "Tacos Viande hachée", desc: "", image: "", hasSauce: true, variations: [{size: "L", price: 39}, {size: "XL", price: 72}, {size: "XXL", price: 104}] },
+      { name: "Tacos Cordon Bleu", desc: "", image: "", hasSauce: true, variations: [{size: "L", price: 39}, {size: "XL", price: 72}, {size: "XXL", price: 104}] },
+      { name: "Tacos Nuggets", desc: "", image: "", hasSauce: true, variations: [{size: "L", price: 39}, {size: "XL", price: 72}, {size: "XXL", price: 104}] },
     ]
   },
   {
     title: "🍕 Pizzas",
     items: [
-      { name: "2 Saisons", desc: "2 moitiés au choix.", logic: "pizza_2", variations: [{size: "M", price: 52}, {size: "L", price: 84}] },
-      { name: "4 Saisons", desc: "3 à 4 ingrédients au choix.", logic: "pizza_4", variations: [{size: "M", price: 58}, {size: "L", price: 92}] },
-      { name: "Pep's", desc: "Sauce tomate, mozzarella, origan.", variations: [{size: "M", price: 28}] },
-      { name: "Burrata", desc: "Crémeuse et fraîche.", variations: [{size: "M", price: 78}] },
-      { name: "4 Fromages", desc: "Mozza, gorgonzola, chèvre, parmesan.", variations: [{size: "M", price: 52}, {size: "L", price: 84}] },
-      { name: "Pepperoni", desc: "", variations: [{size: "M", price: 52}, {size: "L", price: 84}] },
-      { name: "Cannibale", desc: "Viande hachée, poulet, merguez.", variations: [{size: "M", price: 56}, {size: "L", price: 87}] },
-      { name: "Thon", desc: "", variations: [{size: "M", price: 46}, {size: "L", price: 62}] },
-      { name: "Fruits de mer", desc: "", variations: [{size: "M", price: 58}, {size: "L", price: 92}] },
-      { name: "Charcuterie", desc: "", variations: [{size: "M", price: 48}, {size: "L", price: 68}] },
-      { name: "Végétarienne", desc: "", variations: [{size: "M", price: 46}, {size: "L", price: 62}] },
-      { name: "Salami", desc: "", variations: [{size: "M", price: 58}, {size: "L", price: 92}] },
-      { name: "Calzone", desc: "", variations: [{size: "M", price: 48}, {size: "L", price: 68}] },
-      { name: "Pizza Viande Hachée", desc: "", variations: [{size: "M", price: 52}, {size: "L", price: 84}] },
-      { name: "Pizza Poulet", desc: "", variations: [{size: "M", price: 52}, {size: "L", price: 84}] },
+      { name: "2 Saisons", desc: "2 moitiés au choix.", image: "", logic: "pizza_2", variations: [{size: "M", price: 52}, {size: "L", price: 84}] },
+      { name: "4 Saisons", desc: "3 à 4 ingrédients au choix.", image: "", logic: "pizza_4", variations: [{size: "M", price: 58}, {size: "L", price: 92}] },
+      { name: "Pep's", desc: "Sauce tomate, mozzarella, origan.", image: "", variations: [{size: "M", price: 28}] },
+      { name: "Burrata", desc: "Crémeuse et fraîche.", image: "", variations: [{size: "M", price: 78}] },
+      { name: "4 Fromages", desc: "Mozza, gorgonzola, chèvre, parmesan.", image: "", variations: [{size: "M", price: 52}, {size: "L", price: 84}] },
+      { name: "Pepperoni", desc: "", image: "", variations: [{size: "M", price: 52}, {size: "L", price: 84}] },
+      { name: "Cannibale", desc: "Viande hachée, poulet, merguez.", image: "", variations: [{size: "M", price: 56}, {size: "L", price: 87}] },
+      { name: "Thon", desc: "", image: "", variations: [{size: "M", price: 46}, {size: "L", price: 62}] },
+      { name: "Fruits de mer", desc: "", image: "", variations: [{size: "M", price: 58}, {size: "L", price: 92}] },
+      { name: "Charcuterie", desc: "", image: "", variations: [{size: "M", price: 48}, {size: "L", price: 68}] },
+      { name: "Végétarienne", desc: "", image: "", variations: [{size: "M", price: 46}, {size: "L", price: 62}] },
+      { name: "Salami", desc: "", image: "", variations: [{size: "M", price: 58}, {size: "L", price: 92}] },
+      { name: "Calzone", desc: "", image: "", variations: [{size: "M", price: 48}, {size: "L", price: 68}] },
+      { name: "Pizza Viande Hachée", desc: "", image: "", variations: [{size: "M", price: 52}, {size: "L", price: 84}] },
+      { name: "Pizza Poulet", desc: "", image: "", variations: [{size: "M", price: 52}, {size: "L", price: 84}] },
     ]
   },
   {
     title: "🍔 Burgers",
     items: [
-      { name: "Burger Cheese", desc: "Simple et efficace.", variations: [{size: "Unique", price: 48}] },
-      { name: "Burger Double", desc: "Double steak, double plaisir.", variations: [{size: "Unique", price: 69}] },
-      { name: "Burger Le Buddha", desc: "Recette signature végétarienne.", variations: [{size: "Unique", price: 50}] },
-      { name: "Burger L'Extrême", desc: "Pour les grosses faims.", variations: [{size: "Unique", price: 74}] },
-      { name: "Burger Le Foodji", desc: "Le best-seller de la maison.", variations: [{size: "Unique", price: 58}] },
-      { name: "Burger Chicken Foodji", desc: "", variations: [{size: "Unique", price: 58}] },
-      { name: "Burger Chicken", desc: "", variations: [{size: "Unique", price: 48}] },
-      { name: "Burger Le Tasty", desc: "", variations: [{size: "Unique", price: 58}] },
+      { name: "Burger Cheese", desc: "Simple et efficace.", image: "", variations: [{size: "Unique", price: 48}] },
+      { name: "Burger Double", desc: "Double steak, double plaisir.", image: "", variations: [{size: "Unique", price: 69}] },
+      { name: "Burger Le Buddha", desc: "Recette signature végétarienne.", image: "", variations: [{size: "Unique", price: 50}] },
+      { name: "Burger L'Extrême", desc: "Pour les grosses faims.", image: "", variations: [{size: "Unique", price: 74}] },
+      { name: "Burger Le Foodji", desc: "Le best-seller de la maison.", image: "", variations: [{size: "Unique", price: 58}] },
+      { name: "Burger Chicken Foodji", desc: "", image: "", variations: [{size: "Unique", price: 58}] },
+      { name: "Burger Chicken", desc: "", image: "", variations: [{size: "Unique", price: 48}] },
+      { name: "Burger Le Tasty", desc: "", image: "", variations: [{size: "Unique", price: 58}] },
     ]
   },
   {
     title: "🍝 Pâtes",
     items: [
-      { name: "Pâtes Bolognaise", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 58}] },
-      { name: "Pâtes Saumon épinard", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 60}] },
-      { name: "Pâtes Poulet Champignon", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 62}] },
-      { name: "Pâtes Arrabiata", desc: "Sauce tomate pimentée.", logic: "pates_choix", variations: [{size: "Unique", price: 42}] },
-      { name: "Pâtes Carbonara", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 52}] },
-      { name: "Pâtes 4 fromages", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 58}] },
-      { name: "Pâtes Alfredo", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 62}] },
-      { name: "Pâtes Fruits de Mer", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 62}] },
-      { name: "Pâtes Salami", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 54}] },
+      { name: "Pâtes Bolognaise", desc: "", image: "", logic: "pates_choix", variations: [{size: "Unique", price: 58}] },
+      { name: "Pâtes Saumon épinard", desc: "", image: "", logic: "pates_choix", variations: [{size: "Unique", price: 60}] },
+      { name: "Pâtes Poulet Champignon", desc: "", image: "", logic: "pates_choix", variations: [{size: "Unique", price: 62}] },
+      { name: "Pâtes Arrabiata", desc: "Sauce tomate pimentée.", image: "", logic: "pates_choix", variations: [{size: "Unique", price: 42}] },
+      { name: "Pâtes Carbonara", desc: "", image: "", logic: "pates_choix", variations: [{size: "Unique", price: 52}] },
+      { name: "Pâtes 4 fromages", desc: "", image: "", logic: "pates_choix", variations: [{size: "Unique", price: 58}] },
+      { name: "Pâtes Alfredo", desc: "", image: "", logic: "pates_choix", variations: [{size: "Unique", price: 62}] },
+      { name: "Pâtes Fruits de Mer", desc: "", image: "", logic: "pates_choix", variations: [{size: "Unique", price: 62}] },
+      { name: "Pâtes Salami", desc: "", image: "", logic: "pates_choix", variations: [{size: "Unique", price: 54}] },
     ]
   },
   {
     title: "🌯 Burritos",
     items: [
-      { name: "Burrito Poulet", desc: "Pain tortilla, poulet, riz, maïs, laitue, tomate, cheddar.", variations: [{size: "Unique", price: 42}] },
-      { name: "Burrito Viande hachée", desc: "Pain tortilla, viande hachée, riz, cheddar, légumes.", variations: [{size: "Unique", price: 47}] },
-      { name: "Burrito Veggie", desc: "Pain tortilla, légumes sautés, riz, laitue, tomate, maïs, cheddar.", variations: [{size: "Unique", price: 39}] },
+      { name: "Burrito Poulet", desc: "Pain tortilla, poulet, riz, maïs, laitue, tomate, cheddar.", image: "", variations: [{size: "Unique", price: 42}] },
+      { name: "Burrito Viande hachée", desc: "Pain tortilla, viande hachée, riz, cheddar, légumes.", image: "", variations: [{size: "Unique", price: 47}] },
+      { name: "Burrito Veggie", desc: "Pain tortilla, légumes sautés, riz, laitue, tomate, maïs, cheddar.", image: "", variations: [{size: "Unique", price: 39}] },
     ]
   },
   {
     title: "🥙 Koniks",
     items: [
-      { name: "Koniks Poulet", desc: "Pain tortilla, poulet, cheddar, mélange de légumes.", variations: [{size: "Unique", price: 48}] },
-      { name: "Koniks Viande Hachée", desc: "Pain tortilla, viande hachée, cheddar, légumes.", variations: [{size: "Unique", price: 52}] },
-      { name: "L'IKonik", desc: "Pain tortilla, poulet et viande hachée, cheddar, légumes.", variations: [{size: "Unique", price: 58}] },
+      { name: "Koniks Poulet", desc: "Pain tortilla, poulet, cheddar, mélange de légumes.", image: "", variations: [{size: "Unique", price: 48}] },
+      { name: "Koniks Viande Hachée", desc: "Pain tortilla, viande hachée, cheddar, légumes.", image: "", variations: [{size: "Unique", price: 52}] },
+      { name: "L'IKonik", desc: "Pain tortilla, poulet et viande hachée, cheddar, légumes.", image: "", variations: [{size: "Unique", price: 58}] },
     ]
   },
   {
     title: "🍟 Sides",
     items: [
-      { name: "Ration Frites", desc: "", variations: [{size: "Unique", price: 15}] },
-      { name: "Frites Fromagères", desc: "", variations: [{size: "Unique", price: 30}] },
-      { name: "Tenders x5", desc: "", variations: [{size: "Unique", price: 35}] },
-      { name: "Mozza' Fingers x5", desc: "", variations: [{size: "Unique", price: 25}] },
-      { name: "Cheese Bomb x5", desc: "", variations: [{size: "Unique", price: 25}] },
-      { name: "Onion rings x5", desc: "", variations: [{size: "Unique", price: 25}] },
-      { name: "Frites Carbo", desc: "", variations: [{size: "Unique", price: 45}] },
-      { name: "Nuggets x5", desc: "", variations: [{size: "Unique", price: 25}] },
+      { name: "Ration Frites", desc: "", image: "", variations: [{size: "Unique", price: 15}] },
+      { name: "Frites Fromagères", desc: "", image: "", variations: [{size: "Unique", price: 30}] },
+      { name: "Tenders x5", desc: "", image: "", variations: [{size: "Unique", price: 35}] },
+      { name: "Mozza' Fingers x5", desc: "", image: "", variations: [{size: "Unique", price: 25}] },
+      { name: "Cheese Bomb x5", desc: "", image: "", variations: [{size: "Unique", price: 25}] },
+      { name: "Onion rings x5", desc: "", image: "", variations: [{size: "Unique", price: 25}] },
+      { name: "Frites Carbo", desc: "", image: "", variations: [{size: "Unique", price: 45}] },
+      { name: "Nuggets x5", desc: "", image: "", variations: [{size: "Unique", price: 25}] },
     ]
   }
 ];
@@ -161,9 +181,11 @@ const isValidMoroccanPhone = (phone: string) => {
   return regex.test(cleanPhone);
 };
 
-// GÉNÉRATION CODE ALÉATOIRE 4 CHIFFRES
-const generateRandomCode = () => {
-    return Math.floor(1000 + Math.random() * 9000).toString();
+const generateSecureCode = (phone: string) => {
+    const now = new Date();
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const lastTwo = phone ? phone.trim().slice(-2) : '00';
+    return `#${minutes}${lastTwo}`;
 };
 
 const cleanPhoneForLink = (p: string) => p.replace('+', '');
@@ -349,7 +371,7 @@ export default function Home() {
           setShowCodeInput(false);
           setInputCode('');
       } else {
-          alert("Code incorrect. Vérifiez le code sur votre ticket.");
+          alert("Code incorrect. Vérifiez le code sur votre ticket (Minute + Fin de numéro).");
       }
   };
 
@@ -369,9 +391,7 @@ export default function Home() {
         return;
     }
 
-    // GÉNÉRATION DU CODE ALÉATOIRE
-    const uniqueCode = generateRandomCode();
-
+    const uniqueCode = generateSecureCode(user.phone);
     const amountEligibleForPoints = cartTotal - discount; 
     const earnedPoints = parseFloat((amountEligibleForPoints * 0.05).toFixed(1));
     
@@ -384,8 +404,7 @@ export default function Home() {
     if (orderMethod === 'emporter') methodLabel = "🛍️ Je passe la récupérer";
     if (orderMethod === 'sur_place') methodLabel = "🍽️ Sur Place";
 
-    // MESSAGE RESTO : CODE EN PREMIER + PAS DE LIEN GPS
-    let message = `🔐 *CODE FIDÉLITÉ : ${uniqueCode}* 🔐\n`;
+    let message = `🔐 *CODE FIDÉLITÉ : ${uniqueCode}*\n`;
     message += `(A RECOPIER SUR LE TICKET)\n\n`;
     message += `*NOUVELLE COMMANDE FOODJI* 🌋\n`;
     message += `---------------------------\n`;
@@ -393,7 +412,6 @@ export default function Home() {
     message += `👤 *Client :* ${user.name}\n`;
     message += `📞 *Tél :* ${user.phone}\n`;
     if (orderMethod === 'livraison') message += `📍 *Adresse :* ${user.address}\n`;
-    // PAS DE LIEN GPS ICI
     if (user.comment) message += `💬 *Note :* ${user.comment}\n`;
     message += `🏆 *Fidélité :* ${pointsAfterUsage} pts (En attente : +${earnedPoints})\n`;
     message += `---------------------------\n`;
@@ -422,7 +440,6 @@ export default function Home() {
     message += `👤 *Client :* ${user.name}\n`;
     message += `📞 *Tél :* ${user.phone}\n`;
     message += `📍 *Adresse :* ${user.address}\n`;
-    // LIEN GPS ICI
     if (user.locationLink) message += `🗺️ *GPS :* ${user.locationLink}\n`;
     if (user.comment) message += `💬 *Note :* ${user.comment}\n`;
     message += `---------------------------\n`;
@@ -523,7 +540,7 @@ export default function Home() {
                           <div className="flex justify-between text-xl font-black mt-2"><span>TOTAL</span><span>{finalTotal} DH</span></div>
                       </div>
                       <p className="text-xs mt-4">Merci de votre visite !</p>
-                      {/* Code masqué sur le ticket client pour éviter la triche, il est sur le ticket resto */}
+                      <p className="text-xs mt-1 font-bold">Code Points : {user.pendingCode}</p> 
                   </div>
                   <button onClick={handlePrint} className="w-full bg-black text-white py-3 rounded-lg font-bold mt-4 no-print">🖨️ Imprimer</button>
               </div>
@@ -676,8 +693,14 @@ export default function Home() {
                      {usePoints && discount > 0 && (<div className="flex justify-between text-[#4ade80] mb-1 font-bold"><span>Réduction Fidélité</span><span>-{discount} DH</span></div>)}
                      <div className="flex justify-between text-2xl font-bold text-white pt-4 border-t border-white/10 mt-2"><span>Total à Payer</span><span className={COLORS.textAccent}>{currentFinalPrice} DH</span></div>
                 </div>
-                <button onClick={sendToResto} disabled={!canOrder} className={`w-full py-4 rounded-xl font-bold text-lg shadow-[0_0_20px_rgba(37,211,102,0.2)] flex items-center justify-center gap-3 transition-all transform ${(!canOrder) ? 'bg-gray-700 cursor-not-allowed text-gray-500 opacity-50' : 'bg-[#25D366] text-white hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(37,211,102,0.4)]'}`}>
-                    <span className="text-2xl">📱</span><span>{canOrder ? 'Confirmer la commande' : 'Info Manquante'}</span>
+                <button 
+                    onClick={sendToResto} 
+                    disabled={!canOrder || !status.isOpen} 
+                    className={`w-full py-4 rounded-xl font-bold text-lg shadow-[0_0_20px_rgba(37,211,102,0.2)] flex items-center justify-center gap-3 transition-all transform 
+                    ${(!canOrder || !status.isOpen) ? 'bg-gray-700 cursor-not-allowed text-gray-500 opacity-50' : 'bg-[#25D366] text-white hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(37,211,102,0.4)]'}`}
+                >
+                    <span className="text-2xl">📱</span>
+                    <span>{!status.isOpen ? 'Fermé (Voir horaires)' : (canOrder ? 'Confirmer la commande' : 'Info Manquante')}</span>
                 </button>
             </div>
           )}
