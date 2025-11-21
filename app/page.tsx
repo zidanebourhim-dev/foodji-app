@@ -6,11 +6,6 @@ import { useState, useEffect } from 'react';
 // --- CONFIGURATION ---
 const PHONE_NUMBER_RESTO = "+212668197671"; 
 const PHONE_NUMBER_LIVREUR = "+212668197671"; 
-const SECRET_CODE = "FOODJI"; 
-
-// Coordonnées de Sala Al Jadida pour la sécurité
-const RESTO_COORDS = { lat: 34.0037, lng: -6.7237 }; 
-const MAX_DELIVERY_DISTANCE_KM = 15; // Rayon de livraison autorisé
 
 const COLORS = {
   bg: "bg-[#151e32]", 
@@ -135,17 +130,6 @@ const categories = [
   }
 ];
 
-// --- FONCTION CALCUL DISTANCE (Haversine) ---
-const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-    const R = 6371; // Rayon de la terre en km
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
-};
-
 const getRestaurantStatus = () => {
   const now = new Date();
   const day = now.getDay(); 
@@ -177,11 +161,9 @@ const isValidMoroccanPhone = (phone: string) => {
   return regex.test(cleanPhone);
 };
 
-const generateSecureCode = (phone: string) => {
-    const now = new Date();
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    const lastTwo = phone ? phone.trim().slice(-2) : '00';
-    return `#${minutes}${lastTwo}`;
+// GÉNÉRATION CODE ALÉATOIRE 4 CHIFFRES
+const generateRandomCode = () => {
+    return Math.floor(1000 + Math.random() * 9000).toString();
 };
 
 const cleanPhoneForLink = (p: string) => p.replace('+', '');
@@ -241,19 +223,7 @@ export default function Home() {
     setIsLocating(true);
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const lat = position.coords.latitude;
-        const lng = position.coords.longitude;
-
-        // VÉRIFICATION DE LA DISTANCE
-        const distance = calculateDistance(lat, lng, RESTO_COORDS.lat, RESTO_COORDS.lng);
-        
-        if (distance > MAX_DELIVERY_DISTANCE_KM) {
-            alert(`Désolé, vous êtes à ${distance.toFixed(1)}km. Nous ne livrons pas au-delà de ${MAX_DELIVERY_DISTANCE_KM}km.`);
-            setIsLocating(false);
-            return;
-        }
-
-        const link = `http://googleusercontent.com/maps.google.com/?q=${lat},${lng}`;
+        const link = `http://googleusercontent.com/maps.google.com/?q=${position.coords.latitude},${position.coords.longitude}`;
         setUser(prev => ({ ...prev, locationLink: link, address: prev.address || "📍 Position GPS récupérée" }));
         setIsLocating(false);
       },
@@ -379,7 +349,7 @@ export default function Home() {
           setShowCodeInput(false);
           setInputCode('');
       } else {
-          alert("Code incorrect. Vérifiez le code sur votre ticket (Minute + Fin de numéro).");
+          alert("Code incorrect. Vérifiez le code sur votre ticket.");
       }
   };
 
@@ -399,7 +369,9 @@ export default function Home() {
         return;
     }
 
-    const uniqueCode = generateSecureCode(user.phone);
+    // GÉNÉRATION DU CODE ALÉATOIRE
+    const uniqueCode = generateRandomCode();
+
     const amountEligibleForPoints = cartTotal - discount; 
     const earnedPoints = parseFloat((amountEligibleForPoints * 0.05).toFixed(1));
     
@@ -412,16 +384,16 @@ export default function Home() {
     if (orderMethod === 'emporter') methodLabel = "🛍️ Je passe la récupérer";
     if (orderMethod === 'sur_place') methodLabel = "🍽️ Sur Place";
 
-    let message = `🔐 *CODE FIDÉLITÉ : ${uniqueCode}*\n`;
+    // MESSAGE RESTO : CODE EN PREMIER + PAS DE LIEN GPS
+    let message = `🔐 *CODE FIDÉLITÉ : ${uniqueCode}* 🔐\n`;
+    message += `(A RECOPIER SUR LE TICKET)\n\n`;
     message += `*NOUVELLE COMMANDE FOODJI* 🌋\n`;
     message += `---------------------------\n`;
     message += `📌 *Type :* ${methodLabel}\n`;
     message += `👤 *Client :* ${user.name}\n`;
     message += `📞 *Tél :* ${user.phone}\n`;
-    if (orderMethod === 'livraison') {
-        message += `📍 *Adresse :* ${user.address}\n`;
-        // PAS DE LIEN GPS POUR LE RESTO
-    }
+    if (orderMethod === 'livraison') message += `📍 *Adresse :* ${user.address}\n`;
+    // PAS DE LIEN GPS ICI
     if (user.comment) message += `💬 *Note :* ${user.comment}\n`;
     message += `🏆 *Fidélité :* ${pointsAfterUsage} pts (En attente : +${earnedPoints})\n`;
     message += `---------------------------\n`;
@@ -450,7 +422,7 @@ export default function Home() {
     message += `👤 *Client :* ${user.name}\n`;
     message += `📞 *Tél :* ${user.phone}\n`;
     message += `📍 *Adresse :* ${user.address}\n`;
-    // LIEN GPS POUR LE LIVREUR SEULEMENT
+    // LIEN GPS ICI
     if (user.locationLink) message += `🗺️ *GPS :* ${user.locationLink}\n`;
     if (user.comment) message += `💬 *Note :* ${user.comment}\n`;
     message += `---------------------------\n`;
@@ -551,7 +523,7 @@ export default function Home() {
                           <div className="flex justify-between text-xl font-black mt-2"><span>TOTAL</span><span>{finalTotal} DH</span></div>
                       </div>
                       <p className="text-xs mt-4">Merci de votre visite !</p>
-                      <p className="text-xs mt-1 font-bold">Code Points : {user.pendingCode}</p> 
+                      {/* Code masqué sur le ticket client pour éviter la triche, il est sur le ticket resto */}
                   </div>
                   <button onClick={handlePrint} className="w-full bg-black text-white py-3 rounded-lg font-bold mt-4 no-print">🖨️ Imprimer</button>
               </div>
