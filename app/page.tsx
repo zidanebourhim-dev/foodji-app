@@ -4,13 +4,17 @@
 import { useState, useEffect } from 'react';
 
 // --- CONFIGURATION ---
-const PHONE_NUMBER_RESTO = "+212668197671"; 
-const PHONE_NUMBER_LIVREUR = "+212668197671"; 
+const PHONE_NUMBER_RESTO = "212668197671"; 
+const PHONE_NUMBER_LIVREUR = "212668197671"; 
 const SECRET_CODE = "FOODJI"; 
 
+// --- SONS (Liens MP3 courts) ---
+const SOUND_ADD = "https://cdn.pixabay.com/audio/2024/09/12/audio_43c970a0e0.mp3"; // Petit "Pop"
+const SOUND_SUCCESS = "https://cdn.pixabay.com/audio/2021/08/09/audio_0e8731548b.mp3"; // "Cha-ching"
+
 const COLORS = {
-  bg: "bg-[#151e32]", 
-  bgLight: "bg-[#1f2b45]", 
+  bg: "bg-slate-900", // Base sombre
+  bgLight: "bg-[#1f2b45]/80", // Transparence pour l'effet de verre
   accent: "bg-[#a31d24]", 
   textAccent: "text-[#a31d24]", 
 };
@@ -40,101 +44,93 @@ const SCHEDULE: Record<number, { day: string; open: number | null; close: number
   6: { day: "Samedi",   open: 18, close: 1 },
 };
 
-// --- DONNÉES DU MENU (AVEC IMAGES) ---
-// 👇 AJOUTEZ VOS IMAGES ICI : image: "/nom-fichier.jpg"
+// --- DONNÉES DU MENU ---
 const categories = [
   {
     title: "🌮 Tacos",
     items: [
-      { 
-        name: "Tacos Mixte", 
-        desc: "Composez votre mélange.", 
-        image: "", // 👈 Mettez "/tacos-mixte.jpg" ici une fois l'image uploadée
-        logic: "tacos_mixte", 
-        hasSauce: true, 
-        variations: [{size: "L", price: 42}, {size: "XL", price: 76}, {size: "XXL", price: 112}] 
-      },
-      { name: "Tacos Le Taj Mahal", image: "", desc: "Viande hachée, Cordon bleu, Nuggets.", hasSauce: true, variations: [{size: "L", price: 34}, {size: "XL", price: 54}, {size: "XXL", price: 96}] },
-      { name: "Tacos Crispy", image: "", desc: "Poulet pané croustillant.", hasSauce: true, variations: [{size: "L", price: 42}, {size: "XL", price: 76}, {size: "XXL", price: 112}] },
-      { name: "Tacos Viande hachée", image: "", desc: "", hasSauce: true, variations: [{size: "L", price: 39}, {size: "XL", price: 72}, {size: "XXL", price: 104}] },
-      { name: "Tacos Cordon Bleu", image: "", desc: "", hasSauce: true, variations: [{size: "L", price: 39}, {size: "XL", price: 72}, {size: "XXL", price: 104}] },
-      { name: "Tacos Nuggets", image: "", desc: "", hasSauce: true, variations: [{size: "L", price: 39}, {size: "XL", price: 72}, {size: "XXL", price: 104}] },
+      { name: "Tacos Mixte", desc: "Composez votre mélange.", logic: "tacos_mixte", hasSauce: true, variations: [{size: "L", price: 42}, {size: "XL", price: 76}, {size: "XXL", price: 112}] },
+      { name: "Tacos Le Taj Mahal", desc: "Viande hachée, Cordon bleu, Nuggets.", hasSauce: true, variations: [{size: "L", price: 34}, {size: "XL", price: 54}, {size: "XXL", price: 96}] },
+      { name: "Tacos Crispy", desc: "Poulet pané croustillant.", hasSauce: true, variations: [{size: "L", price: 42}, {size: "XL", price: 76}, {size: "XXL", price: 112}] },
+      { name: "Tacos Viande hachée", desc: "", hasSauce: true, variations: [{size: "L", price: 39}, {size: "XL", price: 72}, {size: "XXL", price: 104}] },
+      { name: "Tacos Cordon Bleu", desc: "", hasSauce: true, variations: [{size: "L", price: 39}, {size: "XL", price: 72}, {size: "XXL", price: 104}] },
+      { name: "Tacos Nuggets", desc: "", hasSauce: true, variations: [{size: "L", price: 39}, {size: "XL", price: 72}, {size: "XXL", price: 104}] },
     ]
   },
   {
     title: "🍕 Pizzas",
     items: [
-      { name: "2 Saisons", image: "", desc: "2 moitiés au choix.", logic: "pizza_2", variations: [{size: "M", price: 52}, {size: "L", price: 84}] },
-      { name: "4 Saisons", image: "", desc: "3 à 4 ingrédients au choix.", logic: "pizza_4", variations: [{size: "M", price: 58}, {size: "L", price: 92}] },
-      { name: "Pep's", image: "", desc: "Sauce tomate, mozzarella, origan.", variations: [{size: "M", price: 28}] },
-      { name: "Burrata", image: "", desc: "Crémeuse et fraîche.", variations: [{size: "M", price: 78}] },
-      { name: "4 Fromages", image: "", desc: "Mozza, gorgonzola, chèvre, parmesan.", variations: [{size: "M", price: 52}, {size: "L", price: 84}] },
-      { name: "Pepperoni", image: "", desc: "", variations: [{size: "M", price: 52}, {size: "L", price: 84}] },
-      { name: "Cannibale", image: "", desc: "Viande hachée, poulet, merguez.", variations: [{size: "M", price: 56}, {size: "L", price: 87}] },
-      { name: "Thon", image: "", desc: "", variations: [{size: "M", price: 46}, {size: "L", price: 62}] },
-      { name: "Fruits de mer", image: "", desc: "", variations: [{size: "M", price: 58}, {size: "L", price: 92}] },
-      { name: "Charcuterie", image: "", desc: "", variations: [{size: "M", price: 48}, {size: "L", price: 68}] },
-      { name: "Végétarienne", image: "", desc: "", variations: [{size: "M", price: 46}, {size: "L", price: 62}] },
-      { name: "Salami", image: "", desc: "", variations: [{size: "M", price: 58}, {size: "L", price: 92}] },
-      { name: "Calzone", image: "", desc: "", variations: [{size: "M", price: 48}, {size: "L", price: 68}] },
-      { name: "Pizza Viande Hachée", image: "", desc: "", variations: [{size: "M", price: 52}, {size: "L", price: 84}] },
-      { name: "Pizza Poulet", image: "", desc: "", variations: [{size: "M", price: 52}, {size: "L", price: 84}] },
+      { name: "2 Saisons", desc: "2 moitiés au choix.", logic: "pizza_2", variations: [{size: "M", price: 52}, {size: "L", price: 84}] },
+      { name: "4 Saisons", desc: "3 à 4 ingrédients au choix.", logic: "pizza_4", variations: [{size: "M", price: 58}, {size: "L", price: 92}] },
+      { name: "Pep's", desc: "Sauce tomate, mozzarella, origan.", variations: [{size: "M", price: 28}] },
+      { name: "Burrata", desc: "Crémeuse et fraîche.", variations: [{size: "M", price: 78}] },
+      { name: "4 Fromages", desc: "Mozza, gorgonzola, chèvre, parmesan.", variations: [{size: "M", price: 52}, {size: "L", price: 84}] },
+      { name: "Pepperoni", desc: "", variations: [{size: "M", price: 52}, {size: "L", price: 84}] },
+      { name: "Cannibale", desc: "Viande hachée, poulet, merguez.", variations: [{size: "M", price: 56}, {size: "L", price: 87}] },
+      { name: "Thon", desc: "", variations: [{size: "M", price: 46}, {size: "L", price: 62}] },
+      { name: "Fruits de mer", desc: "", variations: [{size: "M", price: 58}, {size: "L", price: 92}] },
+      { name: "Charcuterie", desc: "", variations: [{size: "M", price: 48}, {size: "L", price: 68}] },
+      { name: "Végétarienne", desc: "", variations: [{size: "M", price: 46}, {size: "L", price: 62}] },
+      { name: "Salami", desc: "", variations: [{size: "M", price: 58}, {size: "L", price: 92}] },
+      { name: "Calzone", desc: "", variations: [{size: "M", price: 48}, {size: "L", price: 68}] },
+      { name: "Pizza Viande Hachée", desc: "", variations: [{size: "M", price: 52}, {size: "L", price: 84}] },
+      { name: "Pizza Poulet", desc: "", variations: [{size: "M", price: 52}, {size: "L", price: 84}] },
     ]
   },
   {
     title: "🍔 Burgers",
     items: [
-      { name: "Burger Cheese", image: "", desc: "Simple et efficace.", variations: [{size: "Unique", price: 48}] },
-      { name: "Burger Double", image: "", desc: "Double steak, double plaisir.", variations: [{size: "Unique", price: 69}] },
-      { name: "Burger Le Buddha", image: "", desc: "Recette signature végétarienne.", variations: [{size: "Unique", price: 50}] },
-      { name: "Burger L'Extrême", image: "", desc: "Pour les grosses faims.", variations: [{size: "Unique", price: 74}] },
-      { name: "Burger Le Foodji", image: "", desc: "Le best-seller de la maison.", variations: [{size: "Unique", price: 58}] },
-      { name: "Burger Chicken Foodji", image: "", desc: "", variations: [{size: "Unique", price: 58}] },
-      { name: "Burger Chicken", image: "", desc: "", variations: [{size: "Unique", price: 48}] },
-      { name: "Burger Le Tasty", image: "", desc: "", variations: [{size: "Unique", price: 58}] },
+      { name: "Burger Cheese", desc: "Simple et efficace.", variations: [{size: "Unique", price: 48}] },
+      { name: "Burger Double", desc: "Double steak, double plaisir.", variations: [{size: "Unique", price: 69}] },
+      { name: "Burger Le Buddha", desc: "Recette signature végétarienne.", variations: [{size: "Unique", price: 50}] },
+      { name: "Burger L'Extrême", desc: "Pour les grosses faims.", variations: [{size: "Unique", price: 74}] },
+      { name: "Burger Le Foodji", desc: "Le best-seller de la maison.", variations: [{size: "Unique", price: 58}] },
+      { name: "Burger Chicken Foodji", desc: "", variations: [{size: "Unique", price: 58}] },
+      { name: "Burger Chicken", desc: "", variations: [{size: "Unique", price: 48}] },
+      { name: "Burger Le Tasty", desc: "", variations: [{size: "Unique", price: 58}] },
     ]
   },
   {
     title: "🍝 Pâtes",
     items: [
-      { name: "Pâtes Bolognaise", image: "", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 58}] },
-      { name: "Pâtes Saumon épinard", image: "", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 60}] },
-      { name: "Pâtes Poulet Champignon", image: "", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 62}] },
-      { name: "Pâtes Arrabiata", image: "", desc: "Sauce tomate pimentée.", logic: "pates_choix", variations: [{size: "Unique", price: 42}] },
-      { name: "Pâtes Carbonara", image: "", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 52}] },
-      { name: "Pâtes 4 fromages", image: "", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 58}] },
-      { name: "Pâtes Alfredo", image: "", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 62}] },
-      { name: "Pâtes Fruits de Mer", image: "", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 62}] },
-      { name: "Pâtes Salami", image: "", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 54}] },
+      { name: "Pâtes Bolognaise", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 58}] },
+      { name: "Pâtes Saumon épinard", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 60}] },
+      { name: "Pâtes Poulet Champignon", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 62}] },
+      { name: "Pâtes Arrabiata", desc: "Sauce tomate pimentée.", logic: "pates_choix", variations: [{size: "Unique", price: 42}] },
+      { name: "Pâtes Carbonara", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 52}] },
+      { name: "Pâtes 4 fromages", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 58}] },
+      { name: "Pâtes Alfredo", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 62}] },
+      { name: "Pâtes Fruits de Mer", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 62}] },
+      { name: "Pâtes Salami", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 54}] },
     ]
   },
   {
     title: "🌯 Burritos",
     items: [
-      { name: "Burrito Poulet", image: "", desc: "Pain tortilla, poulet, riz, maïs, laitue, tomate, cheddar.", variations: [{size: "Unique", price: 42}] },
-      { name: "Burrito Viande hachée", image: "", desc: "Pain tortilla, viande hachée, riz, cheddar, légumes.", variations: [{size: "Unique", price: 47}] },
-      { name: "Burrito Veggie", image: "", desc: "Pain tortilla, légumes sautés, riz, laitue, tomate, maïs, cheddar.", variations: [{size: "Unique", price: 39}] },
+      { name: "Burrito Poulet", desc: "Pain tortilla, poulet, riz, maïs, laitue, tomate, cheddar.", variations: [{size: "Unique", price: 42}] },
+      { name: "Burrito Viande hachée", desc: "Pain tortilla, viande hachée, riz, cheddar, légumes.", variations: [{size: "Unique", price: 47}] },
+      { name: "Burrito Veggie", desc: "Pain tortilla, légumes sautés, riz, laitue, tomate, maïs, cheddar.", variations: [{size: "Unique", price: 39}] },
     ]
   },
   {
     title: "🥙 Koniks",
     items: [
-      { name: "Koniks Poulet", image: "", desc: "Pain tortilla, poulet, cheddar, mélange de légumes.", variations: [{size: "Unique", price: 48}] },
-      { name: "Koniks Viande Hachée", image: "", desc: "Pain tortilla, viande hachée, cheddar, légumes.", variations: [{size: "Unique", price: 52}] },
-      { name: "L'IKonik", image: "", desc: "Pain tortilla, poulet et viande hachée, cheddar, légumes.", variations: [{size: "Unique", price: 58}] },
+      { name: "Koniks Poulet", desc: "Pain tortilla, poulet, cheddar, mélange de légumes.", variations: [{size: "Unique", price: 48}] },
+      { name: "Koniks Viande Hachée", desc: "Pain tortilla, viande hachée, cheddar, légumes.", variations: [{size: "Unique", price: 52}] },
+      { name: "L'IKonik", desc: "Pain tortilla, poulet et viande hachée, cheddar, légumes.", variations: [{size: "Unique", price: 58}] },
     ]
   },
   {
     title: "🍟 Sides",
     items: [
-      { name: "Ration Frites", image: "", desc: "", variations: [{size: "Unique", price: 15}] },
-      { name: "Frites Fromagères", image: "", desc: "", variations: [{size: "Unique", price: 30}] },
-      { name: "Tenders x5", image: "", desc: "", variations: [{size: "Unique", price: 35}] },
-      { name: "Mozza' Fingers x5", image: "", desc: "", variations: [{size: "Unique", price: 25}] },
-      { name: "Cheese Bomb x5", image: "", desc: "", variations: [{size: "Unique", price: 25}] },
-      { name: "Onion rings x5", image: "", desc: "", variations: [{size: "Unique", price: 25}] },
-      { name: "Frites Carbo", image: "", desc: "", variations: [{size: "Unique", price: 45}] },
-      { name: "Nuggets x5", image: "", desc: "", variations: [{size: "Unique", price: 25}] },
+      { name: "Ration Frites", desc: "", variations: [{size: "Unique", price: 15}] },
+      { name: "Frites Fromagères", desc: "", variations: [{size: "Unique", price: 30}] },
+      { name: "Tenders x5", desc: "", variations: [{size: "Unique", price: 35}] },
+      { name: "Mozza' Fingers x5", desc: "", variations: [{size: "Unique", price: 25}] },
+      { name: "Cheese Bomb x5", desc: "", variations: [{size: "Unique", price: 25}] },
+      { name: "Onion rings x5", desc: "", variations: [{size: "Unique", price: 25}] },
+      { name: "Frites Carbo", desc: "", variations: [{size: "Unique", price: 45}] },
+      { name: "Nuggets x5", desc: "", variations: [{size: "Unique", price: 25}] },
     ]
   }
 ];
@@ -150,12 +146,10 @@ const getRestaurantStatus = () => {
   }
   const todaySchedule = SCHEDULE[day];
   if (todaySchedule.open === null) return { isOpen: false, closeAt: null, openAt: "Demain" };
-  
   let isLateNightShift = false;
   if (todaySchedule.close !== null && todaySchedule.open !== null) {
     isLateNightShift = todaySchedule.close < todaySchedule.open;
   }
-
   if (todaySchedule.open !== null && todaySchedule.close !== null) {
     if (isLateNightShift) {
         if (hour >= todaySchedule.open) return { isOpen: true, closeAt: todaySchedule.close, openAt: null };
@@ -172,11 +166,23 @@ const isValidMoroccanPhone = (phone: string) => {
   return regex.test(cleanPhone);
 };
 
+const generateUniqueCode = () => {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let result = "#";
+    for (let i = 0; i < 4; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+};
+
 export default function Home() {
+  // --- INTRO SPLASH SCREEN ---
+  const [loading, setLoading] = useState(true);
+
   const [view, setView] = useState('home'); 
   const [activeCategory, setActiveCategory] = useState(categories[0].title);
   const [cart, setCart] = useState<any[]>([]); 
-  const [user, setUser] = useState({ name: '', phone: '', address: '', points: 0, comment: '', locationLink: '', pendingPoints: 0 });
+  const [user, setUser] = useState({ name: '', phone: '', address: '', points: 0, comment: '', locationLink: '', pendingPoints: 0, pendingCode: '' });
   const [usePoints, setUsePoints] = useState(false);
   const [orderMethod, setOrderMethod] = useState('livraison'); 
   const [showClosedMessage, setShowClosedMessage] = useState(false);
@@ -189,6 +195,22 @@ export default function Home() {
   const [toast, setToast] = useState<string | null>(null); 
   const [inputCode, setInputCode] = useState('');
   const [showCodeInput, setShowCodeInput] = useState(false);
+  const [showReceipt, setShowReceipt] = useState(false);
+
+  // --- EFFET CHARGEMENT (SPLASH) ---
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 2500); // L'intro dure 2.5 secondes
+    return () => clearTimeout(timer);
+  }, []);
+
+  // --- FONCTIONS SONORES ---
+  const playSound = (url: string) => {
+    const audio = new Audio(url);
+    audio.volume = 0.5;
+    audio.play().catch(e => console.log("Audio blocked", e));
+  };
 
   useEffect(() => {
     const checkStatus = () => setStatus(getRestaurantStatus());
@@ -299,13 +321,16 @@ export default function Home() {
       price: variation.price,
       size: variation.size === "Unique" ? "" : variation.size,
       options: options,
-      // On ajoute l'image de l'item d'origine
-      image: item.image, 
+      image: item.image,
       id: Math.random()
     };
     setCart([...cart, cartItem]);
     setCustomizingItem(null);
+    
+    // Son & Toast
+    playSound(SOUND_ADD);
     showToast(`"${item.name}" ajouté au panier !`);
+    
     const isMainDish = item.price > 20; 
     if (isMainDish) {
         setTimeout(() => setShowUpsell(true), 500); 
@@ -321,6 +346,7 @@ export default function Home() {
           id: Math.random()
       };
       setCart(prev => [...prev, cartItem]);
+      playSound(SOUND_ADD);
       showToast(`+ ${uItem.name} ajouté !`);
       setShowUpsell(false); 
   };
@@ -340,17 +366,23 @@ export default function Home() {
   const validatePointsCode = () => {
       if (inputCode.toUpperCase() === SECRET_CODE) {
           const newPoints = user.points + user.pendingPoints;
-          saveUserData({ ...user, points: newPoints, pendingPoints: 0 }); 
-          showToast(`Félicitations ! ${user.pendingPoints} points ajoutés !`);
+          saveUserData({ ...user, points: newPoints, pendingPoints: 0, pendingCode: '' }); 
+          playSound(SOUND_SUCCESS);
+          showToast(`Félicitations ! +${user.pendingPoints} points !`);
           setShowCodeInput(false);
+          setInputCode('');
       } else {
-          alert("Code incorrect.");
+          alert("Code incorrect. Vérifiez votre ticket.");
       }
   };
 
   const saveUserData = (newData: any) => {
     setUser(newData);
     localStorage.setItem('foodji_account', JSON.stringify(newData));
+  };
+
+  const handlePrint = () => {
+      window.print();
   };
 
   const sendToResto = () => {
@@ -360,20 +392,22 @@ export default function Home() {
         return;
     }
 
+    const uniqueCode = generateUniqueCode();
     const amountEligibleForPoints = cartTotal - discount; 
     const earnedPoints = parseFloat((amountEligibleForPoints * 0.05).toFixed(1));
     
+    setFinalTotal(currentFinalPrice);
     const { comment, locationLink, ...userToSave } = user;
     const pointsAfterUsage = user.points - discount;
-    saveUserData({ ...userToSave, points: pointsAfterUsage, pendingPoints: earnedPoints });
-
-    setFinalTotal(currentFinalPrice);
+    saveUserData({ ...userToSave, points: pointsAfterUsage, pendingPoints: earnedPoints, pendingCode: uniqueCode });
 
     let methodLabel = "🛵 Livraison";
     if (orderMethod === 'emporter') methodLabel = "🛍️ Je passe la récupérer";
     if (orderMethod === 'sur_place') methodLabel = "🍽️ Sur Place";
 
     let message = `*NOUVELLE COMMANDE FOODJI* 🌋\n`;
+    message += `---------------------------\n`;
+    message += `🔐 *CODE FIDÉLITÉ : ${uniqueCode}*\n`;
     message += `---------------------------\n`;
     message += `📌 *Type :* ${methodLabel}\n`;
     message += `👤 *Client :* ${user.name}\n`;
@@ -399,6 +433,7 @@ export default function Home() {
     const url = `https://wa.me/${PHONE_NUMBER_RESTO}?text=${encodeURIComponent(message)}`;
     window.open(url, '_blank');
 
+    playSound(SOUND_SUCCESS); // Son de succès !
     setView('success');
   };
 
@@ -421,12 +456,60 @@ export default function Home() {
   const isAddressNeeded = orderMethod === 'livraison';
   const canOrder = user.name && isValidMoroccanPhone(user.phone) && (!isAddressNeeded || user.address);
 
+  // --- RENDU INTRO (SPLASH) ---
+  if (loading) {
+      return (
+          <div className="fixed inset-0 bg-[#151e32] flex flex-col items-center justify-center z-[999]">
+              <img src="/foodji.png" alt="Logo" className="w-48 h-48 mb-6 animate-pulse drop-shadow-2xl" />
+              <div className="text-[#a31d24] font-bold tracking-[0.3em] text-sm animate-bounce">CHARGEMENT...</div>
+              {/* Petite animation de barre */}
+              <div className="w-32 h-1 bg-gray-800 mt-4 rounded-full overflow-hidden">
+                  <div className="h-full bg-[#a31d24] animate-progress"></div>
+              </div>
+              <style jsx>{`
+                  @keyframes progress { 0% { width: 0%; } 100% { width: 100%; } }
+                  .animate-progress { animation: progress 2.5s ease-out forwards; }
+              `}</style>
+          </div>
+      );
+  }
+
   return (
     <div className={`min-h-screen ${COLORS.bg} text-white font-sans pb-24 selection:bg-red-900 relative`}>
       
-      {toast && (
-          <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[200] bg-green-500 text-white px-6 py-3 rounded-full shadow-2xl font-bold animate-bounce-slight flex items-center gap-2">
-              <span>✅</span> {toast}
+      <style jsx global>{`
+        @media print {
+          body * { visibility: hidden; }
+          #receipt-print, #receipt-print * { visibility: visible; }
+          #receipt-print { position: absolute; left: 0; top: 0; width: 100%; color: black; background: white; }
+          .no-print { display: none; }
+        }
+        /* Animation de fond "Lava" */
+        @keyframes lava {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        .bg-animated {
+            background: linear-gradient(-45deg, #151e32, #0f172a, #1e293b, #2a0a0d);
+            background-size: 400% 400%;
+            animation: lava 15s ease infinite;
+        }
+      `}</style>
+
+      {/* --- ARRIÈRE PLAN ANIMÉ --- */}
+      <div className="fixed inset-0 bg-animated -z-10"></div>
+
+      {toast && <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[200] bg-green-500 text-white px-6 py-3 rounded-full shadow-2xl font-bold animate-bounce-slight flex items-center gap-2"><span>✅</span> {toast}</div>}
+
+      {showUpsell && (
+          <div className="fixed inset-0 z-[160] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+              <div className={`${COLORS.bgLight} p-6 rounded-2xl border border-white/10 max-w-sm w-full text-center backdrop-blur-md`}>
+                  <h3 className="text-xl font-bold text-white mb-1">Un petit supplément ? 😋</h3>
+                  <p className="text-sm text-gray-400 mb-6">Complétez votre repas avec ceci :</p>
+                  <div className="grid grid-cols-2 gap-3 mb-6">{UPSELL_ITEMS.map((uItem) => (<button key={uItem.name} onClick={() => addUpsellItem(uItem)} className="bg-[#151e32] p-3 rounded-xl border border-white/5 hover:border-[#a31d24] transition group"><div className="text-3xl mb-2 group-hover:scale-110 transition">{uItem.emoji}</div><div className="text-xs font-bold text-white">{uItem.name}</div><div className="text-xs text-[#a31d24]">{uItem.price} DH</div></button>))}</div>
+                  <button onClick={() => setShowUpsell(false)} className="text-gray-500 text-sm hover:text-white underline">Non merci, je continue</button>
+              </div>
           </div>
       )}
 
@@ -434,33 +517,44 @@ export default function Home() {
           <div className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
               <div className={`${COLORS.bgLight} p-6 rounded-2xl border border-white/10 max-w-sm w-full text-center`}>
                   <h3 className="text-xl font-bold text-white mb-4">Valider mes points 🎁</h3>
-                  <p className="text-sm text-gray-400 mb-4">Entrez le code présent sur votre ticket de caisse ou donné par le livreur :</p>
-                  <input type="text" className="w-full p-3 rounded-lg bg-black/30 border border-gray-600 text-white text-center text-xl tracking-widest mb-4 uppercase" placeholder="CODE" value={inputCode} onChange={(e) => setInputCode(e.target.value)} />
+                  <p className="text-sm text-gray-400 mb-4">Entrez le code présent sur votre ticket :</p>
+                  <input type="text" className="w-full p-3 rounded-lg bg-black/30 border border-gray-600 text-white text-center text-xl tracking-widest mb-4 uppercase" placeholder="#CODE" value={inputCode} onChange={(e) => setInputCode(e.target.value)} />
                   <button onClick={validatePointsCode} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold mb-3">Valider</button>
                   <button onClick={() => setShowCodeInput(false)} className="text-gray-500 text-sm underline">Annuler</button>
               </div>
           </div>
       )}
 
-      {showUpsell && (
-          <div className="fixed inset-0 z-[160] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-              <div className={`${COLORS.bgLight} p-6 rounded-2xl border border-white/10 max-w-sm w-full text-center`}>
-                  <h3 className="text-xl font-bold text-white mb-1">Un petit supplément ? 😋</h3>
-                  <p className="text-sm text-gray-400 mb-6">Complétez votre repas avec ceci :</p>
-                  <div className="grid grid-cols-2 gap-3 mb-6">
-                      {UPSELL_ITEMS.map((uItem) => (
-                          <button key={uItem.name} onClick={() => addUpsellItem(uItem)} className="bg-[#151e32] p-3 rounded-xl border border-white/5 hover:border-[#a31d24] transition group">
-                              <div className="text-3xl mb-2 group-hover:scale-110 transition">{uItem.emoji}</div>
-                              <div className="text-xs font-bold text-white">{uItem.name}</div>
-                              <div className="text-xs text-[#a31d24]">{uItem.price} DH</div>
-                          </button>
-                      ))}
+      {showReceipt && (
+          <div className="fixed inset-0 z-[250] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-white text-black w-full max-w-sm p-6 rounded-lg shadow-2xl max-h-[90vh] overflow-y-auto relative">
+                  <button onClick={() => setShowReceipt(false)} className="absolute top-2 right-2 text-gray-500 text-2xl no-print">✕</button>
+                  <div id="receipt-print" className="text-center font-mono text-sm">
+                      <h2 className="text-2xl font-black mb-1">FOODJI</h2>
+                      <p className="text-xs mb-4">L'éruption des saveurs</p>
+                      <p className="mb-4 border-b border-dashed border-black pb-2">{new Date().toLocaleString('fr-MA')}<br/>Client : {user.name}<br/>Tél : {user.phone}</p>
+                      <div className="text-left mb-4">
+                          {cart.map((item, i) => (
+                              <div key={i} className="mb-2">
+                                  <div className="flex justify-between font-bold"><span>{item.name} {item.size !== "Unique" && `(${item.size})`}</span><span>{item.price} dh</span></div>
+                                  {item.options && item.options.length > 0 && (<div className="text-xs text-gray-600 ml-2">- {item.options.join(', ')}</div>)}
+                              </div>
+                          ))}
+                      </div>
+                      <div className="border-t border-dashed border-black pt-2 mb-4">
+                          {deliveryFee > 0 && <div className="flex justify-between"><span>Livraison</span><span>{deliveryFee} dh</span></div>}
+                          {discount > 0 && <div className="flex justify-between"><span>Remise Fidélité</span><span>-{discount} dh</span></div>}
+                          <div className="flex justify-between text-xl font-black mt-2"><span>TOTAL</span><span>{finalTotal} DH</span></div>
+                      </div>
+                      <p className="text-xs mt-4">Merci de votre visite !</p>
+                      <p className="text-xs mt-1">Code Points : {user.pendingCode}</p> 
+                      {/* Affiche le code sur le ticket du client pour qu'il puisse le rentrer plus tard */}
                   </div>
-                  <button onClick={() => setShowUpsell(false)} className="text-gray-500 text-sm hover:text-white underline">Non merci, je continue</button>
+                  <button onClick={handlePrint} className="w-full bg-black text-white py-3 rounded-lg font-bold mt-4 no-print">🖨️ Imprimer</button>
               </div>
           </div>
       )}
-
+      
       {customizingItem && (
          <div className="fixed inset-0 z-[150] bg-black/90 backdrop-blur-sm flex items-end sm:items-center justify-center animate-fade-in">
             <div className={`bg-[#1f2b45] w-full max-w-md p-6 rounded-t-3xl sm:rounded-2xl border-t-2 sm:border-2 border-[#a31d24] shadow-2xl flex flex-col max-h-[90vh]`}>
@@ -480,7 +574,7 @@ export default function Home() {
 
       {showClosedMessage && (
         <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-[#1f2b45] border-2 border-[#a31d24] p-8 rounded-2xl text-center max-w-sm shadow-2xl transform scale-110"><div className="text-6xl mb-4 animate-bounce">🚫</div><h3 className="text-2xl font-bold text-[#a31d24] mb-4">Oups, c&apos;est fermé !</h3><p className="text-gray-300 text-lg mb-8 leading-relaxed font-medium">On sait qu&apos;on te manque mais fallait venir plus tôt...<br/><span className="text-white font-bold text-xl block mt-2">NE POUSSEZ PAS ! 😤</span><span className="text-sm text-gray-400 block mt-2">Un peu de patience, on ouvre bientôt.</span></p><button onClick={() => setShowClosedMessage(false)} className="bg-white text-black px-6 py-3 rounded-full font-bold hover:bg-gray-200 w-full">D&apos;accord, à demain ❤️</button></div>
+            <div className="bg-[#1f2b45] border-2 border-[#a31d24] p-8 rounded-2xl text-center max-w-sm shadow-2xl transform scale-110"><div className="text-6xl mb-4 animate-bounce">🚫</div><h3 className="text-2xl font-bold text-[#a31d24] mb-4">Oups, c'est fermé !</h3><p className="text-gray-300 text-lg mb-8 leading-relaxed font-medium">On sait qu'on te manque mais fallait venir plus tôt...<br/><span className="text-white font-bold text-xl block mt-2">NE POUSSEZ PAS ! 😤</span><span className="text-sm text-gray-400 block mt-2">Un peu de patience, on ouvre bientôt.</span></p><button onClick={() => setShowClosedMessage(false)} className="bg-white text-black px-6 py-3 rounded-full font-bold hover:bg-gray-200 w-full">D'accord, à demain ❤️</button></div>
         </div>
       )}
 
@@ -488,7 +582,10 @@ export default function Home() {
           <div className="fixed inset-0 z-[50] bg-[#151e32] flex flex-col items-center justify-center p-6 text-center animate-fade-in">
               <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center text-4xl mb-6 shadow-[0_0_30px_rgba(34,197,94,0.5)]">🎉</div>
               <h2 className="text-3xl font-bold text-white mb-2">Commande Envoyée !</h2>
-              <p className="text-gray-400 mb-8">Merci, on s&apos;occupe de tout.</p>
+              <p className="text-gray-400 mb-8">Merci, on s'occupe de tout.</p>
+              
+              <button onClick={() => setShowReceipt(true)} className="mb-4 text-white underline text-sm">📄 Voir mon ticket</button>
+
               {user.pendingPoints > 0 && (
                   <div className="w-full max-w-sm bg-[#a31d24]/20 p-4 rounded-xl border border-[#a31d24] mb-6">
                       <p className="text-white font-bold mb-2">🎁 Vous avez {user.pendingPoints} points en attente !</p>
@@ -501,13 +598,12 @@ export default function Home() {
                       <button onClick={sendToDriver} className="w-full bg-[#007acc] text-white py-4 rounded-xl font-bold text-lg shadow-lg hover:scale-[1.02] transition flex items-center justify-center gap-2"><span>🛵 Envoyer infos au Livreur</span></button>
                   </div>
               )}
-              <button onClick={() => {setCart([]); setView('home');}} className="text-gray-500 hover:text-white underline">Retour à l&apos;accueil</button>
+              <button onClick={() => {setCart([]); setView('home');}} className="text-gray-500 hover:text-white underline">Retour à l'accueil</button>
           </div>
       )}
 
       {view === 'home' && (
         <div className={`flex flex-col items-center justify-center h-screen p-4 text-center ${COLORS.bg} relative overflow-hidden`}>
-          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-transparent to-black opacity-60 pointer-events-none"></div>
           <button onClick={() => setView('profile')} className={`absolute top-6 right-6 ${COLORS.bgLight} backdrop-blur-md px-4 py-2 rounded-full flex items-center border border-white/10 z-10 hover:bg-white/10 transition`}>
              <span className="mr-2 text-lg">👤</span>
              <span className="font-bold text-sm text-gray-200">{user.name ? user.name : 'Compte'}</span>
@@ -533,7 +629,7 @@ export default function Home() {
             <h3 className={`text-lg font-bold ${COLORS.textAccent} mb-6`}>Mes Coordonnées</h3>
             <div className="space-y-5">
               <div className="group"><label className="block text-xs font-bold text-gray-500 mb-1">NOM</label><input type="text" name="name" value={user.name} onChange={handleInputChange} className={`w-full ${COLORS.bg} border border-gray-700 rounded-lg p-3 text-white outline-none focus:border-[#a31d24] transition-colors`}/></div>
-              <div className="group"><label className="block text-xs font-bold text-gray-500 mb-1">TÉLÉPHONE</label><input type="tel" name="phone" value={user.phone} onChange={handleInputChange} placeholder="06..." className={`w-full ${COLORS.bg} p-4 rounded-lg text-white border outline-none transition ${user.phone && !isValidMoroccanPhone(user.phone) ? 'border-red-500' : 'border-gray-700 focus:border-[#a31d24]'}`}/></div>
+              <div className="group"><label className="block text-xs font-bold text-gray-500 mb-1">TÉLÉPHONE</label><input type="tel" name="phone" value={user.phone} onChange={handleInputChange} className={`w-full ${COLORS.bg} p-4 rounded-lg text-white border outline-none transition ${user.phone && !isValidMoroccanPhone(user.phone) ? 'border-red-500' : 'border-gray-700 focus:border-[#a31d24]'}`}/></div>
               <div className="group"><label className="block text-xs font-bold text-gray-500 mb-1">ADRESSE</label><textarea name="address" value={user.address} onChange={handleInputChange} placeholder="Adresse de livraison" className={`w-full ${COLORS.bg} p-4 rounded-lg text-white border border-gray-700 focus:border-[#a31d24] outline-none h-24 transition`}/></div>
               <button onClick={() => saveUserData(user)} className={`w-full py-4 rounded-lg font-bold transition mt-2 bg-gray-700 text-white hover:bg-gray-600`}>Enregistrer</button>
             </div>
@@ -549,12 +645,9 @@ export default function Home() {
           </header>
           <div className="p-4 space-y-4 flex-grow overflow-y-auto bg-gradient-to-b from-transparent to-black/20"><h3 className="text-xl font-bold text-white mb-2 mt-2 flex items-center"><span className="w-1 h-6 bg-[#a31d24] mr-3 rounded-full"></span>{activeCategory}</h3>
             {currentItems.map((item, index) => (
-              <div key={index} className={`${COLORS.bgLight} p-4 rounded-xl shadow-lg border border-white/5 hover:border-[#a31d24]/30 transition-colors`}>
-                <div className="mb-3">
-                    {item.image && <img src={item.image} alt={item.name} className="w-full h-32 object-cover rounded-lg mb-3" />}
-                    <h4 className="font-bold text-lg text-gray-100 leading-tight">{item.name}</h4>
-                    {item.desc && <p className="text-xs text-gray-400 mt-1 font-light">{item.desc}</p>}
-                </div>
+              <div key={index} className={`${COLORS.bgLight} p-4 rounded-xl shadow-lg border border-white/5 hover:border-[#a31d24]/30 transition-colors`}><div className="mb-3">
+                {item.image && <img src={item.image} alt={item.name} className="w-full h-32 object-cover rounded-lg mb-3" />}
+                <h4 className="font-bold text-lg text-gray-100 leading-tight">{item.name}</h4>{item.desc && <p className="text-xs text-gray-400 mt-1 font-light">{item.desc}</p>}</div>
                 <div className="flex flex-wrap gap-2">{item.variations.map((v, vIndex) => (<button key={vIndex} onClick={() => initiateAddToCart(item, v)} className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm font-bold transition-all flex-grow ${item.variations.length > 1 ? 'bg-[#151e32] text-gray-300 border border-gray-700 hover:border-[#a31d24] hover:text-white' : 'bg-white text-black hover:bg-gray-200'}`}><span>{v.size === "Unique" ? "Commander" : v.size}</span><span className={`ml-2 ${item.variations.length > 1 ? COLORS.textAccent : 'text-black'}`}>{v.price}dh</span>{item.variations.length === 1 && <span className="ml-2 text-[#a31d24]">+</span>}</button>))}</div>
               </div>
             ))}
@@ -576,7 +669,7 @@ export default function Home() {
                </div>
              ))}
              <div className="mt-4"><label className="block text-xs font-bold text-gray-500 mb-1">COMMENTAIRE / PRÉCISIONS</label><input type="text" name="comment" value={user.comment || ''} onChange={handleInputChange} placeholder="Ex: Sans oignons, code porte..." className={`w-full ${COLORS.bgLight} border border-white/10 rounded-xl p-4 text-white outline-none focus:border-[#a31d24] transition-colors`}/></div>
-             <div className="mt-4 p-4 rounded-xl bg-white/5 border border-white/5"><div className="flex justify-between text-gray-400 mb-2"><span>Nombre d&apos;articles</span><span>{cart.length}</span></div><div className="flex justify-between text-2xl font-bold text-white pt-4 border-t border-white/10"><span>Total Panier</span><span className={COLORS.textAccent}>{cartTotal} DH</span></div></div>
+             <div className="mt-4 p-4 rounded-xl bg-white/5 border border-white/5"><div className="flex justify-between text-gray-400 mb-2"><span>Nombre d'articles</span><span>{cart.length}</span></div><div className="flex justify-between text-2xl font-bold text-white pt-4 border-t border-white/10"><span>Total Panier</span><span className={COLORS.textAccent}>{cartTotal} DH</span></div></div>
              <button onClick={() => setView('checkout')} className={`w-full ${COLORS.accent} text-white py-4 rounded-xl font-bold text-lg shadow-lg mt-4 hover:scale-[1.02] transition transform`}>Choisir mode de livraison →</button>
            </div>
           )}
