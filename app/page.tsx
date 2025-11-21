@@ -6,7 +6,6 @@ import { useState, useEffect } from 'react';
 // --- CONFIGURATION ---
 const PHONE_NUMBER_RESTO = "+212668197671"; 
 const PHONE_NUMBER_LIVREUR = "+212668197671"; 
-const SECRET_CODE = "FOODJI"; 
 
 const COLORS = {
   bg: "bg-[#151e32]", 
@@ -142,12 +141,10 @@ const getRestaurantStatus = () => {
   }
   const todaySchedule = SCHEDULE[day];
   if (todaySchedule.open === null) return { isOpen: false, closeAt: null, openAt: "Demain" };
-  
   let isLateNightShift = false;
   if (todaySchedule.close !== null && todaySchedule.open !== null) {
     isLateNightShift = todaySchedule.close < todaySchedule.open;
   }
-
   if (todaySchedule.open !== null && todaySchedule.close !== null) {
     if (isLateNightShift) {
         if (hour >= todaySchedule.open) return { isOpen: true, closeAt: todaySchedule.close, openAt: null };
@@ -164,16 +161,15 @@ const isValidMoroccanPhone = (phone: string) => {
   return regex.test(cleanPhone);
 };
 
-const generateUniqueCode = () => {
-    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    let result = "#";
-    for (let i = 0; i < 4; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
+// --- GÉNÉRATION DU CODE SÉCURISÉ ---
+// Minute (2 chiffres) + 2 derniers chiffres du téléphone
+const generateSecureCode = (phone: string) => {
+    const now = new Date();
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const lastTwoDigits = phone.trim().slice(-2); // Prend les 2 derniers
+    return `${minutes}${lastTwoDigits}`;
 };
 
-// Fonction helper pour nettoyer le numéro pour le lien WhatsApp
 const cleanPhoneForLink = (p: string) => p.replace('+', '');
 
 export default function Home() {
@@ -350,14 +346,15 @@ export default function Home() {
   };
 
   const validatePointsCode = () => {
-      if (inputCode.toUpperCase() === SECRET_CODE) {
+      // Comparaison avec le code stocké dans la session du client
+      if (inputCode === user.pendingCode) {
           const newPoints = user.points + user.pendingPoints;
           saveUserData({ ...user, points: newPoints, pendingPoints: 0, pendingCode: '' }); 
           showToast(`Félicitations ! +${user.pendingPoints} points !`);
           setShowCodeInput(false);
           setInputCode('');
       } else {
-          alert("Code incorrect.");
+          alert("Code incorrect. Vérifiez le code sur votre ticket (Minute + Fin de numéro).");
       }
   };
 
@@ -377,7 +374,9 @@ export default function Home() {
         return;
     }
 
-    const uniqueCode = generateUniqueCode();
+    // GÉNÉRATION DU CODE (Minute + 2 derniers chiffres)
+    const uniqueCode = generateSecureCode(user.phone);
+
     const amountEligibleForPoints = cartTotal - discount; 
     const earnedPoints = parseFloat((amountEligibleForPoints * 0.05).toFixed(1));
     
@@ -391,8 +390,6 @@ export default function Home() {
     if (orderMethod === 'sur_place') methodLabel = "🍽️ Sur Place";
 
     let message = `*NOUVELLE COMMANDE FOODJI* 🌋\n`;
-    message += `---------------------------\n`;
-    message += `🔐 *CODE FIDÉLITÉ : ${uniqueCode}*\n`;
     message += `---------------------------\n`;
     message += `📌 *Type :* ${methodLabel}\n`;
     message += `👤 *Client :* ${user.name}\n`;
@@ -415,7 +412,6 @@ export default function Home() {
     if (usePoints && discount > 0) message += `\n💎 Points utilisés : -${discount} DH`;
     message += `\n\n💰 *TOTAL À PAYER : ${currentFinalPrice} DH*`;
     
-    // UTILISATION DE LA FONCTION DE NETTOYAGE POUR L'URL
     const url = `https://wa.me/${cleanPhoneForLink(PHONE_NUMBER_RESTO)}?text=${encodeURIComponent(message)}`;
     window.open(url, '_blank');
 
@@ -499,7 +495,7 @@ export default function Home() {
               <div className={`${COLORS.bgLight} p-6 rounded-2xl border border-white/10 max-w-sm w-full text-center`}>
                   <h3 className="text-xl font-bold text-white mb-4">Valider mes points 🎁</h3>
                   <p className="text-sm text-gray-400 mb-4">Entrez le code présent sur votre ticket :</p>
-                  <input type="text" className="w-full p-3 rounded-lg bg-black/30 border border-gray-600 text-white text-center text-xl tracking-widest mb-4 uppercase" placeholder="#CODE" value={inputCode} onChange={(e) => setInputCode(e.target.value)} />
+                  <input type="text" className="w-full p-3 rounded-lg bg-black/30 border border-gray-600 text-white text-center text-xl tracking-widest mb-4" placeholder="Ex: 4288" value={inputCode} onChange={(e) => setInputCode(e.target.value)} />
                   <button onClick={validatePointsCode} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold mb-3">Valider</button>
                   <button onClick={() => setShowCodeInput(false)} className="text-gray-500 text-sm underline">Annuler</button>
               </div>
@@ -528,7 +524,6 @@ export default function Home() {
                           <div className="flex justify-between text-xl font-black mt-2"><span>TOTAL</span><span>{finalTotal} DH</span></div>
                       </div>
                       <p className="text-xs mt-4">Merci de votre visite !</p>
-                      <p className="text-xs mt-1">Code Points : {user.pendingCode}</p> 
                   </div>
                   <button onClick={handlePrint} className="w-full bg-black text-white py-3 rounded-lg font-bold mt-4 no-print">🖨️ Imprimer</button>
               </div>
