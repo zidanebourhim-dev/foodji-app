@@ -4,8 +4,9 @@
 import { useState, useEffect } from 'react';
 
 // --- CONFIGURATION ---
-const PHONE_NUMBER_RESTO = "+212668197671"; 
-const PHONE_NUMBER_LIVREUR = "+212654859675"; 
+const PHONE_NUMBER_RESTO = "212600000000"; 
+const PHONE_NUMBER_LIVREUR = "212600000000"; 
+const SECRET_CODE = "FOODJI"; 
 
 const COLORS = {
   bg: "bg-[#151e32]", 
@@ -14,10 +15,10 @@ const COLORS = {
   textAccent: "text-[#a31d24]", 
 };
 
-// --- DATA UPSELL ---
+// --- DATA MARKETING ---
 const UPSELL_ITEMS = [
   { name: "Soda 33cl", price: 12, emoji: "🥤" },
-  { name: "Frites", price: 15, emoji: "🍟" },
+  { name: "Frites", price: 15, emoji: "🍟" }
 ];
 
 const PROMO_TEXT = "🔥 OFFRE DU MOMENT : Livraison offerte dès 150 DH !";
@@ -28,7 +29,7 @@ const VIANDES_TACOS = ["Poulet", "Viande hachée", "Nuggets", "Crispy", "Cordon 
 const GARNITURES_PIZZA = ["Viande hachée", "Poulet", "Cannibale", "Fruits de mer", "Charcuterie", "4 fromages", "Thon", "Végétarienne", "Pepperoni", "Salami", "Surprenez-moi !"];
 const TYPES_PATES = ["Spaghetti", "Penne", "Tagliatelle"];
 
-// --- HORAIRES (CORRECTION TYPE) ---
+// --- HORAIRES ---
 const SCHEDULE: Record<number, { day: string; open: number | null; close: number | null }> = {
   0: { day: "Dimanche", open: 18, close: 1 },
   1: { day: "Lundi",    open: 12, close: 1 },
@@ -39,93 +40,101 @@ const SCHEDULE: Record<number, { day: string; open: number | null; close: number
   6: { day: "Samedi",   open: 18, close: 1 },
 };
 
-// --- DONNÉES DU MENU ---
+// --- DONNÉES DU MENU (AVEC IMAGES) ---
+// 👇 AJOUTEZ VOS IMAGES ICI : image: "/nom-fichier.jpg"
 const categories = [
   {
     title: "🌮 Tacos",
     items: [
-      { name: "Tacos Mixte", desc: "Composez votre mélange.", logic: "tacos_mixte", hasSauce: true, variations: [{size: "L", price: 42}, {size: "XL", price: 76}, {size: "XXL", price: 112}] },
-      { name: "Tacos Le Taj Mahal", desc: "Viande hachée, Cordon bleu, Nuggets.", hasSauce: true, variations: [{size: "L", price: 34}, {size: "XL", price: 54}, {size: "XXL", price: 96}] },
-      { name: "Tacos Crispy", desc: "Poulet pané croustillant.", hasSauce: true, variations: [{size: "L", price: 42}, {size: "XL", price: 76}, {size: "XXL", price: 112}] },
-      { name: "Tacos Viande hachée", desc: "", hasSauce: true, variations: [{size: "L", price: 39}, {size: "XL", price: 72}, {size: "XXL", price: 104}] },
-      { name: "Tacos Cordon Bleu", desc: "", hasSauce: true, variations: [{size: "L", price: 39}, {size: "XL", price: 72}, {size: "XXL", price: 104}] },
-      { name: "Tacos Nuggets", desc: "", hasSauce: true, variations: [{size: "L", price: 39}, {size: "XL", price: 72}, {size: "XXL", price: 104}] },
+      { 
+        name: "Tacos Mixte", 
+        desc: "Composez votre mélange.", 
+        image: "", // 👈 Mettez "/tacos-mixte.jpg" ici une fois l'image uploadée
+        logic: "tacos_mixte", 
+        hasSauce: true, 
+        variations: [{size: "L", price: 42}, {size: "XL", price: 76}, {size: "XXL", price: 112}] 
+      },
+      { name: "Tacos Le Taj Mahal", image: "", desc: "Viande hachée, Cordon bleu, Nuggets.", hasSauce: true, variations: [{size: "L", price: 34}, {size: "XL", price: 54}, {size: "XXL", price: 96}] },
+      { name: "Tacos Crispy", image: "", desc: "Poulet pané croustillant.", hasSauce: true, variations: [{size: "L", price: 42}, {size: "XL", price: 76}, {size: "XXL", price: 112}] },
+      { name: "Tacos Viande hachée", image: "", desc: "", hasSauce: true, variations: [{size: "L", price: 39}, {size: "XL", price: 72}, {size: "XXL", price: 104}] },
+      { name: "Tacos Cordon Bleu", image: "", desc: "", hasSauce: true, variations: [{size: "L", price: 39}, {size: "XL", price: 72}, {size: "XXL", price: 104}] },
+      { name: "Tacos Nuggets", image: "", desc: "", hasSauce: true, variations: [{size: "L", price: 39}, {size: "XL", price: 72}, {size: "XXL", price: 104}] },
     ]
   },
   {
     title: "🍕 Pizzas",
     items: [
-      { name: "2 Saisons", desc: "2 moitiés au choix.", logic: "pizza_2", variations: [{size: "M", price: 52}, {size: "L", price: 84}] },
-      { name: "4 Saisons", desc: "3 à 4 ingrédients au choix.", logic: "pizza_4", variations: [{size: "M", price: 58}, {size: "L", price: 92}] },
-      { name: "Pep's", desc: "Sauce tomate, mozzarella, origan.", variations: [{size: "M", price: 28}] },
-      { name: "Burrata", desc: "Crémeuse et fraîche.", variations: [{size: "M", price: 78}] },
-      { name: "4 Fromages", desc: "Mozza, gorgonzola, chèvre, parmesan.", variations: [{size: "M", price: 52}, {size: "L", price: 84}] },
-      { name: "Pepperoni", desc: "", variations: [{size: "M", price: 52}, {size: "L", price: 84}] },
-      { name: "Cannibale", desc: "Viande hachée, poulet, merguez.", variations: [{size: "M", price: 56}, {size: "L", price: 87}] },
-      { name: "Thon", desc: "", variations: [{size: "M", price: 46}, {size: "L", price: 62}] },
-      { name: "Fruits de mer", desc: "", variations: [{size: "M", price: 58}, {size: "L", price: 92}] },
-      { name: "Charcuterie", desc: "", variations: [{size: "M", price: 48}, {size: "L", price: 68}] },
-      { name: "Végétarienne", desc: "", variations: [{size: "M", price: 46}, {size: "L", price: 62}] },
-      { name: "Salami", desc: "", variations: [{size: "M", price: 58}, {size: "L", price: 92}] },
-      { name: "Calzone", desc: "", variations: [{size: "M", price: 48}, {size: "L", price: 68}] },
-      { name: "Pizza Viande Hachée", desc: "", variations: [{size: "M", price: 52}, {size: "L", price: 84}] },
-      { name: "Pizza Poulet", desc: "", variations: [{size: "M", price: 52}, {size: "L", price: 84}] },
+      { name: "2 Saisons", image: "", desc: "2 moitiés au choix.", logic: "pizza_2", variations: [{size: "M", price: 52}, {size: "L", price: 84}] },
+      { name: "4 Saisons", image: "", desc: "3 à 4 ingrédients au choix.", logic: "pizza_4", variations: [{size: "M", price: 58}, {size: "L", price: 92}] },
+      { name: "Pep's", image: "", desc: "Sauce tomate, mozzarella, origan.", variations: [{size: "M", price: 28}] },
+      { name: "Burrata", image: "", desc: "Crémeuse et fraîche.", variations: [{size: "M", price: 78}] },
+      { name: "4 Fromages", image: "", desc: "Mozza, gorgonzola, chèvre, parmesan.", variations: [{size: "M", price: 52}, {size: "L", price: 84}] },
+      { name: "Pepperoni", image: "", desc: "", variations: [{size: "M", price: 52}, {size: "L", price: 84}] },
+      { name: "Cannibale", image: "", desc: "Viande hachée, poulet, merguez.", variations: [{size: "M", price: 56}, {size: "L", price: 87}] },
+      { name: "Thon", image: "", desc: "", variations: [{size: "M", price: 46}, {size: "L", price: 62}] },
+      { name: "Fruits de mer", image: "", desc: "", variations: [{size: "M", price: 58}, {size: "L", price: 92}] },
+      { name: "Charcuterie", image: "", desc: "", variations: [{size: "M", price: 48}, {size: "L", price: 68}] },
+      { name: "Végétarienne", image: "", desc: "", variations: [{size: "M", price: 46}, {size: "L", price: 62}] },
+      { name: "Salami", image: "", desc: "", variations: [{size: "M", price: 58}, {size: "L", price: 92}] },
+      { name: "Calzone", image: "", desc: "", variations: [{size: "M", price: 48}, {size: "L", price: 68}] },
+      { name: "Pizza Viande Hachée", image: "", desc: "", variations: [{size: "M", price: 52}, {size: "L", price: 84}] },
+      { name: "Pizza Poulet", image: "", desc: "", variations: [{size: "M", price: 52}, {size: "L", price: 84}] },
     ]
   },
   {
     title: "🍔 Burgers",
     items: [
-      { name: "Burger Cheese", desc: "Simple et efficace.", variations: [{size: "Unique", price: 48}] },
-      { name: "Burger Double", desc: "Double steak, double plaisir.", variations: [{size: "Unique", price: 69}] },
-      { name: "Burger Le Buddha", desc: "Recette signature végétarienne.", variations: [{size: "Unique", price: 50}] },
-      { name: "Burger L'Extrême", desc: "Pour les grosses faims.", variations: [{size: "Unique", price: 74}] },
-      { name: "Burger Le Foodji", desc: "Le best-seller de la maison.", variations: [{size: "Unique", price: 58}] },
-      { name: "Burger Chicken Foodji", desc: "", variations: [{size: "Unique", price: 58}] },
-      { name: "Burger Chicken", desc: "", variations: [{size: "Unique", price: 48}] },
-      { name: "Burger Le Tasty", desc: "", variations: [{size: "Unique", price: 58}] },
+      { name: "Burger Cheese", image: "", desc: "Simple et efficace.", variations: [{size: "Unique", price: 48}] },
+      { name: "Burger Double", image: "", desc: "Double steak, double plaisir.", variations: [{size: "Unique", price: 69}] },
+      { name: "Burger Le Buddha", image: "", desc: "Recette signature végétarienne.", variations: [{size: "Unique", price: 50}] },
+      { name: "Burger L'Extrême", image: "", desc: "Pour les grosses faims.", variations: [{size: "Unique", price: 74}] },
+      { name: "Burger Le Foodji", image: "", desc: "Le best-seller de la maison.", variations: [{size: "Unique", price: 58}] },
+      { name: "Burger Chicken Foodji", image: "", desc: "", variations: [{size: "Unique", price: 58}] },
+      { name: "Burger Chicken", image: "", desc: "", variations: [{size: "Unique", price: 48}] },
+      { name: "Burger Le Tasty", image: "", desc: "", variations: [{size: "Unique", price: 58}] },
     ]
   },
   {
     title: "🍝 Pâtes",
     items: [
-      { name: "Pâtes Bolognaise", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 58}] },
-      { name: "Pâtes Saumon épinard", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 60}] },
-      { name: "Pâtes Poulet Champignon", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 62}] },
-      { name: "Pâtes Arrabiata", desc: "Sauce tomate pimentée.", logic: "pates_choix", variations: [{size: "Unique", price: 42}] },
-      { name: "Pâtes Carbonara", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 52}] },
-      { name: "Pâtes 4 fromages", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 58}] },
-      { name: "Pâtes Alfredo", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 62}] },
-      { name: "Pâtes Fruits de Mer", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 62}] },
-      { name: "Pâtes Salami", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 54}] },
+      { name: "Pâtes Bolognaise", image: "", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 58}] },
+      { name: "Pâtes Saumon épinard", image: "", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 60}] },
+      { name: "Pâtes Poulet Champignon", image: "", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 62}] },
+      { name: "Pâtes Arrabiata", image: "", desc: "Sauce tomate pimentée.", logic: "pates_choix", variations: [{size: "Unique", price: 42}] },
+      { name: "Pâtes Carbonara", image: "", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 52}] },
+      { name: "Pâtes 4 fromages", image: "", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 58}] },
+      { name: "Pâtes Alfredo", image: "", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 62}] },
+      { name: "Pâtes Fruits de Mer", image: "", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 62}] },
+      { name: "Pâtes Salami", image: "", desc: "", logic: "pates_choix", variations: [{size: "Unique", price: 54}] },
     ]
   },
   {
     title: "🌯 Burritos",
     items: [
-      { name: "Burrito Poulet", desc: "Pain tortilla, poulet, riz, maïs, laitue, tomate, cheddar.", variations: [{size: "Unique", price: 42}] },
-      { name: "Burrito Viande hachée", desc: "Pain tortilla, viande hachée, riz, cheddar, légumes.", variations: [{size: "Unique", price: 47}] },
-      { name: "Burrito Veggie", desc: "Pain tortilla, légumes sautés, riz, laitue, tomate, maïs, cheddar.", variations: [{size: "Unique", price: 39}] },
+      { name: "Burrito Poulet", image: "", desc: "Pain tortilla, poulet, riz, maïs, laitue, tomate, cheddar.", variations: [{size: "Unique", price: 42}] },
+      { name: "Burrito Viande hachée", image: "", desc: "Pain tortilla, viande hachée, riz, cheddar, légumes.", variations: [{size: "Unique", price: 47}] },
+      { name: "Burrito Veggie", image: "", desc: "Pain tortilla, légumes sautés, riz, laitue, tomate, maïs, cheddar.", variations: [{size: "Unique", price: 39}] },
     ]
   },
   {
     title: "🥙 Koniks",
     items: [
-      { name: "Koniks Poulet", desc: "Pain tortilla, poulet, cheddar, mélange de légumes.", variations: [{size: "Unique", price: 48}] },
-      { name: "Koniks Viande Hachée", desc: "Pain tortilla, viande hachée, cheddar, légumes.", variations: [{size: "Unique", price: 52}] },
-      { name: "L'IKonik", desc: "Pain tortilla, poulet et viande hachée, cheddar, légumes.", variations: [{size: "Unique", price: 58}] },
+      { name: "Koniks Poulet", image: "", desc: "Pain tortilla, poulet, cheddar, mélange de légumes.", variations: [{size: "Unique", price: 48}] },
+      { name: "Koniks Viande Hachée", image: "", desc: "Pain tortilla, viande hachée, cheddar, légumes.", variations: [{size: "Unique", price: 52}] },
+      { name: "L'IKonik", image: "", desc: "Pain tortilla, poulet et viande hachée, cheddar, légumes.", variations: [{size: "Unique", price: 58}] },
     ]
   },
   {
     title: "🍟 Sides",
     items: [
-      { name: "Ration Frites", desc: "", variations: [{size: "Unique", price: 15}] },
-      { name: "Frites Fromagères", desc: "", variations: [{size: "Unique", price: 30}] },
-      { name: "Tenders x5", desc: "", variations: [{size: "Unique", price: 35}] },
-      { name: "Mozza' Fingers x5", desc: "", variations: [{size: "Unique", price: 25}] },
-      { name: "Cheese Bomb x5", desc: "", variations: [{size: "Unique", price: 25}] },
-      { name: "Onion rings x5", desc: "", variations: [{size: "Unique", price: 25}] },
-      { name: "Frites Carbo", desc: "", variations: [{size: "Unique", price: 45}] },
-      { name: "Nuggets x5", desc: "", variations: [{size: "Unique", price: 25}] },
+      { name: "Ration Frites", image: "", desc: "", variations: [{size: "Unique", price: 15}] },
+      { name: "Frites Fromagères", image: "", desc: "", variations: [{size: "Unique", price: 30}] },
+      { name: "Tenders x5", image: "", desc: "", variations: [{size: "Unique", price: 35}] },
+      { name: "Mozza' Fingers x5", image: "", desc: "", variations: [{size: "Unique", price: 25}] },
+      { name: "Cheese Bomb x5", image: "", desc: "", variations: [{size: "Unique", price: 25}] },
+      { name: "Onion rings x5", image: "", desc: "", variations: [{size: "Unique", price: 25}] },
+      { name: "Frites Carbo", image: "", desc: "", variations: [{size: "Unique", price: 45}] },
+      { name: "Nuggets x5", image: "", desc: "", variations: [{size: "Unique", price: 25}] },
     ]
   }
 ];
@@ -134,27 +143,26 @@ const getRestaurantStatus = () => {
   const now = new Date();
   const day = now.getDay(); 
   const hour = now.getHours(); 
-
   const prevDay = (day === 0) ? 6 : day - 1;
   const prevSchedule = SCHEDULE[prevDay];
-  
   if (prevSchedule.open !== null && prevSchedule.close !== null && prevSchedule.close < prevSchedule.open && hour < prevSchedule.close) {
     return { isOpen: true, closeAt: prevSchedule.close, openAt: null };
   }
-
   const todaySchedule = SCHEDULE[day];
   if (todaySchedule.open === null) return { isOpen: false, closeAt: null, openAt: "Demain" };
-
-  const isLateNightShift = (todaySchedule.close !== null) && (todaySchedule.close < todaySchedule.open);
   
-  if (todaySchedule.close !== null) {
-      if (isLateNightShift) {
-        if (hour >= todaySchedule.open) return { isOpen: true, closeAt: todaySchedule.close, openAt: null };
-      } else {
-        if (hour >= todaySchedule.open && hour < todaySchedule.close) return { isOpen: true, closeAt: todaySchedule.close, openAt: null };
-      }
+  let isLateNightShift = false;
+  if (todaySchedule.close !== null && todaySchedule.open !== null) {
+    isLateNightShift = todaySchedule.close < todaySchedule.open;
   }
-  
+
+  if (todaySchedule.open !== null && todaySchedule.close !== null) {
+    if (isLateNightShift) {
+        if (hour >= todaySchedule.open) return { isOpen: true, closeAt: todaySchedule.close, openAt: null };
+    } else {
+        if (hour >= todaySchedule.open && hour < todaySchedule.close) return { isOpen: true, closeAt: todaySchedule.close, openAt: null };
+    }
+  }
   return { isOpen: false, closeAt: null, openAt: todaySchedule.open };
 };
 
@@ -168,19 +176,19 @@ export default function Home() {
   const [view, setView] = useState('home'); 
   const [activeCategory, setActiveCategory] = useState(categories[0].title);
   const [cart, setCart] = useState<any[]>([]); 
-  const [user, setUser] = useState({ name: '', phone: '', address: '', points: 0, comment: '', locationLink: '' });
+  const [user, setUser] = useState({ name: '', phone: '', address: '', points: 0, comment: '', locationLink: '', pendingPoints: 0 });
   const [usePoints, setUsePoints] = useState(false);
   const [orderMethod, setOrderMethod] = useState('livraison'); 
   const [showClosedMessage, setShowClosedMessage] = useState(false);
-  const [status, setStatus] = useState<{isOpen: boolean, closeAt: number | null, openAt: any}>({ isOpen: true, closeAt: null, openAt: null });
+  const [status, setStatus] = useState<{isOpen: boolean, closeAt: number | null, openAt: any}>({ isOpen: false, closeAt: null, openAt: null });
   const [isLocating, setIsLocating] = useState(false);
   const [finalTotal, setFinalTotal] = useState(0);
-  
-  // --- ETATS ADDITIONNELS ---
   const [customizingItem, setCustomizingItem] = useState<any>(null); 
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]); 
   const [showUpsell, setShowUpsell] = useState(false); 
   const [toast, setToast] = useState<string | null>(null); 
+  const [inputCode, setInputCode] = useState('');
+  const [showCodeInput, setShowCodeInput] = useState(false);
 
   useEffect(() => {
     const checkStatus = () => setStatus(getRestaurantStatus());
@@ -210,8 +218,8 @@ export default function Home() {
     setIsLocating(true);
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const link = `http://googleusercontent.com/maps.google.com/?q=${position.coords.latitude},${position.coords.longitude}`;
-        setUser(prev => ({ ...prev, locationLink: link, address: prev.address || "📍 Position GPS OK" }));
+        const link = `https://www.google.com/maps?q=${position.coords.latitude},${position.coords.longitude}`;
+        setUser(prev => ({ ...prev, locationLink: link, address: prev.address || "📍 Position GPS récupérée" }));
         setIsLocating(false);
       },
       (error) => {
@@ -234,15 +242,26 @@ export default function Home() {
   };
 
   const handleOptionToggle = (option: string, maxLimit: number) => {
-    if (selectedOptions.includes(option)) {
-      setSelectedOptions(selectedOptions.filter(o => o !== option));
+    const SURPRISE = "Surprenez-moi !";
+    if (option === SURPRISE) {
+        if (selectedOptions.includes(SURPRISE)) {
+            setSelectedOptions([]);
+        } else {
+            setSelectedOptions([SURPRISE]);
+        }
+        return;
+    }
+    let currentOptions = selectedOptions.includes(SURPRISE) ? [] : [...selectedOptions];
+    if (currentOptions.includes(option)) {
+      currentOptions = currentOptions.filter(o => o !== option);
     } else {
       if (maxLimit === 1) {
-        setSelectedOptions([option]);
-      } else if (selectedOptions.length < maxLimit) {
-        setSelectedOptions([...selectedOptions, option]);
+        currentOptions = [option];
+      } else if (currentOptions.length < maxLimit) {
+        currentOptions.push(option);
       }
     }
+    setSelectedOptions(currentOptions);
   };
 
   const getConfigRules = () => {
@@ -262,7 +281,7 @@ export default function Home() {
   };
 
   const rules = getConfigRules();
-  const isConfigValid = selectedOptions.length >= rules.min;
+  const isConfigValid = selectedOptions.length >= rules.min || selectedOptions.includes("Surprenez-moi !");
 
   const handleValidateConfig = () => {
       if (customizingItem.phase === 'logic' && customizingItem.item.hasSauce) {
@@ -280,6 +299,8 @@ export default function Home() {
       price: variation.price,
       size: variation.size === "Unique" ? "" : variation.size,
       options: options,
+      // On ajoute l'image de l'item d'origine
+      image: item.image, 
       id: Math.random()
     };
     setCart([...cart, cartItem]);
@@ -316,19 +337,37 @@ export default function Home() {
     setUser({ ...user, [name]: value });
   };
 
+  const validatePointsCode = () => {
+      if (inputCode.toUpperCase() === SECRET_CODE) {
+          const newPoints = user.points + user.pendingPoints;
+          saveUserData({ ...user, points: newPoints, pendingPoints: 0 }); 
+          showToast(`Félicitations ! ${user.pendingPoints} points ajoutés !`);
+          setShowCodeInput(false);
+      } else {
+          alert("Code incorrect.");
+      }
+  };
+
   const saveUserData = (newData: any) => {
     setUser(newData);
     localStorage.setItem('foodji_account', JSON.stringify(newData));
   };
 
   const sendToResto = () => {
+    const currentStatus = getRestaurantStatus();
+    if (!currentStatus.isOpen) {
+        setShowClosedMessage(true);
+        return;
+    }
+
     const amountEligibleForPoints = cartTotal - discount; 
     const earnedPoints = parseFloat((amountEligibleForPoints * 0.05).toFixed(1));
-    const newTotalPoints = parseFloat(((user.points - discount) + earnedPoints).toFixed(1));
     
-    setFinalTotal(currentFinalPrice);
     const { comment, locationLink, ...userToSave } = user;
-    saveUserData({ ...userToSave, points: newTotalPoints });
+    const pointsAfterUsage = user.points - discount;
+    saveUserData({ ...userToSave, points: pointsAfterUsage, pendingPoints: earnedPoints });
+
+    setFinalTotal(currentFinalPrice);
 
     let methodLabel = "🛵 Livraison";
     if (orderMethod === 'emporter') methodLabel = "🛍️ Je passe la récupérer";
@@ -342,7 +381,7 @@ export default function Home() {
     if (orderMethod === 'livraison') message += `📍 *Adresse :* ${user.address}\n`;
     if (user.locationLink) message += `🗺️ *GPS :* ${user.locationLink}\n`;
     if (user.comment) message += `💬 *Note :* ${user.comment}\n`;
-    message += `🏆 *Fidélité :* ${user.points} pts (+${earnedPoints})\n`;
+    message += `🏆 *Fidélité :* ${pointsAfterUsage} pts (En attente : +${earnedPoints})\n`;
     message += `---------------------------\n`;
     message += `*COMMANDE :*\n`;
     
@@ -391,12 +430,24 @@ export default function Home() {
           </div>
       )}
 
+      {showCodeInput && (
+          <div className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+              <div className={`${COLORS.bgLight} p-6 rounded-2xl border border-white/10 max-w-sm w-full text-center`}>
+                  <h3 className="text-xl font-bold text-white mb-4">Valider mes points 🎁</h3>
+                  <p className="text-sm text-gray-400 mb-4">Entrez le code présent sur votre ticket de caisse ou donné par le livreur :</p>
+                  <input type="text" className="w-full p-3 rounded-lg bg-black/30 border border-gray-600 text-white text-center text-xl tracking-widest mb-4 uppercase" placeholder="CODE" value={inputCode} onChange={(e) => setInputCode(e.target.value)} />
+                  <button onClick={validatePointsCode} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold mb-3">Valider</button>
+                  <button onClick={() => setShowCodeInput(false)} className="text-gray-500 text-sm underline">Annuler</button>
+              </div>
+          </div>
+      )}
+
       {showUpsell && (
           <div className="fixed inset-0 z-[160] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
               <div className={`${COLORS.bgLight} p-6 rounded-2xl border border-white/10 max-w-sm w-full text-center`}>
                   <h3 className="text-xl font-bold text-white mb-1">Un petit supplément ? 😋</h3>
                   <p className="text-sm text-gray-400 mb-6">Complétez votre repas avec ceci :</p>
-                  <div className="grid grid-cols-3 gap-3 mb-6">
+                  <div className="grid grid-cols-2 gap-3 mb-6">
                       {UPSELL_ITEMS.map((uItem) => (
                           <button key={uItem.name} onClick={() => addUpsellItem(uItem)} className="bg-[#151e32] p-3 rounded-xl border border-white/5 hover:border-[#a31d24] transition group">
                               <div className="text-3xl mb-2 group-hover:scale-110 transition">{uItem.emoji}</div>
@@ -438,6 +489,12 @@ export default function Home() {
               <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center text-4xl mb-6 shadow-[0_0_30px_rgba(34,197,94,0.5)]">🎉</div>
               <h2 className="text-3xl font-bold text-white mb-2">Commande Envoyée !</h2>
               <p className="text-gray-400 mb-8">Merci, on s&apos;occupe de tout.</p>
+              {user.pendingPoints > 0 && (
+                  <div className="w-full max-w-sm bg-[#a31d24]/20 p-4 rounded-xl border border-[#a31d24] mb-6">
+                      <p className="text-white font-bold mb-2">🎁 Vous avez {user.pendingPoints} points en attente !</p>
+                      <button onClick={() => setShowCodeInput(true)} className="bg-[#a31d24] text-white px-4 py-2 rounded-lg text-sm font-bold animate-pulse">Entrer le code ticket</button>
+                  </div>
+              )}
               {orderMethod === 'livraison' && (
                   <div className="w-full max-w-sm bg-[#1f2b45] p-6 rounded-2xl border border-white/10 mb-6">
                       <p className="text-sm text-gray-300 mb-4">Pour aider le livreur à arriver plus vite, envoyez-lui votre position 👇</p>
@@ -460,9 +517,10 @@ export default function Home() {
                 <div className="absolute -inset-1 bg-red-600 rounded-full blur-3xl opacity-20 group-hover:opacity-40 transition duration-1000"></div>
                 <img src="/foodji.png" alt="Logo Foodji" className="relative w-72 mb-10 drop-shadow-2xl transition-all duration-700 ease-in-out transform hover:scale-105 hover:rotate-2 animate-pulse" />
             </div>
-            {user.name && (<div className="mb-8 bg-white/5 px-6 py-2 rounded-xl border border-white/10 backdrop-blur-sm animate-fade-in-up"><span className="text-[#a31d24] font-bold">🏆 {user.points || 0} Points Fidélité</span></div>)}
+            {user.name && (<div className="mb-8 bg-white/5 px-6 py-2 rounded-xl border border-white/10 backdrop-blur-sm animate-fade-in-up"><span className="text-[#a31d24] font-bold">🏆 {user.points} Points</span> {user.pendingPoints > 0 && <span className="text-xs text-yellow-400 block">({user.pendingPoints} en attente)</span>}</div>)}
+            {user.pendingPoints > 0 && (<button onClick={() => setShowCodeInput(true)} className="mb-6 bg-yellow-600/80 text-white px-4 py-2 rounded-full text-xs font-bold animate-bounce border border-yellow-400">🎁 Valider mes points en attente</button>)}
             <div className={`mb-6 flex items-center gap-2 px-4 py-1 rounded-full border border-white/5 backdrop-blur-md ${status.isOpen ? 'bg-green-900/30' : 'bg-red-900/30'}`}><div className={`w-2 h-2 rounded-full ${status.isOpen ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div><span className="text-xs text-gray-200 uppercase tracking-widest font-bold">{status.isOpen ? `OUVERT JUSQU'À ${status.closeAt}H00` : `FERMÉ • OUVRE À ${status.openAt}H00`}</span></div>
-            <button onClick={() => setView('menu')} className={`${COLORS.accent} text-white px-12 py-5 rounded-full text-xl font-bold shadow-[0_0_30px_rgba(163,29,36,0.5)] hover:scale-105 transition transform duration-300 border border-red-900`}>VOIR LA CARTE</button>
+            <button onClick={() => {if(status.isOpen) setView('menu'); else setShowClosedMessage(true);}} className={`${COLORS.accent} text-white px-12 py-5 rounded-full text-xl font-bold shadow-[0_0_30px_rgba(163,29,36,0.5)] hover:scale-105 transition transform duration-300 border border-red-900 ${!status.isOpen ? 'opacity-50 grayscale' : ''}`}>VOIR LA CARTE</button>
           </div>
         </div>
       )}
@@ -491,7 +549,12 @@ export default function Home() {
           </header>
           <div className="p-4 space-y-4 flex-grow overflow-y-auto bg-gradient-to-b from-transparent to-black/20"><h3 className="text-xl font-bold text-white mb-2 mt-2 flex items-center"><span className="w-1 h-6 bg-[#a31d24] mr-3 rounded-full"></span>{activeCategory}</h3>
             {currentItems.map((item, index) => (
-              <div key={index} className={`${COLORS.bgLight} p-4 rounded-xl shadow-lg border border-white/5 hover:border-[#a31d24]/30 transition-colors`}><div className="mb-3"><h4 className="font-bold text-lg text-gray-100 leading-tight">{item.name}</h4>{item.desc && <p className="text-xs text-gray-400 mt-1 font-light">{item.desc}</p>}</div>
+              <div key={index} className={`${COLORS.bgLight} p-4 rounded-xl shadow-lg border border-white/5 hover:border-[#a31d24]/30 transition-colors`}>
+                <div className="mb-3">
+                    {item.image && <img src={item.image} alt={item.name} className="w-full h-32 object-cover rounded-lg mb-3" />}
+                    <h4 className="font-bold text-lg text-gray-100 leading-tight">{item.name}</h4>
+                    {item.desc && <p className="text-xs text-gray-400 mt-1 font-light">{item.desc}</p>}
+                </div>
                 <div className="flex flex-wrap gap-2">{item.variations.map((v, vIndex) => (<button key={vIndex} onClick={() => initiateAddToCart(item, v)} className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm font-bold transition-all flex-grow ${item.variations.length > 1 ? 'bg-[#151e32] text-gray-300 border border-gray-700 hover:border-[#a31d24] hover:text-white' : 'bg-white text-black hover:bg-gray-200'}`}><span>{v.size === "Unique" ? "Commander" : v.size}</span><span className={`ml-2 ${item.variations.length > 1 ? COLORS.textAccent : 'text-black'}`}>{v.price}dh</span>{item.variations.length === 1 && <span className="ml-2 text-[#a31d24]">+</span>}</button>))}</div>
               </div>
             ))}
