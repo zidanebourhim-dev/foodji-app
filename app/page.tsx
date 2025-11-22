@@ -42,7 +42,7 @@ const SCHEDULE: Record<number, { day: string; open: number | null; close: number
   6: { day: "Samedi",   open: 18, close: 1 },
 };
 
-// --- DONNÉES DU MENU ---
+// --- MENU ---
 type Variation = { size: string; price: number; };
 type MenuItem = { name: string; desc: string; image?: string; logic?: string; hasSauce?: boolean; variations: Variation[]; };
 type Category = { title: string; items: MenuItem[]; };
@@ -168,7 +168,7 @@ const isValidMoroccanPhone = (phone: string) => {
   return regex.test(cleanPhone);
 };
 
-// GÉNÉRATION CODE ALÉATOIRE SIMPLE (4 CHIFFRES)
+// GÉNÉRATION CODE ALÉATOIRE (PAS D'HEURE, JUSTE DU HASARD)
 const generateRandomCode = () => {
     return Math.floor(1000 + Math.random() * 9000).toString();
 };
@@ -195,13 +195,11 @@ export default function Home() {
   const [showCodeInput, setShowCodeInput] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
   
-  // --- ETAT DÉBOGAGE ---
-  const [debugMsg, setDebugMsg] = useState("");
+  // Etat pour Debug
+  const [debugError, setDebugError] = useState("");
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 2500);
+    const timer = setTimeout(() => { setLoading(false); }, 2500);
     return () => clearTimeout(timer);
   }, []);
 
@@ -212,7 +210,7 @@ export default function Home() {
     return () => clearInterval(timer);
   }, []);
 
-  // --- CHARGEMENT DONNÉES (Avec logs) ---
+  // CHARGEMENT DES DONNÉES (Avec mouchard d'erreur)
   useEffect(() => {
     const localData = localStorage.getItem('foodji_account');
     if (localData) {
@@ -228,7 +226,7 @@ export default function Home() {
             }
          }).catch(e => {
              console.error(e);
-             setDebugMsg("Erreur chargement Firebase: " + e.message);
+             setDebugError("Erreur Chargement: " + e.message);
          });
       } else {
           setUser(localUser);
@@ -246,7 +244,7 @@ export default function Home() {
     setIsLocating(true);
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const link = `https://www.google.com/maps?q=${position.coords.latitude},${position.coords.longitude}`;
+        const link = `http://googleusercontent.com/maps.google.com/?q=${position.coords.latitude},${position.coords.longitude}`;
         setUser(prev => ({ ...prev, locationLink: link, address: prev.address || "📍 Position GPS récupérée" }));
         setIsLocating(false);
       },
@@ -323,7 +321,26 @@ export default function Home() {
     };
     setCart([...cart, cartItem]);
     setCustomizingItem(null);
-    showToast(`"${item.name}" ajouté au panier !`);
+    showToast(`"${item.name}" ajouté !`);
+    
+    const isMainDish = item.price > 20; 
+    if (isMainDish) {
+        // CORRECTION UPSELL : Affichage immédiat
+        setShowUpsell(true); 
+    }
+  };
+
+  const addUpsellItem = (uItem: any) => {
+      const cartItem = {
+          name: uItem.name,
+          price: uItem.price,
+          size: "Unique",
+          options: [],
+          id: Math.random()
+      };
+      setCart(prev => [...prev, cartItem]);
+      showToast(`+ ${uItem.name} ajouté !`);
+      setShowUpsell(false); 
   };
 
   const removeFromCart = (indexToRemove: number) => setCart(cart.filter((_, index) => index !== indexToRemove));
@@ -338,7 +355,7 @@ export default function Home() {
     setUser({ ...user, [name]: value });
   };
 
-  // --- SAUVEGARDE FIREBASE + ALERTES ERREURS ---
+  // SAUVEGARDE FIREBASE AVEC MOUCHARD
   const saveUserToFirebase = async (updatedUser: any) => {
       localStorage.setItem('foodji_account', JSON.stringify(updatedUser));
       try {
@@ -354,12 +371,13 @@ export default function Home() {
             }, { merge: true });
         }
       } catch (e: any) {
-          console.error("Erreur Firebase", e);
-          setDebugMsg("Erreur Firebase: " + e.message);
+          console.error("Erreur Firebase Save", e);
+          setDebugError("Erreur sauvegarde : " + e.message);
       }
   };
 
   const validatePointsCode = async () => {
+      // Comparaison stricte avec le code en attente
       if (inputCode.trim() === user.pendingCode) {
           const newPoints = user.points + user.pendingPoints;
           const updatedUser = { ...user, points: newPoints, pendingPoints: 0, pendingCode: '' };
@@ -371,7 +389,7 @@ export default function Home() {
           setShowCodeInput(false);
           setInputCode('');
       } else {
-          alert("Code incorrect.");
+          alert(`Code incorrect. Code attendu : ${user.pendingCode} (Regardez en haut du message WhatsApp)`);
       }
   };
 
@@ -392,10 +410,9 @@ export default function Home() {
     const { comment, locationLink, ...userToSave } = user;
     const pointsAfterUsage = user.points - discount;
     
-    const updatedUser = { ...user, points: pointsAfterUsage, pendingPoints: earnedPoints, pendingCode: uniqueCode };
+    // On sauvegarde le code unique
+    const updatedUser = { ...userToSave, points: pointsAfterUsage, pendingPoints: earnedPoints, pendingCode: uniqueCode };
     setUser(updatedUser);
-    
-    // On attend la sauvegarde avant de continuer
     await saveUserToFirebase(updatedUser);
 
     let methodLabel = "🛵 Livraison";
@@ -465,6 +482,14 @@ export default function Home() {
   return (
     <div className={`min-h-screen ${COLORS.bg} text-white font-sans pb-24 selection:bg-red-900 relative`}>
       
+      {/* --- ERREUR DEBOGAGE SI FIREBASE ECHOUE --- */}
+      {debugError && (
+          <div className="fixed top-0 left-0 w-full bg-red-600 text-white text-xs p-4 z-[9999] font-bold text-center">
+              ⚠️ {debugError}
+              <button onClick={() => setDebugError("")} className="ml-4 underline">Fermer</button>
+          </div>
+      )}
+
       <style jsx global>{`
         @media print {
           body * { visibility: hidden; }
@@ -478,14 +503,6 @@ export default function Home() {
       <div className="fixed inset-0 bg-animated -z-10"></div>
 
       {toast && <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[200] bg-green-500 text-white px-6 py-3 rounded-full shadow-2xl font-bold animate-bounce-slight flex items-center gap-2"><span>✅</span> {toast}</div>}
-
-      {/* --- BOITE D'ERREUR (DEBUG) --- */}
-      {debugMsg && (
-          <div className="fixed top-0 left-0 w-full bg-red-600 text-white text-xs p-4 z-[9999] font-bold text-center">
-              ⚠️ {debugMsg}
-              <button onClick={() => setDebugMsg("")} className="ml-4 underline">Fermer</button>
-          </div>
-      )}
 
       {showUpsell && (
           <div className="fixed inset-0 z-[160] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
@@ -509,6 +526,10 @@ export default function Home() {
           </div>
       )}
 
+      {/* ... Reste de l'affichage (Receipt, Customizer, Home, etc.) ... */}
+      {/* Le reste du code d'affichage est identique, je ne le répète pas pour éviter la coupure. */}
+      {/* Assurez-vous de copier tout le bloc comme d'habitude. */}
+      
       {showReceipt && (
           <div className="fixed inset-0 z-[250] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
               <div className="bg-white text-black w-full max-w-sm p-6 rounded-lg shadow-2xl max-h-[90vh] overflow-y-auto relative">
@@ -536,10 +557,6 @@ export default function Home() {
               </div>
           </div>
       )}
-      
-      {/* ... (Reste du rendu Customizer, Closed, Success, Home, Profile, Menu, Cart, Checkout identique) ... */}
-      {/* Pour ne pas couper le message, je vous laisse les composants d'affichage inchangés. Ils sont déjà corrects dans votre version actuelle. */}
-      {/* Si vous avez besoin que je recolle TOUT le fichier (c'est long), dites-le moi, sinon le bloc ci-dessus remplace le début du fichier. */}
       
       {customizingItem && (
          <div className="fixed inset-0 z-[150] bg-black/90 backdrop-blur-sm flex items-end sm:items-center justify-center animate-fade-in">
@@ -687,8 +704,14 @@ export default function Home() {
                      {usePoints && discount > 0 && (<div className="flex justify-between text-[#4ade80] mb-1 font-bold"><span>Réduction Fidélité</span><span>-{discount} DH</span></div>)}
                      <div className="flex justify-between text-2xl font-bold text-white pt-4 border-t border-white/10 mt-2"><span>Total à Payer</span><span className={COLORS.textAccent}>{currentFinalPrice} DH</span></div>
                 </div>
-                <button onClick={sendToResto} disabled={!canOrder} className={`w-full py-4 rounded-xl font-bold text-lg shadow-[0_0_20px_rgba(37,211,102,0.2)] flex items-center justify-center gap-3 transition-all transform ${(!canOrder) ? 'bg-gray-700 cursor-not-allowed text-gray-500 opacity-50' : 'bg-[#25D366] text-white hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(37,211,102,0.4)]'}`}>
-                    <span className="text-2xl">📱</span><span>{canOrder ? 'Confirmer la commande' : 'Info Manquante'}</span>
+                <button 
+                    onClick={sendToResto} 
+                    disabled={!canOrder || !status.isOpen} 
+                    className={`w-full py-4 rounded-xl font-bold text-lg shadow-[0_0_20px_rgba(37,211,102,0.2)] flex items-center justify-center gap-3 transition-all transform 
+                    ${(!canOrder || !status.isOpen) ? 'bg-gray-700 cursor-not-allowed text-gray-500 opacity-50' : 'bg-[#25D366] text-white hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(37,211,102,0.4)]'}`}
+                >
+                    <span className="text-2xl">📱</span>
+                    <span>{!status.isOpen ? 'Fermé (Voir horaires)' : (canOrder ? 'Confirmer la commande' : 'Info Manquante')}</span>
                 </button>
             </div>
           )}
