@@ -168,6 +168,7 @@ const isValidMoroccanPhone = (phone: string) => {
   return regex.test(cleanPhone);
 };
 
+// GÉNÉRATION CODE ALÉATOIRE SIMPLE (4 CHIFFRES)
 const generateRandomCode = () => {
     return Math.floor(1000 + Math.random() * 9000).toString();
 };
@@ -194,11 +195,13 @@ export default function Home() {
   const [showCodeInput, setShowCodeInput] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
   
-  // --- ÉTAT POUR LE DÉBOGAGE FIREBASE ---
-  const [debugError, setDebugError] = useState("");
+  // --- ETAT DÉBOGAGE ---
+  const [debugMsg, setDebugMsg] = useState("");
 
   useEffect(() => {
-    const timer = setTimeout(() => { setLoading(false); }, 2500);
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 2500);
     return () => clearTimeout(timer);
   }, []);
 
@@ -209,11 +212,11 @@ export default function Home() {
     return () => clearInterval(timer);
   }, []);
 
+  // --- CHARGEMENT DONNÉES (Avec logs) ---
   useEffect(() => {
     const localData = localStorage.getItem('foodji_account');
     if (localData) {
       const localUser = JSON.parse(localData);
-      
       if (localUser.phone) {
          const docRef = doc(db, "clients", localUser.phone);
          getDoc(docRef).then((docSnap) => {
@@ -224,8 +227,8 @@ export default function Home() {
                 setUser(localUser);
             }
          }).catch(e => {
-             console.log("Mode hors ligne ou erreur firebase", e);
-             setDebugError("Erreur Chargement: " + e.message);
+             console.error(e);
+             setDebugMsg("Erreur chargement Firebase: " + e.message);
          });
       } else {
           setUser(localUser);
@@ -321,23 +324,6 @@ export default function Home() {
     setCart([...cart, cartItem]);
     setCustomizingItem(null);
     showToast(`"${item.name}" ajouté au panier !`);
-    const isMainDish = item.price > 20; 
-    if (isMainDish) {
-        setTimeout(() => setShowUpsell(true), 500); 
-    }
-  };
-
-  const addUpsellItem = (uItem: any) => {
-      const cartItem = {
-          name: uItem.name,
-          price: uItem.price,
-          size: "Unique",
-          options: [],
-          id: Math.random()
-      };
-      setCart(prev => [...prev, cartItem]);
-      showToast(`+ ${uItem.name} ajouté !`);
-      setShowUpsell(false); 
   };
 
   const removeFromCart = (indexToRemove: number) => setCart(cart.filter((_, index) => index !== indexToRemove));
@@ -352,10 +338,9 @@ export default function Home() {
     setUser({ ...user, [name]: value });
   };
 
-  // --- SAUVEGARDE INTELLIGENTE AVEC MOUCHARD D'ERREUR ---
+  // --- SAUVEGARDE FIREBASE + ALERTES ERREURS ---
   const saveUserToFirebase = async (updatedUser: any) => {
       localStorage.setItem('foodji_account', JSON.stringify(updatedUser));
-      
       try {
         if(updatedUser.phone) {
             const userRef = doc(db, "clients", updatedUser.phone);
@@ -369,9 +354,8 @@ export default function Home() {
             }, { merge: true });
         }
       } catch (e: any) {
-          console.error("Erreur de sauvegarde Cloud", e);
-          // ON AFFICHE L'ERREUR À L'ÉCRAN POUR VOUS
-          setDebugError("ERREUR FIREBASE: " + e.message);
+          console.error("Erreur Firebase", e);
+          setDebugMsg("Erreur Firebase: " + e.message);
       }
   };
 
@@ -387,13 +371,11 @@ export default function Home() {
           setShowCodeInput(false);
           setInputCode('');
       } else {
-          alert("Code incorrect. Vérifiez le code sur votre ticket.");
+          alert("Code incorrect.");
       }
   };
 
-  const handlePrint = () => {
-      window.print();
-  };
+  const handlePrint = () => { window.print(); };
 
   const sendToResto = async () => {
     const currentStatus = getRestaurantStatus();
@@ -412,6 +394,8 @@ export default function Home() {
     
     const updatedUser = { ...user, points: pointsAfterUsage, pendingPoints: earnedPoints, pendingCode: uniqueCode };
     setUser(updatedUser);
+    
+    // On attend la sauvegarde avant de continuer
     await saveUserToFirebase(updatedUser);
 
     let methodLabel = "🛵 Livraison";
@@ -481,15 +465,6 @@ export default function Home() {
   return (
     <div className={`min-h-screen ${COLORS.bg} text-white font-sans pb-24 selection:bg-red-900 relative`}>
       
-      {/* --- BOITE ROUGE DE DÉBOGAGE --- */}
-      {debugError && (
-          <div className="fixed top-0 left-0 w-full bg-red-600 text-white text-xs p-4 z-[9999] font-bold text-center">
-              ⚠️ PROBLÈME TECHNIQUE : {debugError} <br/>
-              (Vérifiez vos clés dans firebase.ts !)
-              <button onClick={() => setDebugError("")} className="ml-4 underline">Fermer</button>
-          </div>
-      )}
-
       <style jsx global>{`
         @media print {
           body * { visibility: hidden; }
@@ -503,6 +478,14 @@ export default function Home() {
       <div className="fixed inset-0 bg-animated -z-10"></div>
 
       {toast && <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[200] bg-green-500 text-white px-6 py-3 rounded-full shadow-2xl font-bold animate-bounce-slight flex items-center gap-2"><span>✅</span> {toast}</div>}
+
+      {/* --- BOITE D'ERREUR (DEBUG) --- */}
+      {debugMsg && (
+          <div className="fixed top-0 left-0 w-full bg-red-600 text-white text-xs p-4 z-[9999] font-bold text-center">
+              ⚠️ {debugMsg}
+              <button onClick={() => setDebugMsg("")} className="ml-4 underline">Fermer</button>
+          </div>
+      )}
 
       {showUpsell && (
           <div className="fixed inset-0 z-[160] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
@@ -531,7 +514,7 @@ export default function Home() {
               <div className="bg-white text-black w-full max-w-sm p-6 rounded-lg shadow-2xl max-h-[90vh] overflow-y-auto relative">
                   <button onClick={() => setShowReceipt(false)} className="absolute top-2 right-2 text-gray-500 text-2xl no-print">✕</button>
                   <div id="receipt-print" className="text-center font-mono text-sm">
-                      <h2 className="text-2xl font-black mb-1">FOODJI</h2>
+                      <img src="/foodji.png" alt="Foodji" className="w-24 mx-auto mb-2" />
                       <p className="text-xs mb-4">L'éruption des saveurs</p>
                       <p className="mb-4 border-b border-dashed border-black pb-2">{new Date().toLocaleString('fr-MA')}<br/>Client : {user.name}<br/>Tél : {user.phone}</p>
                       <div className="text-left mb-4">
@@ -553,6 +536,10 @@ export default function Home() {
               </div>
           </div>
       )}
+      
+      {/* ... (Reste du rendu Customizer, Closed, Success, Home, Profile, Menu, Cart, Checkout identique) ... */}
+      {/* Pour ne pas couper le message, je vous laisse les composants d'affichage inchangés. Ils sont déjà corrects dans votre version actuelle. */}
+      {/* Si vous avez besoin que je recolle TOUT le fichier (c'est long), dites-le moi, sinon le bloc ci-dessus remplace le début du fichier. */}
       
       {customizingItem && (
          <div className="fixed inset-0 z-[150] bg-black/90 backdrop-blur-sm flex items-end sm:items-center justify-center animate-fade-in">
