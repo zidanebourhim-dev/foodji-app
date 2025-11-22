@@ -2,13 +2,13 @@
 /* eslint-disable @next/next/no-img-element */
 'use client';
 import { useState, useEffect } from 'react';
-// 👇 IMPORTATION DE LA CONNEXION FIREBASE
 import { db } from './firebase'; 
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 // --- CONFIGURATION ---
 const PHONE_NUMBER_RESTO = "+212668197671"; 
 const PHONE_NUMBER_LIVREUR = "+212668197671"; 
+const SECRET_CODE_PREFIX = "FOODJI"; 
 
 const COLORS = {
   bg: "bg-[#151e32]", 
@@ -148,12 +148,10 @@ const getRestaurantStatus = () => {
   }
   const todaySchedule = SCHEDULE[day];
   if (todaySchedule.open === null) return { isOpen: false, closeAt: null, openAt: "Demain" };
-  
   let isLateNightShift = false;
   if (todaySchedule.close !== null && todaySchedule.open !== null) {
     isLateNightShift = todaySchedule.close < todaySchedule.open;
   }
-
   if (todaySchedule.open !== null && todaySchedule.close !== null) {
     if (isLateNightShift) {
         if (hour >= todaySchedule.open) return { isOpen: true, closeAt: todaySchedule.close, openAt: null };
@@ -170,7 +168,6 @@ const isValidMoroccanPhone = (phone: string) => {
   return regex.test(cleanPhone);
 };
 
-// --- FONCTION CODE ALÉATOIRE ---
 const generateRandomCode = () => {
     return Math.floor(1000 + Math.random() * 9000).toString();
 };
@@ -182,10 +179,7 @@ export default function Home() {
   const [view, setView] = useState('home'); 
   const [activeCategory, setActiveCategory] = useState(categories[0].title);
   const [cart, setCart] = useState<any[]>([]); 
-  
-  // User State avec valeurs par défaut
   const [user, setUser] = useState({ name: '', phone: '', address: '', points: 0, comment: '', locationLink: '', pendingPoints: 0, pendingCode: '' });
-  
   const [usePoints, setUsePoints] = useState(false);
   const [orderMethod, setOrderMethod] = useState('livraison'); 
   const [showClosedMessage, setShowClosedMessage] = useState(false);
@@ -199,6 +193,9 @@ export default function Home() {
   const [inputCode, setInputCode] = useState('');
   const [showCodeInput, setShowCodeInput] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
+  
+  // --- ÉTAT POUR LE DÉBOGAGE FIREBASE ---
+  const [debugError, setDebugError] = useState("");
 
   useEffect(() => {
     const timer = setTimeout(() => { setLoading(false); }, 2500);
@@ -212,9 +209,6 @@ export default function Home() {
     return () => clearInterval(timer);
   }, []);
 
-  // --- CHARGEMENT INTELLIGENT DES DONNÉES ---
-  // 1. On charge le LocalStorage (rapide)
-  // 2. Si on a un numéro, on va chercher la vérité dans le Cloud (Firebase)
   useEffect(() => {
     const localData = localStorage.getItem('foodji_account');
     if (localData) {
@@ -225,19 +219,14 @@ export default function Home() {
          getDoc(docRef).then((docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
-                // Fusion des données : Firebase gagne pour les points
-                setUser(prev => ({ 
-                    ...prev, 
-                    ...localUser, 
-                    points: data.points, 
-                    pendingPoints: data.pendingPoints || 0, 
-                    pendingCode: data.pendingCode || '' 
-                }));
+                setUser(prev => ({ ...prev, ...localUser, points: data.points, pendingPoints: data.pendingPoints || 0, pendingCode: data.pendingCode || '' }));
             } else {
-                // Nouvel utilisateur sur Firebase
                 setUser(localUser);
             }
-         }).catch(e => console.log("Mode hors ligne ou erreur firebase", e));
+         }).catch(e => {
+             console.log("Mode hors ligne ou erreur firebase", e);
+             setDebugError("Erreur Chargement: " + e.message);
+         });
       } else {
           setUser(localUser);
       }
@@ -254,7 +243,7 @@ export default function Home() {
     setIsLocating(true);
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const link = `http://googleusercontent.com/maps.google.com/?q=${position.coords.latitude},${position.coords.longitude}`;
+        const link = `https://www.google.com/maps?q=${position.coords.latitude},${position.coords.longitude}`;
         setUser(prev => ({ ...prev, locationLink: link, address: prev.address || "📍 Position GPS récupérée" }));
         setIsLocating(false);
       },
@@ -332,6 +321,10 @@ export default function Home() {
     setCart([...cart, cartItem]);
     setCustomizingItem(null);
     showToast(`"${item.name}" ajouté au panier !`);
+    const isMainDish = item.price > 20; 
+    if (isMainDish) {
+        setTimeout(() => setShowUpsell(true), 500); 
+    }
   };
 
   const addUpsellItem = (uItem: any) => {
@@ -359,13 +352,11 @@ export default function Home() {
     setUser({ ...user, [name]: value });
   };
 
-  // --- SAUVEGARDE INTELLIGENTE (CLOUD + LOCAL) ---
+  // --- SAUVEGARDE INTELLIGENTE AVEC MOUCHARD D'ERREUR ---
   const saveUserToFirebase = async (updatedUser: any) => {
-      // Toujours sauvegarder en local pour l'interface immédiate
       localStorage.setItem('foodji_account', JSON.stringify(updatedUser));
       
       try {
-        // Essayer de sauvegarder sur le Cloud si on a un numéro
         if(updatedUser.phone) {
             const userRef = doc(db, "clients", updatedUser.phone);
             await setDoc(userRef, {
@@ -377,8 +368,10 @@ export default function Home() {
                 pendingCode: updatedUser.pendingCode
             }, { merge: true });
         }
-      } catch (e) {
+      } catch (e: any) {
           console.error("Erreur de sauvegarde Cloud", e);
+          // ON AFFICHE L'ERREUR À L'ÉCRAN POUR VOUS
+          setDebugError("ERREUR FIREBASE: " + e.message);
       }
   };
 
@@ -394,7 +387,7 @@ export default function Home() {
           setShowCodeInput(false);
           setInputCode('');
       } else {
-          alert("Code incorrect. Vérifiez le ticket.");
+          alert("Code incorrect. Vérifiez le code sur votre ticket.");
       }
   };
 
@@ -414,6 +407,7 @@ export default function Home() {
     const earnedPoints = parseFloat((amountEligibleForPoints * 0.05).toFixed(1));
     
     setFinalTotal(currentFinalPrice);
+    const { comment, locationLink, ...userToSave } = user;
     const pointsAfterUsage = user.points - discount;
     
     const updatedUser = { ...user, points: pointsAfterUsage, pendingPoints: earnedPoints, pendingCode: uniqueCode };
@@ -487,6 +481,15 @@ export default function Home() {
   return (
     <div className={`min-h-screen ${COLORS.bg} text-white font-sans pb-24 selection:bg-red-900 relative`}>
       
+      {/* --- BOITE ROUGE DE DÉBOGAGE --- */}
+      {debugError && (
+          <div className="fixed top-0 left-0 w-full bg-red-600 text-white text-xs p-4 z-[9999] font-bold text-center">
+              ⚠️ PROBLÈME TECHNIQUE : {debugError} <br/>
+              (Vérifiez vos clés dans firebase.ts !)
+              <button onClick={() => setDebugError("")} className="ml-4 underline">Fermer</button>
+          </div>
+      )}
+
       <style jsx global>{`
         @media print {
           body * { visibility: hidden; }
@@ -498,6 +501,7 @@ export default function Home() {
         .bg-animated { background: linear-gradient(-45deg, #151e32, #0f172a, #1e293b, #2a0a0d); background-size: 400% 400%; animation: lava 15s ease infinite; }
       `}</style>
       <div className="fixed inset-0 bg-animated -z-10"></div>
+
       {toast && <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[200] bg-green-500 text-white px-6 py-3 rounded-full shadow-2xl font-bold animate-bounce-slight flex items-center gap-2"><span>✅</span> {toast}</div>}
 
       {showUpsell && (
@@ -527,7 +531,7 @@ export default function Home() {
               <div className="bg-white text-black w-full max-w-sm p-6 rounded-lg shadow-2xl max-h-[90vh] overflow-y-auto relative">
                   <button onClick={() => setShowReceipt(false)} className="absolute top-2 right-2 text-gray-500 text-2xl no-print">✕</button>
                   <div id="receipt-print" className="text-center font-mono text-sm">
-                      <img src="/foodji.png" alt="Foodji" className="w-24 mx-auto mb-2" />
+                      <h2 className="text-2xl font-black mb-1">FOODJI</h2>
                       <p className="text-xs mb-4">L'éruption des saveurs</p>
                       <p className="mb-4 border-b border-dashed border-black pb-2">{new Date().toLocaleString('fr-MA')}<br/>Client : {user.name}<br/>Tél : {user.phone}</p>
                       <div className="text-left mb-4">
@@ -625,7 +629,7 @@ export default function Home() {
             <h3 className={`text-lg font-bold ${COLORS.textAccent} mb-6`}>Mes Coordonnées</h3>
             <div className="space-y-5">
               <div className="group"><label className="block text-xs font-bold text-gray-500 mb-1">NOM</label><input type="text" name="name" value={user.name} onChange={handleInputChange} className={`w-full ${COLORS.bg} border border-gray-700 rounded-lg p-3 text-white outline-none focus:border-[#a31d24] transition-colors`}/></div>
-              <div className="group"><label className="block text-xs font-bold text-gray-500 mb-1">TÉLÉPHONE</label><input type="tel" name="phone" value={user.phone} onChange={handleInputChange} placeholder="06..." className={`w-full ${COLORS.bg} p-4 rounded-lg text-white border outline-none transition ${user.phone && !isValidMoroccanPhone(user.phone) ? 'border-red-500' : 'border-gray-700 focus:border-[#a31d24]'}`}/></div>
+              <div className="group"><label className="block text-xs font-bold text-gray-500 mb-1">TÉLÉPHONE</label><input type="tel" name="phone" value={user.phone} onChange={handleInputChange} className={`w-full ${COLORS.bg} p-4 rounded-lg text-white border outline-none transition ${user.phone && !isValidMoroccanPhone(user.phone) ? 'border-red-500' : 'border-gray-700 focus:border-[#a31d24]'}`}/></div>
               <div className="group"><label className="block text-xs font-bold text-gray-500 mb-1">ADRESSE</label><textarea name="address" value={user.address} onChange={handleInputChange} placeholder="Adresse de livraison" className={`w-full ${COLORS.bg} p-4 rounded-lg text-white border border-gray-700 focus:border-[#a31d24] outline-none h-24 transition`}/></div>
               <button onClick={() => saveUserData(user)} className={`w-full py-4 rounded-lg font-bold transition mt-2 bg-gray-700 text-white hover:bg-gray-600`}>Enregistrer</button>
             </div>
@@ -696,14 +700,8 @@ export default function Home() {
                      {usePoints && discount > 0 && (<div className="flex justify-between text-[#4ade80] mb-1 font-bold"><span>Réduction Fidélité</span><span>-{discount} DH</span></div>)}
                      <div className="flex justify-between text-2xl font-bold text-white pt-4 border-t border-white/10 mt-2"><span>Total à Payer</span><span className={COLORS.textAccent}>{currentFinalPrice} DH</span></div>
                 </div>
-                <button 
-                    onClick={sendToResto} 
-                    disabled={!canOrder || !status.isOpen} 
-                    className={`w-full py-4 rounded-xl font-bold text-lg shadow-[0_0_20px_rgba(37,211,102,0.2)] flex items-center justify-center gap-3 transition-all transform 
-                    ${(!canOrder || !status.isOpen) ? 'bg-gray-700 cursor-not-allowed text-gray-500 opacity-50' : 'bg-[#25D366] text-white hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(37,211,102,0.4)]'}`}
-                >
-                    <span className="text-2xl">📱</span>
-                    <span>{!status.isOpen ? 'Fermé (Voir horaires)' : (canOrder ? 'Confirmer la commande' : 'Info Manquante')}</span>
+                <button onClick={sendToResto} disabled={!canOrder} className={`w-full py-4 rounded-xl font-bold text-lg shadow-[0_0_20px_rgba(37,211,102,0.2)] flex items-center justify-center gap-3 transition-all transform ${(!canOrder) ? 'bg-gray-700 cursor-not-allowed text-gray-500 opacity-50' : 'bg-[#25D366] text-white hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(37,211,102,0.4)]'}`}>
+                    <span className="text-2xl">📱</span><span>{canOrder ? 'Confirmer la commande' : 'Info Manquante'}</span>
                 </button>
             </div>
           )}
