@@ -3,9 +3,30 @@
 'use client';
 import { useState, useEffect } from 'react';
 
+// --- DÉFINITION DES TYPES (Pour éviter l'erreur de build Vercel) ---
+type Variation = {
+  size: string;
+  price: number;
+};
+
+type MenuItem = {
+  name: string;
+  desc: string;
+  image?: string; // L'image est optionnelle pour éviter le crash
+  logic?: string;
+  hasSauce?: boolean;
+  variations: Variation[];
+};
+
+type Category = {
+  title: string;
+  items: MenuItem[];
+};
+
 // --- CONFIGURATION ---
 const PHONE_NUMBER_RESTO = "+212668197671"; 
 const PHONE_NUMBER_LIVREUR = "+212668197671"; 
+const SECRET_CODE_PREFIX = "FOODJI"; // Fallback au cas où
 
 const COLORS = {
   bg: "bg-[#151e32]", 
@@ -39,7 +60,97 @@ const SCHEDULE: Record<number, { day: string; open: number | null; close: number
   6: { day: "Samedi",   open: 18, close: 1 },
 };
 
-// --- LOGIQUE D'OUVERTURE ---
+// --- DONNÉES DU MENU ---
+const categories: Category[] = [
+  {
+    title: "🌮 Tacos",
+    items: [
+      { name: "Tacos Mixte", desc: "Composez votre mélange.", image: "", logic: "tacos_mixte", hasSauce: true, variations: [{size: "L", price: 42}, {size: "XL", price: 76}, {size: "XXL", price: 112}] },
+      { name: "Tacos Le Taj Mahal", desc: "Viande hachée, Cordon bleu, Nuggets.", image: "", hasSauce: true, variations: [{size: "L", price: 34}, {size: "XL", price: 54}, {size: "XXL", price: 96}] },
+      { name: "Tacos Crispy", desc: "Poulet pané croustillant.", image: "", hasSauce: true, variations: [{size: "L", price: 42}, {size: "XL", price: 76}, {size: "XXL", price: 112}] },
+      { name: "Tacos Viande hachée", desc: "", image: "", hasSauce: true, variations: [{size: "L", price: 39}, {size: "XL", price: 72}, {size: "XXL", price: 104}] },
+      { name: "Tacos Cordon Bleu", desc: "", image: "", hasSauce: true, variations: [{size: "L", price: 39}, {size: "XL", price: 72}, {size: "XXL", price: 104}] },
+      { name: "Tacos Nuggets", desc: "", image: "", hasSauce: true, variations: [{size: "L", price: 39}, {size: "XL", price: 72}, {size: "XXL", price: 104}] },
+    ]
+  },
+  {
+    title: "🍕 Pizzas",
+    items: [
+      { name: "2 Saisons", desc: "2 moitiés au choix.", image: "", logic: "pizza_2", variations: [{size: "M", price: 52}, {size: "L", price: 84}] },
+      { name: "4 Saisons", desc: "3 à 4 ingrédients au choix.", image: "", logic: "pizza_4", variations: [{size: "M", price: 58}, {size: "L", price: 92}] },
+      { name: "Pep's", desc: "Sauce tomate, mozzarella, origan.", image: "", variations: [{size: "M", price: 28}] },
+      { name: "Burrata", desc: "Crémeuse et fraîche.", image: "", variations: [{size: "M", price: 78}] },
+      { name: "4 Fromages", desc: "Mozza, gorgonzola, chèvre, parmesan.", image: "", variations: [{size: "M", price: 52}, {size: "L", price: 84}] },
+      { name: "Pepperoni", desc: "", image: "", variations: [{size: "M", price: 52}, {size: "L", price: 84}] },
+      { name: "Cannibale", desc: "Viande hachée, poulet, merguez.", image: "", variations: [{size: "M", price: 56}, {size: "L", price: 87}] },
+      { name: "Thon", desc: "", image: "", variations: [{size: "M", price: 46}, {size: "L", price: 62}] },
+      { name: "Fruits de mer", desc: "", image: "", variations: [{size: "M", price: 58}, {size: "L", price: 92}] },
+      { name: "Charcuterie", desc: "", image: "", variations: [{size: "M", price: 48}, {size: "L", price: 68}] },
+      { name: "Végétarienne", desc: "", image: "", variations: [{size: "M", price: 46}, {size: "L", price: 62}] },
+      { name: "Salami", desc: "", image: "", variations: [{size: "M", price: 58}, {size: "L", price: 92}] },
+      { name: "Calzone", desc: "", image: "", variations: [{size: "M", price: 48}, {size: "L", price: 68}] },
+      { name: "Pizza Viande Hachée", desc: "", image: "", variations: [{size: "M", price: 52}, {size: "L", price: 84}] },
+      { name: "Pizza Poulet", desc: "", image: "", variations: [{size: "M", price: 52}, {size: "L", price: 84}] },
+    ]
+  },
+  {
+    title: "🍔 Burgers",
+    items: [
+      { name: "Burger Cheese", desc: "Simple et efficace.", image: "", variations: [{size: "Unique", price: 48}] },
+      { name: "Burger Double", desc: "Double steak, double plaisir.", image: "", variations: [{size: "Unique", price: 69}] },
+      { name: "Burger Le Buddha", desc: "Recette signature végétarienne.", image: "", variations: [{size: "Unique", price: 50}] },
+      { name: "Burger L'Extrême", desc: "Pour les grosses faims.", image: "", variations: [{size: "Unique", price: 74}] },
+      { name: "Burger Le Foodji", desc: "Le best-seller de la maison.", image: "", variations: [{size: "Unique", price: 58}] },
+      { name: "Burger Chicken Foodji", desc: "", image: "", variations: [{size: "Unique", price: 58}] },
+      { name: "Burger Chicken", desc: "", image: "", variations: [{size: "Unique", price: 48}] },
+      { name: "Burger Le Tasty", desc: "", image: "", variations: [{size: "Unique", price: 58}] },
+    ]
+  },
+  {
+    title: "🍝 Pâtes",
+    items: [
+      { name: "Pâtes Bolognaise", desc: "", image: "", logic: "pates_choix", variations: [{size: "Unique", price: 58}] },
+      { name: "Pâtes Saumon épinard", desc: "", image: "", logic: "pates_choix", variations: [{size: "Unique", price: 60}] },
+      { name: "Pâtes Poulet Champignon", desc: "", image: "", logic: "pates_choix", variations: [{size: "Unique", price: 62}] },
+      { name: "Pâtes Arrabiata", desc: "Sauce tomate pimentée.", image: "", logic: "pates_choix", variations: [{size: "Unique", price: 42}] },
+      { name: "Pâtes Carbonara", desc: "", image: "", logic: "pates_choix", variations: [{size: "Unique", price: 52}] },
+      { name: "Pâtes 4 fromages", desc: "", image: "", logic: "pates_choix", variations: [{size: "Unique", price: 58}] },
+      { name: "Pâtes Alfredo", desc: "", image: "", logic: "pates_choix", variations: [{size: "Unique", price: 62}] },
+      { name: "Pâtes Fruits de Mer", desc: "", image: "", logic: "pates_choix", variations: [{size: "Unique", price: 62}] },
+      { name: "Pâtes Salami", desc: "", image: "", logic: "pates_choix", variations: [{size: "Unique", price: 54}] },
+    ]
+  },
+  {
+    title: "🌯 Burritos",
+    items: [
+      { name: "Burrito Poulet", desc: "Pain tortilla, poulet, riz, maïs, laitue, tomate, cheddar.", image: "", variations: [{size: "Unique", price: 42}] },
+      { name: "Burrito Viande hachée", desc: "Pain tortilla, viande hachée, riz, cheddar, légumes.", image: "", variations: [{size: "Unique", price: 47}] },
+      { name: "Burrito Veggie", desc: "Pain tortilla, légumes sautés, riz, laitue, tomate, maïs, cheddar.", image: "", variations: [{size: "Unique", price: 39}] },
+    ]
+  },
+  {
+    title: "🥙 Koniks",
+    items: [
+      { name: "Koniks Poulet", desc: "Pain tortilla, poulet, cheddar, mélange de légumes.", image: "", variations: [{size: "Unique", price: 48}] },
+      { name: "Koniks Viande Hachée", desc: "Pain tortilla, viande hachée, cheddar, légumes.", image: "", variations: [{size: "Unique", price: 52}] },
+      { name: "L'IKonik", desc: "Pain tortilla, poulet et viande hachée, cheddar, légumes.", image: "", variations: [{size: "Unique", price: 58}] },
+    ]
+  },
+  {
+    title: "🍟 Sides",
+    items: [
+      { name: "Ration Frites", desc: "", image: "", variations: [{size: "Unique", price: 15}] },
+      { name: "Frites Fromagères", desc: "", image: "", variations: [{size: "Unique", price: 30}] },
+      { name: "Tenders x5", desc: "", image: "", variations: [{size: "Unique", price: 35}] },
+      { name: "Mozza' Fingers x5", desc: "", image: "", variations: [{size: "Unique", price: 25}] },
+      { name: "Cheese Bomb x5", desc: "", image: "", variations: [{size: "Unique", price: 25}] },
+      { name: "Onion rings x5", desc: "", image: "", variations: [{size: "Unique", price: 25}] },
+      { name: "Frites Carbo", desc: "", image: "", variations: [{size: "Unique", price: 45}] },
+      { name: "Nuggets x5", desc: "", image: "", variations: [{size: "Unique", price: 25}] },
+    ]
+  }
+];
+
 const getRestaurantStatus = () => {
   const now = new Date();
   const day = now.getDay(); 
@@ -71,6 +182,7 @@ const isValidMoroccanPhone = (phone: string) => {
   return regex.test(cleanPhone);
 };
 
+// --- GÉNÉRATION CODE ALÉATOIRE SIMPLE ---
 const generateRandomCode = () => {
     return Math.floor(1000 + Math.random() * 9000).toString();
 };
@@ -97,7 +209,10 @@ export default function Home() {
   const [showCodeInput, setShowCodeInput] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
 
+  // --- ANIMATION SPLASH SCREEN ---
   useEffect(() => {
+    // On force le loading à true au début
+    setLoading(true);
     const timer = setTimeout(() => {
       setLoading(false);
     }, 2500);
@@ -132,24 +247,7 @@ export default function Home() {
     setIsLocating(true);
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const lat = position.coords.latitude;
-        const lng = position.coords.longitude;
-        
-        const R = 6371; // Earth radius in km
-        const dLat = (RESTO_COORDS.lat - lat) * Math.PI / 180;
-        const dLon = (RESTO_COORDS.lng - lng) * Math.PI / 180;
-        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                  Math.cos(lat * Math.PI / 180) * Math.cos(RESTO_COORDS.lat * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        const distance = R * c;
-
-        if (distance > MAX_DELIVERY_DISTANCE_KM) {
-            alert(`Désolé, vous êtes à ${distance.toFixed(1)}km. Nous ne livrons pas au-delà de ${MAX_DELIVERY_DISTANCE_KM}km.`);
-            setIsLocating(false);
-            return;
-        }
-
-        const link = `http://googleusercontent.com/maps.google.com/?q=${lat},${lng}`;
+        const link = `http://googleusercontent.com/maps.google.com/?q=${position.coords.latitude},${position.coords.longitude}`;
         setUser(prev => ({ ...prev, locationLink: link, address: prev.address || "📍 Position GPS récupérée" }));
         setIsLocating(false);
       },
@@ -237,8 +335,9 @@ export default function Home() {
     setCustomizingItem(null);
     showToast(`"${item.name}" ajouté au panier !`);
     const isMainDish = item.price > 20; 
+    // CORRECTION UPSELL : Plus de setTimeout pour éviter les conflits
     if (isMainDish) {
-        setTimeout(() => setShowUpsell(true), 500); 
+        setShowUpsell(true); 
     }
   };
 
@@ -268,7 +367,7 @@ export default function Home() {
   };
 
   const validatePointsCode = () => {
-      // Nettoyage de l'input et comparaison stricte
+      // Nettoyage de l'input et comparaison (Code Aléatoire 4 chiffres)
       const cleanInput = inputCode.trim();
       const cleanPending = (user.pendingCode || "").trim();
 
@@ -279,7 +378,7 @@ export default function Home() {
           setShowCodeInput(false);
           setInputCode('');
       } else {
-          alert("Code incorrect.");
+          alert(`Code incorrect.`);
       }
   };
 
@@ -300,13 +399,14 @@ export default function Home() {
     }
 
     const uniqueCode = generateRandomCode();
-
     const amountEligibleForPoints = cartTotal - discount; 
     const earnedPoints = parseFloat((amountEligibleForPoints * 0.05).toFixed(1));
     
     setFinalTotal(currentFinalPrice);
     const { comment, locationLink, ...userToSave } = user;
     const pointsAfterUsage = user.points - discount;
+    
+    // SAUVEGARDE DU CODE AVANT D'ENVOYER
     saveUserData({ ...userToSave, points: pointsAfterUsage, pendingPoints: earnedPoints, pendingCode: uniqueCode });
 
     let methodLabel = "🛵 Livraison";
@@ -321,7 +421,6 @@ export default function Home() {
     message += `👤 *Client :* ${user.name}\n`;
     message += `📞 *Tél :* ${user.phone}\n`;
     if (orderMethod === 'livraison') message += `📍 *Adresse :* ${user.address}\n`;
-    // GPS LINK EST ENLEVÉ ICI POUR LE RESTAURANT
     if (user.comment) message += `💬 *Note :* ${user.comment}\n`;
     message += `🏆 *Fidélité :* ${pointsAfterUsage} pts (En attente : +${earnedPoints})\n`;
     message += `---------------------------\n`;
@@ -350,7 +449,6 @@ export default function Home() {
     message += `👤 *Client :* ${user.name}\n`;
     message += `📞 *Tél :* ${user.phone}\n`;
     message += `📍 *Adresse :* ${user.address}\n`;
-    // GPS LINK ENVOYÉ ICI UNIQUEMENT
     if (user.locationLink) message += `🗺️ *GPS :* ${user.locationLink}\n`;
     if (user.comment) message += `💬 *Note :* ${user.comment}\n`;
     message += `---------------------------\n`;
@@ -364,6 +462,7 @@ export default function Home() {
   const isAddressNeeded = orderMethod === 'livraison';
   const canOrder = user.name && isValidMoroccanPhone(user.phone) && (!isAddressNeeded || user.address);
 
+  // --- RENDU : SPLASH SCREEN (INTRO) ---
   if (loading) {
       return (
           <div className="fixed inset-0 bg-[#151e32] flex flex-col items-center justify-center z-[999]">
@@ -380,6 +479,7 @@ export default function Home() {
       );
   }
 
+  // --- RENDU : APPLICATION PRINCIPALE ---
   return (
     <div className={`min-h-screen ${COLORS.bg} text-white font-sans pb-24 selection:bg-red-900 relative`}>
       
@@ -422,7 +522,7 @@ export default function Home() {
               <div className={`${COLORS.bgLight} p-6 rounded-2xl border border-white/10 max-w-sm w-full text-center`}>
                   <h3 className="text-xl font-bold text-white mb-4">Valider mes points 🎁</h3>
                   <p className="text-sm text-gray-400 mb-4">Entrez le code présent sur votre ticket :</p>
-                  <input type="text" className="w-full p-3 rounded-lg bg-black/30 border border-gray-600 text-white text-center text-xl tracking-widest mb-4 uppercase" placeholder="#CODE" value={inputCode} onChange={(e) => setInputCode(e.target.value)} />
+                  <input type="text" className="w-full p-3 rounded-lg bg-black/30 border border-gray-600 text-white text-center text-xl tracking-widest mb-4 uppercase" placeholder="CODE" value={inputCode} onChange={(e) => setInputCode(e.target.value)} />
                   <button onClick={validatePointsCode} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold mb-3">Valider</button>
                   <button onClick={() => setShowCodeInput(false)} className="text-gray-500 text-sm underline">Annuler</button>
               </div>
@@ -451,6 +551,7 @@ export default function Home() {
                           <div className="flex justify-between text-xl font-black mt-2"><span>TOTAL</span><span>{finalTotal} DH</span></div>
                       </div>
                       <p className="text-xs mt-4">Merci de votre visite !</p>
+                      <p className="text-xs mt-1 font-bold">Code Points : {user.pendingCode}</p> 
                   </div>
                   <button onClick={handlePrint} className="w-full bg-black text-white py-3 rounded-lg font-bold mt-4 no-print">🖨️ Imprimer</button>
               </div>
@@ -603,8 +704,14 @@ export default function Home() {
                      {usePoints && discount > 0 && (<div className="flex justify-between text-[#4ade80] mb-1 font-bold"><span>Réduction Fidélité</span><span>-{discount} DH</span></div>)}
                      <div className="flex justify-between text-2xl font-bold text-white pt-4 border-t border-white/10 mt-2"><span>Total à Payer</span><span className={COLORS.textAccent}>{currentFinalPrice} DH</span></div>
                 </div>
-                <button onClick={sendToResto} disabled={!canOrder} className={`w-full py-4 rounded-xl font-bold text-lg shadow-[0_0_20px_rgba(37,211,102,0.2)] flex items-center justify-center gap-3 transition-all transform ${(!canOrder) ? 'bg-gray-700 cursor-not-allowed text-gray-500 opacity-50' : 'bg-[#25D366] text-white hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(37,211,102,0.4)]'}`}>
-                    <span className="text-2xl">📱</span><span>{canOrder ? 'Confirmer la commande' : 'Info Manquante'}</span>
+                <button 
+                    onClick={sendToResto} 
+                    disabled={!canOrder || !status.isOpen} 
+                    className={`w-full py-4 rounded-xl font-bold text-lg shadow-[0_0_20px_rgba(37,211,102,0.2)] flex items-center justify-center gap-3 transition-all transform 
+                    ${(!canOrder || !status.isOpen) ? 'bg-gray-700 cursor-not-allowed text-gray-500 opacity-50' : 'bg-[#25D366] text-white hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(37,211,102,0.4)]'}`}
+                >
+                    <span className="text-2xl">📱</span>
+                    <span>{!status.isOpen ? 'Fermé (Voir horaires)' : (canOrder ? 'Confirmer la commande' : 'Info Manquante')}</span>
                 </button>
             </div>
           )}
