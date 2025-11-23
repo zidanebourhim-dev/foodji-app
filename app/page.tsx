@@ -54,7 +54,7 @@ const SCHEDULE: Record<number, { day: string; open: number | null; close: number
   3: { day: "Mercredi", open: 12, close: 1 },
   4: { day: "Jeudi",    open: 12, close: 1 },
   5: { day: "Vendredi", open: 12, close: 2 },
-  6: { day: "Samedi",   open: 18, close: 1 },
+  6: { day: "Samedi",   open: 18, close: 2 },
 };
 
 // --- DONNÉES DU MENU ---
