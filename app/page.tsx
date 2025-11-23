@@ -2,13 +2,28 @@
 /* eslint-disable @next/next/no-img-element */
 'use client';
 import { useState, useEffect } from 'react';
-import { db } from './firebase'; 
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+// ON IMPORTE TOUT DIRECTEMENT ICI
+import { initializeApp, getApps, getApp } from "firebase/app";
+import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 
-// --- CONFIGURATION ---
+// --- 1. VOS CLÉS FIREBASE (COLLEZ-LES ICI) ---
+const firebaseConfig = {
+  apiKey: "AIzaSyDqXN8tkXCnpXB_QdyHAUX6DzbsiT795FY",
+    authDomain: "foodji-app.firebaseapp.com",
+    projectId: "foodji-app",
+    storageBucket: "foodji-app.firebasestorage.app",
+    messagingSenderId: "760216056378",
+    appId: "1:760216056378:web:594f079a9ccb031d033b03"
+};
+
+// --- INITIALISATION FIREBASE (Sécurisée) ---
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+const db = getFirestore(app);
+
+
+// --- CONFIGURATION APP ---
 const PHONE_NUMBER_RESTO = "+212668197671"; 
 const PHONE_NUMBER_LIVREUR = "+212668197671"; 
-const SECRET_CODE_PREFIX = "FOODJI"; 
 
 const COLORS = {
   bg: "bg-[#151e32]", 
@@ -42,7 +57,7 @@ const SCHEDULE: Record<number, { day: string; open: number | null; close: number
   6: { day: "Samedi",   open: 18, close: 1 },
 };
 
-// --- MENU ---
+// --- DONNÉES DU MENU ---
 type Variation = { size: string; price: number; };
 type MenuItem = { name: string; desc: string; image?: string; logic?: string; hasSauce?: boolean; variations: Variation[]; };
 type Category = { title: string; items: MenuItem[]; };
@@ -168,7 +183,6 @@ const isValidMoroccanPhone = (phone: string) => {
   return regex.test(cleanPhone);
 };
 
-// GÉNÉRATION CODE ALÉATOIRE (PAS D'HEURE, JUSTE DU HASARD)
 const generateRandomCode = () => {
     return Math.floor(1000 + Math.random() * 9000).toString();
 };
@@ -194,9 +208,6 @@ export default function Home() {
   const [inputCode, setInputCode] = useState('');
   const [showCodeInput, setShowCodeInput] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
-  
-  // Etat pour Debug
-  const [debugError, setDebugError] = useState("");
 
   useEffect(() => {
     const timer = setTimeout(() => { setLoading(false); }, 2500);
@@ -210,7 +221,6 @@ export default function Home() {
     return () => clearInterval(timer);
   }, []);
 
-  // CHARGEMENT DES DONNÉES (Avec mouchard d'erreur)
   useEffect(() => {
     const localData = localStorage.getItem('foodji_account');
     if (localData) {
@@ -224,15 +234,23 @@ export default function Home() {
             } else {
                 setUser(localUser);
             }
-         }).catch(e => {
-             console.error(e);
-             setDebugError("Erreur Chargement: " + e.message);
-         });
+         }).catch(e => { console.error(e); });
       } else {
           setUser(localUser);
       }
     }
   }, []);
+
+  // --- FONCTION TEST DE CONNEXION ---
+  const testConnection = async () => {
+      try {
+          const testRef = doc(db, "clients", "test_connexion");
+          await setDoc(testRef, { test: "OK", date: new Date().toISOString() });
+          alert("✅ CONNEXION RÉUSSIE ! La base de données fonctionne.");
+      } catch (e: any) {
+          alert("❌ ERREUR DE CONNEXION : " + e.message);
+      }
+  };
 
   const showToast = (message: string) => {
     setToast(message);
@@ -244,7 +262,7 @@ export default function Home() {
     setIsLocating(true);
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const link = `http://googleusercontent.com/maps.google.com/?q=${position.coords.latitude},${position.coords.longitude}`;
+        const link = `https://www.google.com/maps?q=${position.coords.latitude},${position.coords.longitude}`;
         setUser(prev => ({ ...prev, locationLink: link, address: prev.address || "📍 Position GPS récupérée" }));
         setIsLocating(false);
       },
@@ -321,12 +339,10 @@ export default function Home() {
     };
     setCart([...cart, cartItem]);
     setCustomizingItem(null);
-    showToast(`"${item.name}" ajouté !`);
-    
+    showToast(`"${item.name}" ajouté au panier !`);
     const isMainDish = item.price > 20; 
     if (isMainDish) {
-        // CORRECTION UPSELL : Affichage immédiat
-        setShowUpsell(true); 
+        setTimeout(() => setShowUpsell(true), 500); 
     }
   };
 
@@ -355,7 +371,6 @@ export default function Home() {
     setUser({ ...user, [name]: value });
   };
 
-  // SAUVEGARDE FIREBASE AVEC MOUCHARD
   const saveUserToFirebase = async (updatedUser: any) => {
       localStorage.setItem('foodji_account', JSON.stringify(updatedUser));
       try {
@@ -372,12 +387,11 @@ export default function Home() {
         }
       } catch (e: any) {
           console.error("Erreur Firebase Save", e);
-          setDebugError("Erreur sauvegarde : " + e.message);
+          alert("Erreur sauvegarde : " + e.message);
       }
   };
 
   const validatePointsCode = async () => {
-      // Comparaison stricte avec le code en attente
       if (inputCode.trim() === user.pendingCode) {
           const newPoints = user.points + user.pendingPoints;
           const updatedUser = { ...user, points: newPoints, pendingPoints: 0, pendingCode: '' };
@@ -389,7 +403,7 @@ export default function Home() {
           setShowCodeInput(false);
           setInputCode('');
       } else {
-          alert(`Code incorrect. Code attendu : ${user.pendingCode} (Regardez en haut du message WhatsApp)`);
+          alert("Code incorrect.");
       }
   };
 
@@ -410,8 +424,7 @@ export default function Home() {
     const { comment, locationLink, ...userToSave } = user;
     const pointsAfterUsage = user.points - discount;
     
-    // On sauvegarde le code unique
-    const updatedUser = { ...userToSave, points: pointsAfterUsage, pendingPoints: earnedPoints, pendingCode: uniqueCode };
+    const updatedUser = { ...user, points: pointsAfterUsage, pendingPoints: earnedPoints, pendingCode: uniqueCode };
     setUser(updatedUser);
     await saveUserToFirebase(updatedUser);
 
@@ -482,14 +495,6 @@ export default function Home() {
   return (
     <div className={`min-h-screen ${COLORS.bg} text-white font-sans pb-24 selection:bg-red-900 relative`}>
       
-      {/* --- ERREUR DEBOGAGE SI FIREBASE ECHOUE --- */}
-      {debugError && (
-          <div className="fixed top-0 left-0 w-full bg-red-600 text-white text-xs p-4 z-[9999] font-bold text-center">
-              ⚠️ {debugError}
-              <button onClick={() => setDebugError("")} className="ml-4 underline">Fermer</button>
-          </div>
-      )}
-
       <style jsx global>{`
         @media print {
           body * { visibility: hidden; }
@@ -500,9 +505,21 @@ export default function Home() {
         @keyframes lava { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
         .bg-animated { background: linear-gradient(-45deg, #151e32, #0f172a, #1e293b, #2a0a0d); background-size: 400% 400%; animation: lava 15s ease infinite; }
       `}</style>
+
       <div className="fixed inset-0 bg-animated -z-10"></div>
 
       {toast && <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[200] bg-green-500 text-white px-6 py-3 rounded-full shadow-2xl font-bold animate-bounce-slight flex items-center gap-2"><span>✅</span> {toast}</div>}
+
+      {/* --- BOUTON DE DIAGNOSTIC (Temporaire) --- */}
+      {view === 'home' && (
+          <button 
+            onClick={testConnection} 
+            className="fixed bottom-4 left-4 z-[9999] text-[10px] bg-gray-800 text-gray-500 px-2 py-1 rounded opacity-50 hover:opacity-100"
+          >
+              TEST CONNEXION
+          </button>
+      )}
+      <div className="fixed bottom-4 right-4 z-[9999] text-[10px] text-gray-600">V47</div>
 
       {showUpsell && (
           <div className="fixed inset-0 z-[160] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
@@ -526,10 +543,6 @@ export default function Home() {
           </div>
       )}
 
-      {/* ... Reste de l'affichage (Receipt, Customizer, Home, etc.) ... */}
-      {/* Le reste du code d'affichage est identique, je ne le répète pas pour éviter la coupure. */}
-      {/* Assurez-vous de copier tout le bloc comme d'habitude. */}
-      
       {showReceipt && (
           <div className="fixed inset-0 z-[250] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
               <div className="bg-white text-black w-full max-w-sm p-6 rounded-lg shadow-2xl max-h-[90vh] overflow-y-auto relative">
@@ -625,6 +638,7 @@ export default function Home() {
         </div>
       )}
 
+      {/* ... (Reste identique : Profile, Menu, Cart, Checkout) ... */}
       {view === 'profile' && (
         <div className="p-4 max-w-md mx-auto min-h-screen">
           <header className="flex justify-between items-center mb-8 mt-4"><button onClick={() => setView('home')} className="text-gray-400 font-bold hover:text-white transition">← ACCUEIL</button><h2 className="text-2xl font-bold text-white">Mon Espace</h2><div className="w-8"></div></header>
@@ -633,7 +647,7 @@ export default function Home() {
             <h3 className={`text-lg font-bold ${COLORS.textAccent} mb-6`}>Mes Coordonnées</h3>
             <div className="space-y-5">
               <div className="group"><label className="block text-xs font-bold text-gray-500 mb-1">NOM</label><input type="text" name="name" value={user.name} onChange={handleInputChange} className={`w-full ${COLORS.bg} border border-gray-700 rounded-lg p-3 text-white outline-none focus:border-[#a31d24] transition-colors`}/></div>
-              <div className="group"><label className="block text-xs font-bold text-gray-500 mb-1">TÉLÉPHONE</label><input type="tel" name="phone" value={user.phone} onChange={handleInputChange} className={`w-full ${COLORS.bg} p-4 rounded-lg text-white border outline-none transition ${user.phone && !isValidMoroccanPhone(user.phone) ? 'border-red-500' : 'border-gray-700 focus:border-[#a31d24]'}`}/></div>
+              <div className="group"><label className="block text-xs font-bold text-gray-500 mb-1">TÉLÉPHONE</label><input type="tel" name="phone" value={user.phone} onChange={handleInputChange} placeholder="06..." className={`w-full ${COLORS.bg} p-4 rounded-lg text-white border outline-none transition ${user.phone && !isValidMoroccanPhone(user.phone) ? 'border-red-500' : 'border-gray-700 focus:border-[#a31d24]'}`}/></div>
               <div className="group"><label className="block text-xs font-bold text-gray-500 mb-1">ADRESSE</label><textarea name="address" value={user.address} onChange={handleInputChange} placeholder="Adresse de livraison" className={`w-full ${COLORS.bg} p-4 rounded-lg text-white border border-gray-700 focus:border-[#a31d24] outline-none h-24 transition`}/></div>
               <button onClick={() => saveUserData(user)} className={`w-full py-4 rounded-lg font-bold transition mt-2 bg-gray-700 text-white hover:bg-gray-600`}>Enregistrer</button>
             </div>
