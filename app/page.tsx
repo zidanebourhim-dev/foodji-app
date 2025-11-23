@@ -2,28 +2,14 @@
 /* eslint-disable @next/next/no-img-element */
 'use client';
 import { useState, useEffect } from 'react';
-// ON IMPORTE TOUT DIRECTEMENT ICI
-import { initializeApp, getApps, getApp } from "firebase/app";
-import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
+// 👇 IMPORTATION FIREBASE
+import { db } from './firebase'; 
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
-// --- 1. VOS CLÉS FIREBASE (COLLEZ-LES ICI) ---
-const firebaseConfig = {
-  apiKey: "AIzaSyDqXN8tkXCnpXB_QdyHAUX6DzbsiT795FY",
-    authDomain: "foodji-app.firebaseapp.com",
-    projectId: "foodji-app",
-    storageBucket: "foodji-app.firebasestorage.app",
-    messagingSenderId: "760216056378",
-    appId: "1:760216056378:web:594f079a9ccb031d033b03"
-};
-
-// --- INITIALISATION FIREBASE (Sécurisée) ---
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-const db = getFirestore(app);
-
-
-// --- CONFIGURATION APP ---
+// --- CONFIGURATION ---
 const PHONE_NUMBER_RESTO = "+212668197671"; 
 const PHONE_NUMBER_LIVREUR = "+212668197671"; 
+const SECRET_CODE_PREFIX = "FOODJI"; 
 
 const COLORS = {
   bg: "bg-[#151e32]", 
@@ -54,7 +40,7 @@ const SCHEDULE: Record<number, { day: string; open: number | null; close: number
   3: { day: "Mercredi", open: 12, close: 1 },
   4: { day: "Jeudi",    open: 12, close: 1 },
   5: { day: "Vendredi", open: 12, close: 2 },
-  6: { day: "Samedi",   open: 18, close: 2 },
+  6: { day: "Samedi",   open: 18, close: 1 },
 };
 
 // --- DONNÉES DU MENU ---
@@ -183,6 +169,7 @@ const isValidMoroccanPhone = (phone: string) => {
   return regex.test(cleanPhone);
 };
 
+// GÉNÉRATION CODE ALÉATOIRE SIMPLE (4 CHIFFRES)
 const generateRandomCode = () => {
     return Math.floor(1000 + Math.random() * 9000).toString();
 };
@@ -208,9 +195,12 @@ export default function Home() {
   const [inputCode, setInputCode] = useState('');
   const [showCodeInput, setShowCodeInput] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
+  const [debugError, setDebugError] = useState("");
 
   useEffect(() => {
-    const timer = setTimeout(() => { setLoading(false); }, 2500);
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 2500);
     return () => clearTimeout(timer);
   }, []);
 
@@ -221,6 +211,7 @@ export default function Home() {
     return () => clearInterval(timer);
   }, []);
 
+  // CHARGEMENT DONNÉES
   useEffect(() => {
     const localData = localStorage.getItem('foodji_account');
     if (localData) {
@@ -234,23 +225,15 @@ export default function Home() {
             } else {
                 setUser(localUser);
             }
-         }).catch(e => { console.error(e); });
+         }).catch(e => {
+             console.error(e);
+             setDebugError("Erreur Chargement: " + e.message);
+         });
       } else {
           setUser(localUser);
       }
     }
   }, []);
-
-  // --- FONCTION TEST DE CONNEXION ---
-  const testConnection = async () => {
-      try {
-          const testRef = doc(db, "clients", "test_connexion");
-          await setDoc(testRef, { test: "OK", date: new Date().toISOString() });
-          alert("✅ CONNEXION RÉUSSIE ! La base de données fonctionne.");
-      } catch (e: any) {
-          alert("❌ ERREUR DE CONNEXION : " + e.message);
-      }
-  };
 
   const showToast = (message: string) => {
     setToast(message);
@@ -262,7 +245,7 @@ export default function Home() {
     setIsLocating(true);
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const link = `https://www.google.com/maps?q=${position.coords.latitude},${position.coords.longitude}`;
+        const link = `http://googleusercontent.com/maps.google.com/?q=${position.coords.latitude},${position.coords.longitude}`;
         setUser(prev => ({ ...prev, locationLink: link, address: prev.address || "📍 Position GPS récupérée" }));
         setIsLocating(false);
       },
@@ -340,10 +323,6 @@ export default function Home() {
     setCart([...cart, cartItem]);
     setCustomizingItem(null);
     showToast(`"${item.name}" ajouté au panier !`);
-    const isMainDish = item.price > 20; 
-    if (isMainDish) {
-        setTimeout(() => setShowUpsell(true), 500); 
-    }
   };
 
   const addUpsellItem = (uItem: any) => {
@@ -371,6 +350,7 @@ export default function Home() {
     setUser({ ...user, [name]: value });
   };
 
+  // SAUVEGARDE FIREBASE
   const saveUserToFirebase = async (updatedUser: any) => {
       localStorage.setItem('foodji_account', JSON.stringify(updatedUser));
       try {
@@ -387,7 +367,7 @@ export default function Home() {
         }
       } catch (e: any) {
           console.error("Erreur Firebase Save", e);
-          alert("Erreur sauvegarde : " + e.message);
+          setDebugError("Erreur sauvegarde : " + e.message);
       }
   };
 
@@ -403,18 +383,19 @@ export default function Home() {
           setShowCodeInput(false);
           setInputCode('');
       } else {
-          alert("Code incorrect.");
+          alert(`Code incorrect. Code attendu : ${user.pendingCode}`);
       }
   };
 
   const handlePrint = () => { window.print(); };
 
   const sendToResto = async () => {
-    const currentStatus = getRestaurantStatus();
-    if (!currentStatus.isOpen) {
-        setShowClosedMessage(true);
-        return;
-    }
+    // --- TEST MODE : ON NE BLOQUE PLUS SI FERMÉ ---
+    // const currentStatus = getRestaurantStatus();
+    // if (!currentStatus.isOpen) {
+    //    setShowClosedMessage(true);
+    //    return;
+    // }
 
     const uniqueCode = generateRandomCode();
     const amountEligibleForPoints = cartTotal - discount; 
@@ -424,7 +405,8 @@ export default function Home() {
     const { comment, locationLink, ...userToSave } = user;
     const pointsAfterUsage = user.points - discount;
     
-    const updatedUser = { ...user, points: pointsAfterUsage, pendingPoints: earnedPoints, pendingCode: uniqueCode };
+    // On sauvegarde le code unique
+    const updatedUser = { ...userToSave, points: pointsAfterUsage, pendingPoints: earnedPoints, pendingCode: uniqueCode };
     setUser(updatedUser);
     await saveUserToFirebase(updatedUser);
 
@@ -440,6 +422,7 @@ export default function Home() {
     message += `👤 *Client :* ${user.name}\n`;
     message += `📞 *Tél :* ${user.phone}\n`;
     if (orderMethod === 'livraison') message += `📍 *Adresse :* ${user.address}\n`;
+    // PAS DE LIEN GPS ICI
     if (user.comment) message += `💬 *Note :* ${user.comment}\n`;
     message += `🏆 *Fidélité :* ${pointsAfterUsage} pts (En attente : +${earnedPoints})\n`;
     message += `---------------------------\n`;
@@ -468,6 +451,7 @@ export default function Home() {
     message += `👤 *Client :* ${user.name}\n`;
     message += `📞 *Tél :* ${user.phone}\n`;
     message += `📍 *Adresse :* ${user.address}\n`;
+    // LIEN GPS ICI
     if (user.locationLink) message += `🗺️ *GPS :* ${user.locationLink}\n`;
     if (user.comment) message += `💬 *Note :* ${user.comment}\n`;
     message += `---------------------------\n`;
@@ -495,6 +479,14 @@ export default function Home() {
   return (
     <div className={`min-h-screen ${COLORS.bg} text-white font-sans pb-24 selection:bg-red-900 relative`}>
       
+      {/* --- ERREUR DEBOGAGE SI FIREBASE ECHOUE --- */}
+      {debugError && (
+          <div className="fixed top-0 left-0 w-full bg-red-600 text-white text-xs p-4 z-[9999] font-bold text-center">
+              ⚠️ {debugError}
+              <button onClick={() => setDebugError("")} className="ml-4 underline">Fermer</button>
+          </div>
+      )}
+
       <style jsx global>{`
         @media print {
           body * { visibility: hidden; }
@@ -505,21 +497,9 @@ export default function Home() {
         @keyframes lava { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
         .bg-animated { background: linear-gradient(-45deg, #151e32, #0f172a, #1e293b, #2a0a0d); background-size: 400% 400%; animation: lava 15s ease infinite; }
       `}</style>
-
       <div className="fixed inset-0 bg-animated -z-10"></div>
 
       {toast && <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[200] bg-green-500 text-white px-6 py-3 rounded-full shadow-2xl font-bold animate-bounce-slight flex items-center gap-2"><span>✅</span> {toast}</div>}
-
-      {/* --- BOUTON DE DIAGNOSTIC (Temporaire) --- */}
-      {view === 'home' && (
-          <button 
-            onClick={testConnection} 
-            className="fixed bottom-4 left-4 z-[9999] text-[10px] bg-gray-800 text-gray-500 px-2 py-1 rounded opacity-50 hover:opacity-100"
-          >
-              TEST CONNEXION
-          </button>
-      )}
-      <div className="fixed bottom-4 right-4 z-[9999] text-[10px] text-gray-600">V47</div>
 
       {showUpsell && (
           <div className="fixed inset-0 z-[160] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
@@ -632,13 +612,20 @@ export default function Home() {
             </div>
             {user.name && (<div className="mb-8 bg-white/5 px-6 py-2 rounded-xl border border-white/10 backdrop-blur-sm animate-fade-in-up"><span className="text-[#a31d24] font-bold">🏆 {user.points} Points</span> {user.pendingPoints > 0 && <span className="text-xs text-yellow-400 block">({user.pendingPoints} en attente)</span>}</div>)}
             {user.pendingPoints > 0 && (<button onClick={() => setShowCodeInput(true)} className="mb-6 bg-yellow-600/80 text-white px-4 py-2 rounded-full text-xs font-bold animate-bounce border border-yellow-400">🎁 Valider mes points en attente</button>)}
-            <div className={`mb-6 flex items-center gap-2 px-4 py-1 rounded-full border border-white/5 backdrop-blur-md ${status.isOpen ? 'bg-green-900/30' : 'bg-red-900/30'}`}><div className={`w-2 h-2 rounded-full ${status.isOpen ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div><span className="text-xs text-gray-200 uppercase tracking-widest font-bold">{status.isOpen ? `OUVERT JUSQU'À ${status.closeAt}H00` : `FERMÉ • OUVRE À ${status.openAt}H00`}</span></div>
-            <button onClick={() => {if(status.isOpen) setView('menu'); else setShowClosedMessage(true);}} className={`${COLORS.accent} text-white px-12 py-5 rounded-full text-xl font-bold shadow-[0_0_30px_rgba(163,29,36,0.5)] hover:scale-105 transition transform duration-300 border border-red-900 ${!status.isOpen ? 'opacity-50 grayscale' : ''}`}>VOIR LA CARTE</button>
+            
+            {/* BOUTON DÉBLOQUÉ POUR LE TEST */}
+            <button 
+                onClick={() => setView('menu')} 
+                className={`${COLORS.accent} text-white px-12 py-5 rounded-full text-xl font-bold shadow-[0_0_30px_rgba(163,29,36,0.5)] hover:scale-105 transition transform duration-300 border border-red-900`}
+            >
+                VOIR LA CARTE
+            </button>
           </div>
         </div>
       )}
 
-      {/* ... (Reste identique : Profile, Menu, Cart, Checkout) ... */}
+      {/* ... (Le reste de l'affichage Profile, Menu, Cart, Checkout est inchangé) ... */}
+      
       {view === 'profile' && (
         <div className="p-4 max-w-md mx-auto min-h-screen">
           <header className="flex justify-between items-center mb-8 mt-4"><button onClick={() => setView('home')} className="text-gray-400 font-bold hover:text-white transition">← ACCUEIL</button><h2 className="text-2xl font-bold text-white">Mon Espace</h2><div className="w-8"></div></header>
@@ -647,7 +634,7 @@ export default function Home() {
             <h3 className={`text-lg font-bold ${COLORS.textAccent} mb-6`}>Mes Coordonnées</h3>
             <div className="space-y-5">
               <div className="group"><label className="block text-xs font-bold text-gray-500 mb-1">NOM</label><input type="text" name="name" value={user.name} onChange={handleInputChange} className={`w-full ${COLORS.bg} border border-gray-700 rounded-lg p-3 text-white outline-none focus:border-[#a31d24] transition-colors`}/></div>
-              <div className="group"><label className="block text-xs font-bold text-gray-500 mb-1">TÉLÉPHONE</label><input type="tel" name="phone" value={user.phone} onChange={handleInputChange} placeholder="06..." className={`w-full ${COLORS.bg} p-4 rounded-lg text-white border outline-none transition ${user.phone && !isValidMoroccanPhone(user.phone) ? 'border-red-500' : 'border-gray-700 focus:border-[#a31d24]'}`}/></div>
+              <div className="group"><label className="block text-xs font-bold text-gray-500 mb-1">TÉLÉPHONE</label><input type="tel" name="phone" value={user.phone} onChange={handleInputChange} className={`w-full ${COLORS.bg} p-4 rounded-lg text-white border outline-none transition ${user.phone && !isValidMoroccanPhone(user.phone) ? 'border-red-500' : 'border-gray-700 focus:border-[#a31d24]'}`}/></div>
               <div className="group"><label className="block text-xs font-bold text-gray-500 mb-1">ADRESSE</label><textarea name="address" value={user.address} onChange={handleInputChange} placeholder="Adresse de livraison" className={`w-full ${COLORS.bg} p-4 rounded-lg text-white border border-gray-700 focus:border-[#a31d24] outline-none h-24 transition`}/></div>
               <button onClick={() => saveUserData(user)} className={`w-full py-4 rounded-lg font-bold transition mt-2 bg-gray-700 text-white hover:bg-gray-600`}>Enregistrer</button>
             </div>
@@ -720,12 +707,12 @@ export default function Home() {
                 </div>
                 <button 
                     onClick={sendToResto} 
-                    disabled={!canOrder || !status.isOpen} 
+                    disabled={!canOrder} 
                     className={`w-full py-4 rounded-xl font-bold text-lg shadow-[0_0_20px_rgba(37,211,102,0.2)] flex items-center justify-center gap-3 transition-all transform 
-                    ${(!canOrder || !status.isOpen) ? 'bg-gray-700 cursor-not-allowed text-gray-500 opacity-50' : 'bg-[#25D366] text-white hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(37,211,102,0.4)]'}`}
+                    ${(!canOrder) ? 'bg-gray-700 cursor-not-allowed text-gray-500 opacity-50' : 'bg-[#25D366] text-white hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(37,211,102,0.4)]'}`}
                 >
                     <span className="text-2xl">📱</span>
-                    <span>{!status.isOpen ? 'Fermé (Voir horaires)' : (canOrder ? 'Confirmer la commande' : 'Info Manquante')}</span>
+                    <span>Confirmer la commande</span>
                 </button>
             </div>
           )}
