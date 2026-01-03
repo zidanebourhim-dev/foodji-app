@@ -23,8 +23,7 @@ const COLORS = {
   card: '#FFFFFF',       
   success: '#10B981',
   danger: '#EF4444',
-  warning: '#F59E0B',
-  promo: '#D97706', // Couleur Or/Promo    
+  warning: '#F59E0B',    
   textLight: '#6B7280'   
 };
 
@@ -38,9 +37,8 @@ function App() {
   const audioRef = useRef(new Audio(NOTIF_SOUND));
 
   const [selectedProduct, setSelectedProduct] = useState(null);
-  // On initialise vide, on le remplira au chargement du menu
   const [categorieActive, setCategorieActive] = useState(''); 
-  const [adminCategorie, setAdminCategorie] = useState('Tout'); // Admin garde 'Tout' pour gestion facile
+  const [adminCategorie, setAdminCategorie] = useState(''); // Plus de 'Tout' par défaut
 
   const [panier, setPanier] = useState([]);
   const [clientNom, setClientNom] = useState('');
@@ -79,7 +77,7 @@ function App() {
       list.sort((a, b) => b.date.seconds - a.date.seconds);
       
       if (list.length > prevCommandesLength.current && user) {
-          audioRef.current.play().catch(e => console.log("Clic requis pour son"));
+          audioRef.current.play().catch(e => console.log("Clic requis"));
       }
       prevCommandesLength.current = list.length;
       setCommandes(list);
@@ -88,45 +86,49 @@ function App() {
     return () => { unsubscribeAuth(); unsubscribeMenu(); unsubscribeCmd(); };
   }, [user]);
 
-  // --- LOGIQUE CLIENT & PROMO ---
-  
-  // Vérifie si c'est Dimanche (0 = Dimanche)
-  const isDimanche = new Date().getDay() === 0;
+  // --- LOGIQUE CATEGORIES DYNAMIQUES (ADMIN & CLIENT) ---
+  // On récupère la liste réelle des catégories présentes dans la base de données
+  const categoriesReelles = [...new Set(menu.map(p => p.categorie))];
 
-  // Construction des catégories dynamiques (SANS 'TOUT')
-  let categoriesUniques = [...new Set(menu.map(p => p.categorie))];
+  // Initialisation des onglets par défaut s'ils sont vides
+  useEffect(() => {
+      if (categoriesReelles.length > 0) {
+          if (!adminCategorie) setAdminCategorie(categoriesReelles[0]);
+          // Pour le client, on gère le dimanche plus bas, mais on initialise ici aussi au cas où
+          if (!categorieActive && new Date().getDay() !== 0) setCategorieActive(categoriesReelles[0]);
+      }
+  }, [menu, adminCategorie, categorieActive]);
+
+
+  // --- LOGIQUE CLIENT SPECIFIQUE (PROMO DIMANCHE) ---
+  const isDimanche = new Date().getDay() === 0;
+  let categoriesClient = [...categoriesReelles];
   
-  // Si Dimanche, on ajoute "PROMOTIONS" au début
   if (isDimanche) {
-      categoriesUniques = ['🔥 PROMOTIONS', ...categoriesUniques];
+      categoriesClient = ['🔥 PROMOTIONS', ...categoriesReelles];
+      if (!categorieActive) setCategorieActive('🔥 PROMOTIONS');
   }
 
-  // Sélectionne la 1ère catégorie par défaut au chargement
-  useEffect(() => {
-      if (categoriesUniques.length > 0 && !categorieActive) {
-          setCategorieActive(categoriesUniques[0]);
-      }
-  }, [menu, isDimanche]);
-
-  // Filtrage du menu
+  // Filtrage Menu Client
   let menuClient = [];
   if (categorieActive === '🔥 PROMOTIONS') {
-      // On injecte manuellement l'offre du dimanche
       menuClient = [{
           id: 'promo-sunday',
           nom: '2 PIZZAS ACHETÉES = 1 OFFERTE',
           description: 'Offre valable uniquement le dimanche. Ajoutez 3 pizzas au panier, la moins chère sera offerte en caisse !',
           categorie: '🔥 PROMOTIONS',
           prix: 0,
-          image: 'https://img.freepik.com/free-vector/pizza-time-promo-banner_23-2148967986.jpg', // Image générique ou ton lien
+          image: 'https://img.freepik.com/free-vector/pizza-time-promo-banner_23-2148967986.jpg',
           available: true,
-          isInfo: true // Marqueur spécial pour dire que c'est une info
+          isInfo: true 
       }];
   } else {
-      menuClient = menu.filter(p => {
-        return p.categorie === categorieActive && p.available !== false;
-      });
+      menuClient = menu.filter(p => p.categorie === categorieActive && p.available !== false);
   }
+
+  // Filtrage Menu Admin (Strict, pas de 'Tout')
+  const menuAdmin = menu.filter(p => p.categorie === adminCategorie);
+
 
   // --- NAVIGATION ---
   const handleStaffAccess = () => {
@@ -134,11 +136,8 @@ function App() {
       else setView('login'); 
   };
 
-  const menuAdmin = adminCategorie === 'Tout' ? menu : menu.filter(p => p.categorie === adminCategorie);
-
   const ajouterAuPanier = (itemFinal) => {
-    if (itemFinal.isInfo) return alert("Ceci est une offre informative. Ajoutez directement vos 3 pizzas au panier !");
-    
+    if (itemFinal.isInfo) return alert("Ceci est une offre informative. Ajoutez directement vos pizzas !");
     if (navigator.vibrate) navigator.vibrate(50);
     const itemSafe = {
         ...itemFinal,
@@ -425,10 +424,14 @@ function App() {
 
           <div style={{marginTop:'40px', borderTop:'2px solid #eee', paddingTop:'20px'}}>
              <h3 style={{marginBottom:'15px'}}>📦 Menu</h3>
+             {/* MENU ADMIN DYNAMIQUE ET SANS 'TOUT' */}
              <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '15px', display:'flex', gap:'10px' }}>
-              <button onClick={() => setAdminCategorie('Tout')} style={{padding:'8px 15px', borderRadius:'20px', border:'none', background: adminCategorie==='Tout'?COLORS.secondary:'#eee', color:adminCategorie==='Tout'?'white':'black', cursor:'pointer'}}>Tout</button>
-              {['Burgers', 'Pizzas', 'Tacos', 'Pâtes', 'Salades'].map(c => (
-                <button key={c} onClick={() => setAdminCategorie(c)} style={{padding:'8px 15px', borderRadius:'20px', border:'none', background: adminCategorie===c?COLORS.secondary:'#eee', color:adminCategorie===c?'white':'black', cursor:'pointer'}}>{c}</button>
+              {categoriesReelles.map(c => (
+                <button key={c} onClick={() => setAdminCategorie(c)} style={{
+                    padding:'8px 15px', borderRadius:'20px', border:'none', 
+                    background: adminCategorie===c?COLORS.secondary:'#eee', 
+                    color:adminCategorie===c?'white':'black', cursor:'pointer'
+                }}>{c}</button>
               ))}
              </div>
 
@@ -470,9 +473,8 @@ function App() {
       {view === 'client' && (
         <div style={{ padding: '20px' }}>
           
-          {/* CATEGORIES SANS 'TOUT' */}
           <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '20px', scrollbarWidth: 'none', display:'flex', gap:'10px' }}>
-            {categoriesUniques.map(c => (
+            {categoriesClient.map(c => (
               <button key={c} onClick={() => setCategorieActive(c)} style={{
                   border: 'none', display:'inline-block', padding:'10px 20px', borderRadius:'25px', 
                   background: categorieActive === c ? (c === '🔥 PROMOTIONS' ? COLORS.promo : COLORS.secondary) : 'white', 
