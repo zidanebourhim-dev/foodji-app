@@ -4,10 +4,10 @@ import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebas
 import { collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, query, writeBatch } from 'firebase/firestore';
 import './App.css';
 
-// --- CONFIGURATION OPTIONS ---
-const LISTE_VIANDES = ["Viande Hachée", "Poulet", "Dinde", "Nuggets", "Cordon Bleu", "Merguez"];
-const LISTE_GARNITURES_PIZZA = ["Champignons", "Poivrons", "Thon", "Viande Hachée", "Poulet", "Jambon", "Oignons", "Olives"];
-const LISTE_SAUCES = ["Algérienne", "Biggy", "Blanche", "Barbecue", "Samouraï", "Cheesy"];
+// --- CONFIGURATION ---
+const LISTE_VIANDES = ["Poulet", "Viande Hachée", "Cordon Bleu", "Nuggets", "Poulet Crispy"];
+const LISTE_GARNITURES_PIZZA = ["Viande Hachée", "Poulet", "4 Fromages", "Cannibale", "Pepperoni", "Thon", "Charcuterie", "Végétarienne", "Fruits de Mer"];
+const LISTE_SAUCES = ["Algérienne Fait Maison", "Biggy Fait Maison", "Barbecue Fait Maison"];
 
 // --- THEME ---
 const COLORS = {
@@ -16,7 +16,8 @@ const COLORS = {
   bg: '#F9FAFB',         
   card: '#FFFFFF',       
   success: '#10B981',
-  danger: '#EF4444',    
+  danger: '#EF4444',
+  warning: '#F59E0B',    
   textLight: '#6B7280'   
 };
 
@@ -33,6 +34,7 @@ function App() {
   const [panier, setPanier] = useState([]);
   const [clientNom, setClientNom] = useState('');
   const [clientTel, setClientTel] = useState('');
+  const [commentaire, setCommentaire] = useState('');
   const [typeCommande, setTypeCommande] = useState('sur_place');
   const [adresse, setAdresse] = useState('');
   
@@ -95,9 +97,11 @@ function App() {
     setLoading(true);
     try {
       await addDoc(collection(db, "commandes"), {
-        client: clientNom, tel: clientTel, type: typeCommande, adresse, items: panier, total, date: new Date(), status: 'En attente'
+        client: clientNom, tel: clientTel, type: typeCommande, adresse, 
+        commentaire: commentaire,
+        items: panier, total, date: new Date(), status: 'En attente'
       });
-      setPanier([]); setClientNom(''); setClientTel(''); setAdresse('');
+      setPanier([]); setClientNom(''); setClientTel(''); setAdresse(''); setCommentaire('');
       alert("✅ Commande envoyée !"); setView('client');
     } catch (e) { alert("Erreur envoi"); }
     setLoading(false);
@@ -110,6 +114,7 @@ function App() {
   const copierOdoo = (cmd) => {
     let t = `Nom: ${cmd.client}\nTél: ${cmd.tel}\n`;
     t += cmd.type === 'livraison' ? `Livraison: ${cmd.adresse}` : `Mode: ${cmd.type === 'sur_place' ? 'Sur Place' : 'Emporter'}`;
+    if(cmd.commentaire) t += `\nNOTE: ${cmd.commentaire}`;
     navigator.clipboard.writeText(t).then(() => alert("📋 Copié pour Odoo !"));
   };
   const changerStatus = async (id, st) => await updateDoc(doc(db, "commandes", id), { status: st });
@@ -161,7 +166,6 @@ function App() {
       }
   };
 
-  // --- IMPORT CSV SPECIAL (LOGIQUE SANDWICH) ---
   const handleCSVImport = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -171,35 +175,26 @@ function App() {
       const rows = text.split('\n').filter(r => r.trim() !== '');
       let count = 0;
 
-      if(confirm(`Importer ${rows.length} lignes ?\n(Assurez-vous d'avoir vidé le menu avant)`)) {
+      if(confirm(`Importer ${rows.length} lignes ?`)) {
         setLoading(true);
-        // Sauter la ligne d'entête si besoin
         const start = rows[0].toLowerCase().includes('catégorie') ? 1 : 0;
 
         for (let i = start; i < rows.length; i++) {
           const row = rows[i];
-          // On splitte par la virgule (format standard CSV)
           const tokens = row.split(','); 
           
-          // Il faut au moins 5 colonnes (Cat, Nom, Desc, P1, P2...)
           if (tokens.length >= 5) {
-             // 1. LE DÉBUT
              const cat = tokens[0].trim();
              const name = tokens[1].trim();
 
-             // 2. LA FIN (Les 3 derniers sont FORCÉMENT les prix, ou vides)
-             // On part de la fin du tableau pour être sûr
              const len = tokens.length;
              const p3Raw = tokens[len - 1];
              const p2Raw = tokens[len - 2];
              const p1Raw = tokens[len - 3];
 
-             // 3. LE MILIEU (Tout ce qui reste est la Description)
-             // On recolle les morceaux de description qui ont été coupés par des virgules
              const descTokens = tokens.slice(2, len - 3);
              const desc = descTokens.join(', ').replace(/"/g, '').trim();
 
-             // Nettoyage Prix
              const cleanPrice = (val) => val ? Number(val.toString().replace(/[^0-9]/g, '')) : 0;
              const p1 = cleanPrice(p1Raw);
              const p2 = cleanPrice(p2Raw);
@@ -208,20 +203,18 @@ function App() {
              let variantsList = [];
              let finalPrice = p1;
 
-             // Logique Variantes Automatiques
              if (p2 > 0 || p3 > 0) {
-                finalPrice = 0; // Si variantes, on affiche 0 (ou le min)
+                finalPrice = 0; 
                 const catLower = cat.toLowerCase();
                 let n1 = "Standard", n2 = "Moyen", n3 = "Grand";
                 
                 if (catLower.includes('tacos')) { n1 = "L"; n2 = "XL"; n3 = "XXL"; }
-                else if (catLower.includes('pizza')) { n1 = "M"; n2 = "L"; n3 = "XL"; } // M, L pour Pizza
+                else if (catLower.includes('pizza')) { n1 = "M"; n2 = "L"; n3 = "XL"; } 
 
                 if(p1 > 0) variantsList.push({ nom: n1, prix: p1 });
                 if(p2 > 0) variantsList.push({ nom: n2, prix: p2 });
                 if(p3 > 0) variantsList.push({ nom: n3, prix: p3 });
              }
-             // Si pas de variante, le prix est P1. Si P1 est 0, c'est une erreur du fichier ou un gratuit.
              if (variantsList.length === 0 && p1 > 0) {
                  finalPrice = p1;
              }
@@ -236,7 +229,7 @@ function App() {
           }
         }
         setLoading(false); 
-        alert(`${count} produits importés ! Vérifiez les prix.`);
+        alert(`${count} produits importés !`);
       }
     };
     reader.readAsText(file);
@@ -265,7 +258,7 @@ function App() {
         )}
       </div>
 
-      {/* --- MODAL PRODUIT DETAIL --- */}
+      {/* --- MODAL --- */}
       {selectedProduct && (
         <ProductModal 
           product={selectedProduct} 
@@ -285,14 +278,14 @@ function App() {
         </div>
       )}
 
-      {/* --- ADMIN DASHBOARD --- */}
+      {/* --- ADMIN --- */}
       {view === 'admin' && user && (
         <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
           
           <div style={{marginBottom:'20px', display:'flex', gap:'10px', alignItems:'center'}}>
               <h2 style={{margin:0}}>⚙️ Admin</h2>
               <button onClick={viderMenu} style={{background: COLORS.danger, color:'white', border:'none', padding:'8px 15px', borderRadius:'8px', cursor:'pointer', fontWeight:'bold'}}>
-                  🗑️ TOUT SUPPRIMER (Reset)
+                  🗑️ Reset Menu
               </button>
           </div>
 
@@ -316,13 +309,18 @@ function App() {
                     <button onClick={() => copierOdoo(cmd)} style={{marginTop:'5px', background: COLORS.secondary, color:'white', border:'none', padding:'6px 12px', borderRadius:'6px', fontSize:'0.75rem', cursor:'pointer'}}>📋 ODOO</button>
                   </div>
                 </div>
-                {cmd.type === 'livraison' && <div style={{background:'#FEF3C7', color:'#D97706', padding:'8px', borderRadius:'8px', fontSize:'0.9rem', marginBottom:'10px'}}>🛵 <strong>{cmd.adresse}</strong></div>}
+                
+                <div style={{marginBottom:'10px'}}>
+                    {cmd.type === 'livraison' && <div style={{background:'#FEF3C7', color:'#D97706', padding:'8px', borderRadius:'8px', fontSize:'0.9rem', marginBottom:'5px'}}>🛵 <strong>{cmd.adresse}</strong></div>}
+                    {cmd.commentaire && <div style={{background: COLORS.warning, color:'white', padding:'8px', borderRadius:'8px', fontSize:'0.9rem', fontWeight:'bold'}}>📝 Note: {cmd.commentaire}</div>}
+                </div>
                 
                 <ul style={{listStyle:'none', marginBottom:'15px'}}>
                   {cmd.items.map((it, i) => (
                     <li key={i} style={{padding:'6px 0', borderBottom:'1px dashed #eee', lineHeight:'1.4'}}>
                       <strong>{it.nom}</strong> 
                       {it.varianteNom && <span style={{color: COLORS.textLight}}> ({it.varianteNom})</span>}
+                      {it.sauces && it.sauces.length > 0 && <div style={{fontSize:'0.85rem', color:'#555', marginLeft:'10px'}}>Sauces: {it.sauces.join(', ')}</div>}
                       {it.optionsChoisies && it.optionsChoisies.length > 0 && <div style={{fontSize:'0.85rem', color:'#555', marginLeft:'10px'}}>+ {it.optionsChoisies.join(', ')}</div>}
                     </li>
                   ))}
@@ -356,11 +354,7 @@ function App() {
                   </div>
                   <div>
                     <div style={{fontWeight:'bold', textDecoration: p.available === false ? 'line-through' : 'none'}}>{p.nom}</div>
-                    <div style={{fontSize:'0.8rem', color: COLORS.textLight}}>
-                         {p.variantes && p.variantes.length > 0 
-                            ? p.variantes.map(v => `${v.nom}:${v.prix}`).join(' | ') 
-                            : `${p.prix} DH`}
-                    </div>
+                    <div style={{fontSize:'0.8rem', color: COLORS.textLight}}>{p.categorie} • {p.variantes?.length > 0 ? 'Multi-tailles' : p.prix + ' DH'}</div>
                   </div>
                 </div>
                 <button onClick={()=>supprimerProduit(p.id)} style={{color:'red', border:'none', background:'transparent', cursor:'pointer'}}>X</button>
@@ -368,7 +362,6 @@ function App() {
             ))}
           </div>
           
-           {/* FORM MANUEL (Replié par défaut) */}
            <details style={{marginTop:'30px', background:'white', padding:'15px', borderRadius:'10px'}}>
              <summary>Ajout Manuel</summary>
              <div style={{marginTop:'10px'}}>
@@ -383,7 +376,7 @@ function App() {
         </div>
       )}
 
-      {/* --- CLIENT MENU --- */}
+      {/* --- CLIENT --- */}
       {view === 'client' && (
         <div style={{ padding: '20px' }}>
           <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '20px', scrollbarWidth: 'none', display:'flex', gap:'10px' }}>
@@ -411,7 +404,7 @@ function App() {
                   </div>
                   <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                      <span style={{ fontWeight: '700', fontSize: '1rem', color: COLORS.primary }}>
-                       {plat.variantes?.length > 0 ? `${Math.min(...plat.variantes.map(v=>v.prix))} DH` : `${plat.prix} DH`}
+                       {plat.variantes?.length > 0 ? `dès ${Math.min(...plat.variantes.map(v=>v.prix))} DH` : `${plat.prix} DH`}
                      </span>
                      <div style={{background: COLORS.secondary, color: 'white', width: '32px', height: '32px', borderRadius: '50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.2rem'}}>+</div>
                   </div>
@@ -436,7 +429,8 @@ function App() {
                         <div style={{fontWeight:'600'}}>{item.nom}</div>
                         <div style={{color: COLORS.textLight, fontSize:'0.9rem'}}>
                             {item.varianteNom}
-                            {item.optionsChoisies && <div style={{fontSize:'0.8rem'}}>{item.optionsChoisies.join(', ')}</div>}
+                            {item.sauces && item.sauces.length > 0 && <div>+ {item.sauces.join(', ')}</div>}
+                            {item.optionsChoisies && item.optionsChoisies.length > 0 && <div>+ {item.optionsChoisies.join(', ')}</div>}
                         </div>
                     </div>
                     <div style={{display:'flex', gap:'15px', alignItems:'center'}}>
@@ -447,8 +441,9 @@ function App() {
                 ))}
                 <div style={{textAlign:'right', fontSize:'1.5rem', fontWeight:'800', marginTop:'20px', color: COLORS.secondary}}>Total : {total} DH</div>
               </div>
+              
               <div style={{background: COLORS.bg, padding: '20px', borderRadius: '16px'}}>
-                <h3 style={{marginTop:0, fontSize:'1.1rem', marginBottom:'15px'}}>Finaliser</h3>
+                <h3 style={{marginTop:0, fontSize:'1.1rem', marginBottom:'15px'}}>Infos Client</h3>
                 <div style={{display:'flex', gap:'10px', marginBottom:'15px'}}>
                   {['sur_place', 'emporter', 'livraison'].map(t => (
                     <button key={t} onClick={() => setTypeCommande(t)} style={{
@@ -460,6 +455,15 @@ function App() {
                 <input type="text" value={clientNom} onChange={e => setClientNom(e.target.value)} style={inputStyle} placeholder="Nom" />
                 <input type="tel" value={clientTel} onChange={e => setClientTel(e.target.value)} style={inputStyle} placeholder="Tél" />
                 {typeCommande === 'livraison' && <textarea value={adresse} onChange={e => setAdresse(e.target.value)} style={{...inputStyle, height:'80px'}} placeholder="Adresse..." />}
+                
+                {/* COMMENTAIRE */}
+                <textarea 
+                    value={commentaire} 
+                    onChange={e => setCommentaire(e.target.value)} 
+                    style={{...inputStyle, height:'60px', marginTop:'10px'}} 
+                    placeholder="Commentaire (ex: sans oignons, code porte...)" 
+                />
+
                 <button onClick={envoyerCommande} disabled={loading} style={{...btnStyle, marginTop:'10px', background: COLORS.success}}>{loading ? '...' : 'COMMANDER'}</button>
               </div>
             </>
@@ -490,34 +494,46 @@ function App() {
 // --- MODAL PRODUIT ---
 function ProductModal({ product, onClose, onAdd }) {
   const [selectedVar, setSelectedVar] = useState(product.variantes && product.variantes.length > 0 ? product.variantes[0] : null);
-  const [optionsChoisies, setOptionsChoisies] = useState([]);
+  const [optionsChoisies, setOptionsChoisies] = useState([]); 
+  const [sauces, setSauces] = useState([]); 
 
-  // LOGIQUE COMPLEXE
   let maxChoix = 0;
+  let minChoix = 0; // NOUVEAU
   let listeOptions = [];
   let titreOptions = "";
+  
   const nomLower = product.nom.toLowerCase();
   const catLower = product.categorie.toLowerCase();
-  
-  // Tacos
-  if (catLower.includes('tacos') && (nomLower.includes('mixte') || selectedVar)) {
+  const isTacos = catLower.includes('tacos');
+  const isMixte = isTacos && nomLower.includes('mixte');
+
+  // --- LOGIQUE TACOS MIXTE ---
+  if (isMixte) {
       listeOptions = LISTE_VIANDES;
-      titreOptions = "Viandes";
-      if (selectedVar?.nom === 'L') maxChoix = 2;
+      titreOptions = "Choisissez vos viandes";
+      minChoix = 2; // TOUJOURS MIN 2
+      
+      if (selectedVar?.nom === 'L' || selectedVar?.nom === 'Standard') maxChoix = 2;
       else if (selectedVar?.nom === 'XL') maxChoix = 3;
       else if (selectedVar?.nom === 'XXL') maxChoix = 4;
-      else maxChoix = 1;
+      else maxChoix = 2;
   }
-  // Pizzas
+  // --- PIZZAS ---
   else if (catLower.includes('pizza')) {
-      if (nomLower.includes('2 saisons')) { maxChoix = 2; listeOptions = LISTE_GARNITURES_PIZZA; titreOptions = "2 Garnitures"; }
-      if (nomLower.includes('4 saisons')) { maxChoix = 4; listeOptions = LISTE_GARNITURES_PIZZA; titreOptions = "4 Garnitures"; }
+      if (nomLower.includes('2 saisons')) { maxChoix = 2; minChoix = 2; listeOptions = LISTE_GARNITURES_PIZZA; titreOptions = "2 Garnitures"; }
+      if (nomLower.includes('4 saisons')) { maxChoix = 4; minChoix = 4; listeOptions = LISTE_GARNITURES_PIZZA; titreOptions = "4 Garnitures"; }
   }
 
   const toggleOption = (opt) => {
     if (optionsChoisies.includes(opt)) setOptionsChoisies(optionsChoisies.filter(o => o !== opt));
     else if (optionsChoisies.length < maxChoix) setOptionsChoisies([...optionsChoisies, opt]);
-    else alert(`Max ${maxChoix}`);
+    else alert(`Maximum ${maxChoix} choix !`);
+  };
+
+  const toggleSauce = (s) => {
+      if (sauces.includes(s)) setSauces(sauces.filter(x => x !== s));
+      else if (sauces.length < 2) setSauces([...sauces, s]); 
+      else alert("Max 2 sauces");
   };
 
   const currentPrice = selectedVar ? selectedVar.prix : product.prix;
@@ -551,10 +567,33 @@ function ProductModal({ product, onClose, onAdd }) {
             </div>
         )}
 
-        {/* Choix Options */}
+        {/* Choix Sauces (TOUS LES TACOS) */}
+        {isTacos && (
+            <div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}>
+                <div style={{fontWeight:'bold', marginBottom:'5px'}}>Sauces Maison (Max 2)</div>
+                <div style={{display:'flex', flexWrap:'wrap', gap:'8px'}}>
+                    {LISTE_SAUCES.map(s => (
+                        <button key={s} onClick={() => toggleSauce(s)}
+                            style={{
+                                padding:'8px 12px', borderRadius:'20px', border:'1px solid #ddd', fontSize:'0.9rem',
+                                background: sauces.includes(s) ? COLORS.secondary : 'white',
+                                color: sauces.includes(s) ? 'white' : 'black'
+                            }}>
+                            {s}
+                        </button>
+                    ))}
+                </div>
+            </div>
+        )}
+
+        {/* Choix Options (Viandes / Garnitures) */}
         {maxChoix > 0 && (
             <div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}>
-                <div style={{fontWeight:'bold', marginBottom:'5px'}}>{titreOptions} <small style={{color: COLORS.primary}}>({optionsChoisies.length}/{maxChoix})</small></div>
+                <div style={{fontWeight:'bold', marginBottom:'5px'}}>
+                    {titreOptions} <small style={{color: optionsChoisies.length < minChoix ? 'red' : COLORS.success}}>
+                        ({optionsChoisies.length}/{maxChoix}) {minChoix > 0 ? `- Min ${minChoix}` : ''}
+                    </small>
+                </div>
                 <div style={{display:'flex', flexWrap:'wrap', gap:'8px'}}>
                     {listeOptions.map(opt => (
                         <button key={opt} onClick={() => toggleOption(opt)}
@@ -571,13 +610,17 @@ function ProductModal({ product, onClose, onAdd }) {
         )}
 
         <button onClick={() => {
-            if (maxChoix > 0 && optionsChoisies.length < maxChoix) { if(!confirm("Choix incomplets. Continuer ?")) return; }
-            onAdd(product, selectedVar ? { ...selectedVar, optionsChoisies } : { optionsChoisies });
+            if (minChoix > 0 && optionsChoisies.length < minChoix) { 
+                alert(`Veuillez choisir au moins ${minChoix} options !`); 
+                return; 
+            }
+            onAdd(product, selectedVar ? { ...selectedVar, optionsChoisies, sauces } : { optionsChoisies, sauces });
         }} style={{
             background: COLORS.primary, color: 'white', border: 'none', borderRadius: '12px', 
-            padding: '15px', fontWeight: 'bold', width: '100%', marginTop: '30px', fontSize: '1.1rem'
+            padding: '15px', fontWeight: 'bold', width: '100%', marginTop: '30px', fontSize: '1.1rem',
+            opacity: (minChoix > 0 && optionsChoisies.length < minChoix) ? 0.5 : 1
         }}>
-            Ajouter au panier - {currentPrice} DH
+            {minChoix > 0 && optionsChoisies.length < minChoix ? `Choisir encore ${minChoix - optionsChoisies.length}` : `Ajouter au panier - ${currentPrice} DH`}
         </button>
       </div>
     </div>
