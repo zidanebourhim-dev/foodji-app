@@ -5,10 +5,11 @@ import { collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, query, write
 import './App.css';
 
 // --- CONFIGURATION ---
-const SECURITY_CODE = "1901"; // LE CODE SECRET
+const SECURITY_CODE = "1234"; 
 const LISTE_VIANDES = ["Poulet", "Viande Hachée", "Cordon Bleu", "Nuggets", "Poulet Crispy"];
 const LISTE_GARNITURES_PIZZA = ["Viande Hachée", "Poulet", "4 Fromages", "Cannibale", "Pepperoni", "Thon", "Charcuterie", "Végétarienne", "Fruits de Mer"];
 const LISTE_SAUCES = ["Algérienne Fait Maison", "Biggy Fait Maison", "Barbecue Fait Maison"];
+const TYPES_PATES = ["Penne", "Tagliatelle", "Spaghetti"]; // NOUVEAU
 
 const NOTIF_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
 
@@ -37,7 +38,7 @@ function App() {
   
   const prevCommandesLength = useRef(0);
   const audioRef = useRef(new Audio(NOTIF_SOUND));
-  const fileInputRef = useRef(null); // Pour contrôler l'upload manuellement
+  const fileInputRef = useRef(null); 
 
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [categorieActive, setCategorieActive] = useState(''); 
@@ -54,7 +55,6 @@ function App() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   
-  // Admin manuel
   const [nom, setNom] = useState('');
   const [description, setDescription] = useState('');
   const [image, setImage] = useState('');
@@ -127,7 +127,7 @@ function App() {
       menuClient = menu.filter(p => p.categorie === categorieActive && p.available !== false);
   }
 
-  // --- FILTRAGE ADMIN (Onglet RUPTURE) ---
+  // --- FILTRAGE ADMIN ---
   let menuAdmin = [];
   if (adminCategorie === 'RUPTURE') {
       menuAdmin = menu.filter(p => p.available === false);
@@ -141,10 +141,8 @@ function App() {
       return code === SECURITY_CODE;
   };
 
-  // --- IMPORT SECURISE (Le Hack du Click) ---
   const triggerImport = () => {
       if(checkSecurity()) {
-          // Si le code est bon, on simule le clic sur l'input caché
           fileInputRef.current.click();
       } else {
           alert("Code incorrect ❌");
@@ -186,7 +184,7 @@ function App() {
              let finalPrice = p1;
 
              if (p2 > 0 || p3 > 0) {
-                finalPrice = p1 > 0 ? p1 : 0; // Fix gratuité
+                finalPrice = p1 > 0 ? p1 : 0; 
                 const catLower = cat.toLowerCase();
                 let n1 = "Standard", n2 = "Moyen", n3 = "Grand";
                 if (catLower.includes('tacos')) { n1 = "L"; n2 = "XL"; n3 = "XXL"; }
@@ -207,17 +205,15 @@ function App() {
           }
         }
         setLoading(false); alert(`${count} produits importés !`);
-        // On reset l'input pour pouvoir réimporter le même fichier si besoin
         e.target.value = null; 
       }
     };
     reader.readAsText(file);
   };
 
-  // --- RESET SECURISE ---
   const viderMenu = async () => {
       if(!checkSecurity()) return alert("Code incorrect ❌");
-      if(confirm("⚠️ ATTENTION : SUPPRESSION TOTALE DU MENU.\nCette action est irréversible.\n\nConfirmer ?")) {
+      if(confirm("⚠️ ATTENTION : SUPPRESSION TOTALE DU MENU.\nConfirmer ?")) {
           setLoading(true);
           const batch = writeBatch(db);
           menu.forEach(p => { const ref = doc(db, "produits", p.id); batch.delete(ref); });
@@ -237,7 +233,6 @@ function App() {
     if (navigator.vibrate) navigator.vibrate(50);
     
     let safePrice = Number(itemFinal.prixFinal);
-    // Double sécurité anti-gratuit
     if (safePrice === 0 && itemFinal.variantes?.length > 0) {
         safePrice = itemFinal.prix || 0; 
     }
@@ -292,7 +287,10 @@ function App() {
     
     t += `\n-- Commande --\n`;
     cmd.items.forEach(it => {
-        t += `[${it.categorie}] ${it.nom} (${it.varianteNom || 'Standard'}) : ${it.prixFinal}DH\n`;
+        // AJOUT DU TYPE DE PATES SI EXISTANT
+        const patesInfo = it.choixPates ? ` [${it.choixPates}]` : '';
+        
+        t += `[${it.categorie}] ${it.nom}${patesInfo} (${it.varianteNom || 'Standard'}) : ${it.prixFinal}DH\n`;
         if(it.sauces) t += `  Sauces: ${formatOptions(it.sauces)}\n`;
         if(it.optionsChoisies) t += `  Options: ${formatOptions(it.optionsChoisies)}\n`;
     });
@@ -425,6 +423,8 @@ function App() {
                       </div>
                       <div style={{display:'flex', justifyContent:'space-between', color: COLORS.secondary}}>
                           <span>
+                              {/* AFFICHAGE DU TYPE DE PATES SI PRESENT */}
+                              {it.choixPates && <strong style={{color: COLORS.primary, marginRight:'5px'}}>{it.choixPates}</strong>}
                               {it.varianteNom && <strong style={{color: COLORS.secondary, fontSize:'0.95rem'}}>({it.varianteNom})</strong>}
                           </span>
                           <strong style={{color: COLORS.textLight}}>{it.prixFinal} DH</strong>
@@ -455,7 +455,6 @@ function App() {
                 }}>{c}</button>
               ))}
               
-              {/* ONGLET SPECIAL RUPTURE */}
               <button onClick={() => setAdminCategorie('RUPTURE')} style={{
                   padding:'8px 15px', borderRadius:'20px', border:'none', 
                   background: adminCategorie==='RUPTURE'?COLORS.danger:'#FEE2E2', 
@@ -498,11 +497,10 @@ function App() {
              </div>
            </details>
 
-           {/* --- ZONE DANGEREUSE (CACHÉE EN BAS) --- */}
+           {/* ZONE DANGEREUSE */}
            <details style={{marginTop:'50px', background:'#FEE2E2', padding:'15px', borderRadius:'10px', border:`1px solid ${COLORS.danger}`}}>
              <summary style={{fontWeight:'bold', color: COLORS.danger, cursor:'pointer'}}>💀 ZONE DANGEREUSE (Import / Reset)</summary>
              
-             {/* INPUT CACHÉ POUR CSV */}
              <input type="file" accept=".csv" ref={fileInputRef} onChange={handleCSVImport} style={{display:'none'}} />
              
              <div style={{marginTop:'20px', display:'flex', gap:'10px', flexDirection:'column'}}>
@@ -538,7 +536,6 @@ function App() {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
             {menuClient.map((plat) => {
-              // CORRECTION PRIX AFFICHAGE (Eviter le Gratuit si variante existe)
               const displayPrice = plat.prix > 0 
                   ? plat.prix 
                   : (plat.variantes?.length > 0 ? Math.min(...plat.variantes.map(v=>v.prix)) : 0);
@@ -582,6 +579,8 @@ function App() {
                         </div>
                         <div style={{fontWeight:'600'}}>
                             {item.nom} 
+                            {/* AFFICHAGE DU TYPE DE PATES */}
+                            {item.choixPates && <span style={{color: COLORS.secondary, fontWeight:'bold'}}> ({item.choixPates})</span>}
                             {item.varianteNom && <span style={{color: COLORS.textLight}}> ({item.varianteNom})</span>}
                         </div>
                         <div style={{color: COLORS.textLight, fontSize:'0.9rem'}}>
@@ -659,6 +658,7 @@ function ProductModal({ product, onClose, onAdd }) {
   const [selectedVar, setSelectedVar] = useState(product.variantes && product.variantes.length > 0 ? product.variantes[0] : null);
   const [optionsChoisies, setOptionsChoisies] = useState([]); 
   const [sauces, setSauces] = useState([]); 
+  const [typePates, setTypePates] = useState(null); // NOUVEAU ETAT POUR LES PATES
 
   let maxChoix = 0;
   let minChoix = 0;
@@ -667,6 +667,10 @@ function ProductModal({ product, onClose, onAdd }) {
   
   const nomLower = product.nom.toLowerCase();
   const catLower = product.categorie.toLowerCase();
+  
+  // DETECTION AUTOMATIQUE SI C'EST DES PATES
+  const isPates = catLower.includes('pâtes') || catLower.includes('pates');
+
   const isTacos = catLower.includes('tacos');
   const isMixte = isTacos && nomLower.includes('mixte');
 
@@ -733,6 +737,25 @@ function ProductModal({ product, onClose, onAdd }) {
             </div>
         )}
 
+        {/* --- SECTION SPECIALE PATES (NOUVEAU) --- */}
+        {isPates && (
+            <div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}>
+                <div style={{fontWeight:'bold', marginBottom:'10px'}}>Type de Pâtes (Obligatoire)</div>
+                <div style={{display:'flex', gap:'10px'}}>
+                    {TYPES_PATES.map(type => (
+                        <button key={type} onClick={() => setTypePates(type)} style={{
+                            flex:1, padding:'12px', borderRadius:'12px', 
+                            border: typePates === type ? `2px solid ${COLORS.primary}` : '1px solid #ddd',
+                            background: typePates === type ? '#FFF5F5' : 'white',
+                            fontWeight: 'bold', color: typePates === type ? COLORS.primary : 'black'
+                        }}>
+                            {type}
+                        </button>
+                    ))}
+                </div>
+            </div>
+        )}
+
         {/* Choix Sauces (TOUS LES TACOS) */}
         {isTacos && (
             <div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}>
@@ -782,11 +805,17 @@ function ProductModal({ product, onClose, onAdd }) {
         )}
 
         <button onClick={() => {
+            // VERIFICATION OBLIGATOIRE POUR LES PATES
+            if (isPates && !typePates) {
+                return alert("Veuillez choisir le type de pâtes !");
+            }
+
             if (minChoix > 0 && optionsChoisies.length < minChoix) { 
                 alert(`Veuillez choisir au moins ${minChoix} options !`); 
                 return; 
             }
-            onAdd({ ...product, prixFinal: currentPrice }, selectedVar ? { ...selectedVar, optionsChoisies, sauces } : { optionsChoisies, sauces });
+            // ON AJOUTE LE CHOIX DES PATES DANS L'OBJET
+            onAdd({ ...product, prixFinal: currentPrice }, selectedVar ? { ...selectedVar, optionsChoisies, sauces, choixPates: typePates } : { optionsChoisies, sauces, choixPates: typePates });
         }} style={{
             background: COLORS.primary, color: 'white', border: 'none', borderRadius: '12px', 
             padding: '15px', fontWeight: 'bold', width: '100%', marginTop: '30px', fontSize: '1.1rem',
