@@ -4,6 +4,11 @@ import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebas
 import { collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, query, writeBatch } from 'firebase/firestore';
 import './App.css';
 
+// --- IMPORTATION DES IMAGES (Méthode Sûre) ---
+// Assure-toi que logo.png et icon.png sont dans le dossier 'src' !
+import logoImg from './logo.png';
+import iconImg from './icon.png';
+
 // --- CONFIGURATION ---
 const LISTE_VIANDES = ["Poulet", "Viande Hachée", "Cordon Bleu", "Nuggets", "Poulet Crispy"];
 const LISTE_GARNITURES_PIZZA = ["Viande Hachée", "Poulet", "4 Fromages", "Cannibale", "Pepperoni", "Thon", "Charcuterie", "Végétarienne", "Fruits de Mer"];
@@ -81,16 +86,12 @@ function App() {
     return () => { unsubscribeAuth(); unsubscribeMenu(); unsubscribeCmd(); };
   }, [user]);
 
-  // --- LOGIQUE NAVIGATION ---
+  // --- LOGIQUE ---
   const handleStaffAccess = () => {
-      if (user) {
-          setView('admin'); 
-      } else {
-          setView('login'); 
-      }
+      if (user) setView('admin'); 
+      else setView('login'); 
   };
 
-  // --- LOGIQUE CLIENT ---
   const categoriesUniques = ['Tout', ...new Set(menu.map(p => p.categorie))];
 
   const menuClient = menu.filter(p => {
@@ -242,16 +243,15 @@ function App() {
   return (
     <div style={{ background: COLORS.bg, minHeight: '100vh', paddingBottom: '100px', color: COLORS.secondary }}>
       
-      {/* --- LANDING PAGE (LOGO SEUL) --- */}
+      {/* --- LANDING PAGE --- */}
       {view === 'landing' && (
         <div style={{
           position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', 
           background: '#1A1E29', color: 'white', zIndex: 2000, 
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '20px'
         }}>
-          {/* LOGO UNIQUEMENT - PLUS DE TEXTE REDONDANT */}
-          <img src="/logo.png" alt="Foodji Logo" style={{width: '220px', height: '220px', objectFit: 'contain', marginBottom: '40px'}} 
-               onError={(e) => {e.target.style.display='none';}} /> 
+          {/* IMAGE IMPORTEE */}
+          <img src={logoImg} alt="Foodji Logo" style={{width: '220px', height: '220px', objectFit: 'contain', marginBottom: '40px'}} /> 
           
           <p style={{fontSize: '1.2rem', color: '#9CA3AF', margin: '0 0 50px 0', maxWidth: '300px'}}>Le goût authentique, commandé en un clic.</p>
           
@@ -272,14 +272,13 @@ function App() {
         </div>
       )}
 
-      {/* HEADER (AVEC ICONE SEULE) */}
+      {/* HEADER AVEC ICONE IMPORTEE */}
       {view !== 'landing' && (
         <div style={{ background: COLORS.card, padding: '15px 20px', position: 'sticky', top: 0, zIndex: 50, display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-          {/* ICONE QUI SERT DE BOUTON ACCUEIL */}
-          <div style={{cursor:'pointer'}} onClick={() => setView('landing')}>
-            <img src="/icon.png" style={{height:'40px', objectFit:'contain'}} alt="Accueil" />
+          <div style={{display:'flex', alignItems:'center', gap:'10px', cursor:'pointer'}} onClick={() => setView('landing')}>
+            <img src={iconImg} style={{height:'35px', objectFit:'contain'}} alt="Accueil" />
+            <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '800', letterSpacing: '-0.5px', color: COLORS.secondary }}>Foodji</h1>
           </div>
-          
           {user ? (
             <button onClick={() => setView(view === 'admin' ? 'client' : 'admin')} style={{background: COLORS.secondary, color: 'white', border: 'none', padding: '8px 15px', borderRadius: '20px', fontSize:'0.8rem', fontWeight:'600'}}>
               {view === 'admin' ? 'App' : 'Admin'}
