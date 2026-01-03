@@ -242,19 +242,18 @@ function App() {
   return (
     <div style={{ background: COLORS.bg, minHeight: '100vh', paddingBottom: '100px', color: COLORS.secondary }}>
       
-      {/* --- LANDING PAGE (LOGO MINUSCULE) --- */}
+      {/* --- LANDING PAGE (LOGO SEUL) --- */}
       {view === 'landing' && (
         <div style={{
           position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', 
           background: '#1A1E29', color: 'white', zIndex: 2000, 
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '20px'
         }}>
-          {/* LOGO PNG BRUT */}
-          <img src="/logo.png" alt="Foodji Logo" style={{width: '180px', height: '180px', objectFit: 'contain', marginBottom: '30px'}} 
+          {/* LOGO UNIQUEMENT - PLUS DE TEXTE REDONDANT */}
+          <img src="/logo.png" alt="Foodji Logo" style={{width: '220px', height: '220px', objectFit: 'contain', marginBottom: '40px'}} 
                onError={(e) => {e.target.style.display='none';}} /> 
           
-          <h1 style={{fontSize: '3rem', margin: 0, color: '#A84438', fontFamily: 'sans-serif', fontWeight: '800'}}>Foodji</h1>
-          <p style={{fontSize: '1.2rem', color: '#9CA3AF', margin: '10px 0 50px 0', maxWidth: '300px'}}>Le goût authentique, commandé en un clic.</p>
+          <p style={{fontSize: '1.2rem', color: '#9CA3AF', margin: '0 0 50px 0', maxWidth: '300px'}}>Le goût authentique, commandé en un clic.</p>
           
           <button onClick={() => setView('client')} style={{
             background: COLORS.primary, color: 'white', border: 'none', padding: '20px 50px', 
@@ -273,13 +272,14 @@ function App() {
         </div>
       )}
 
-      {/* HEADER (AVEC LOGO MINUSCULE) */}
+      {/* HEADER (AVEC ICONE SEULE) */}
       {view !== 'landing' && (
         <div style={{ background: COLORS.card, padding: '15px 20px', position: 'sticky', top: 0, zIndex: 50, display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-          <div style={{display:'flex', alignItems:'center', gap:'10px', cursor:'pointer'}} onClick={() => setView('landing')}>
-            <img src="/logo.png" style={{height:'35px'}} onError={(e)=>e.target.style.display='none'}/>
-            <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '800', letterSpacing: '-0.5px', color: COLORS.secondary }}>Foodji</h1>
+          {/* ICONE QUI SERT DE BOUTON ACCUEIL */}
+          <div style={{cursor:'pointer'}} onClick={() => setView('landing')}>
+            <img src="/icon.png" style={{height:'40px', objectFit:'contain'}} alt="Accueil" />
           </div>
+          
           {user ? (
             <button onClick={() => setView(view === 'admin' ? 'client' : 'admin')} style={{background: COLORS.secondary, color: 'white', border: 'none', padding: '8px 15px', borderRadius: '20px', fontSize:'0.8rem', fontWeight:'600'}}>
               {view === 'admin' ? 'App' : 'Admin'}
