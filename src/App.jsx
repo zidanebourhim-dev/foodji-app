@@ -5,7 +5,7 @@ import { collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, query, write
 import './App.css';
 
 // --- CONFIGURATION ---
-const SECURITY_CODE = "1234"; // Code pour Importer/Reset
+const SECURITY_CODE = "1234"; // LE CODE SECRET
 const LISTE_VIANDES = ["Poulet", "Viande Hachée", "Cordon Bleu", "Nuggets", "Poulet Crispy"];
 const LISTE_GARNITURES_PIZZA = ["Viande Hachée", "Poulet", "4 Fromages", "Cannibale", "Pepperoni", "Thon", "Charcuterie", "Végétarienne", "Fruits de Mer"];
 const LISTE_SAUCES = ["Algérienne Fait Maison", "Biggy Fait Maison", "Barbecue Fait Maison"];
@@ -37,10 +37,11 @@ function App() {
   
   const prevCommandesLength = useRef(0);
   const audioRef = useRef(new Audio(NOTIF_SOUND));
+  const fileInputRef = useRef(null); // Pour contrôler l'upload manuellement
 
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [categorieActive, setCategorieActive] = useState(''); 
-  const [adminCategorie, setAdminCategorie] = useState(''); // Plus de 'Tout'
+  const [adminCategorie, setAdminCategorie] = useState(''); 
 
   const [panier, setPanier] = useState([]);
   const [clientNom, setClientNom] = useState('');
@@ -53,7 +54,7 @@ function App() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   
-  // Admin form
+  // Admin manuel
   const [nom, setNom] = useState('');
   const [description, setDescription] = useState('');
   const [image, setImage] = useState('');
@@ -91,14 +92,12 @@ function App() {
   // --- LOGIQUE CATEGORIES ---
   const categoriesReelles = [...new Set(menu.map(p => p.categorie))];
 
-  // Init Admin Tab
   useEffect(() => {
       if (categoriesReelles.length > 0 && !adminCategorie) {
           setAdminCategorie(categoriesReelles[0]);
       }
   }, [menu, adminCategorie]);
 
-  // Init Client Tab & Promo
   const isDimanche = new Date().getDay() === 0;
   let categoriesClient = [...categoriesReelles];
   if (isDimanche) {
@@ -128,16 +127,104 @@ function App() {
       menuClient = menu.filter(p => p.categorie === categorieActive && p.available !== false);
   }
 
-  // --- FILTRAGE ADMIN (Nouveau système Onglet RUPTURE) ---
+  // --- FILTRAGE ADMIN (Onglet RUPTURE) ---
   let menuAdmin = [];
   if (adminCategorie === 'RUPTURE') {
       menuAdmin = menu.filter(p => p.available === false);
   } else {
-      // Affiche les produits de la catégorie (même s'ils sont désactivés, pour les gérer)
-      // OU on affiche que les actifs ici ? 
-      // Le mieux : Afficher tout de la catégorie pour pouvoir désactiver.
       menuAdmin = menu.filter(p => p.categorie === adminCategorie);
   }
+
+  // --- SECURITE ---
+  const checkSecurity = () => {
+      const code = prompt("🔒 Code de sécurité requis :");
+      return code === SECURITY_CODE;
+  };
+
+  // --- IMPORT SECURISE (Le Hack du Click) ---
+  const triggerImport = () => {
+      if(checkSecurity()) {
+          // Si le code est bon, on simule le clic sur l'input caché
+          fileInputRef.current.click();
+      } else {
+          alert("Code incorrect ❌");
+      }
+  };
+
+  const handleCSVImport = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      const text = evt.target.result;
+      const rows = text.split('\n').filter(r => r.trim() !== '');
+      let count = 0;
+
+      if(confirm(`Importer ${rows.length} lignes ?`)) {
+        setLoading(true);
+        const start = rows[0].toLowerCase().includes('catégorie') ? 1 : 0;
+
+        for (let i = start; i < rows.length; i++) {
+          const row = rows[i];
+          const tokens = row.split(','); 
+          
+          if (tokens.length >= 5) {
+             const cat = tokens[0].trim();
+             const name = tokens[1].trim();
+             const len = tokens.length;
+             const p3Raw = tokens[len - 1];
+             const p2Raw = tokens[len - 2];
+             const p1Raw = tokens[len - 3];
+             const descTokens = tokens.slice(2, len - 3);
+             const desc = descTokens.join(', ').replace(/"/g, '').trim();
+             const cleanPrice = (val) => val ? Number(val.toString().replace(/[^0-9.]/g, '')) : 0;
+             const p1 = cleanPrice(p1Raw.replace(',','.'));
+             const p2 = cleanPrice(p2Raw.replace(',','.'));
+             const p3 = cleanPrice(p3Raw.replace(',','.'));
+
+             let variantsList = [];
+             let finalPrice = p1;
+
+             if (p2 > 0 || p3 > 0) {
+                finalPrice = p1 > 0 ? p1 : 0; // Fix gratuité
+                const catLower = cat.toLowerCase();
+                let n1 = "Standard", n2 = "Moyen", n3 = "Grand";
+                if (catLower.includes('tacos')) { n1 = "L"; n2 = "XL"; n3 = "XXL"; }
+                else if (catLower.includes('pizza')) { n1 = "M"; n2 = "L"; n3 = "XL"; } 
+                
+                if(p1 > 0) variantsList.push({ nom: n1, prix: p1 });
+                if(p2 > 0) variantsList.push({ nom: n2, prix: p2 });
+                if(p3 > 0) variantsList.push({ nom: n3, prix: p3 });
+             }
+
+             if(name && cat) {
+               await addDoc(collection(db, "produits"), {
+                 categorie: cat, nom: name, description: desc, prix: finalPrice, 
+                 image: '', variantes: variantsList, date: new Date(), available: true
+               });
+               count++;
+             }
+          }
+        }
+        setLoading(false); alert(`${count} produits importés !`);
+        // On reset l'input pour pouvoir réimporter le même fichier si besoin
+        e.target.value = null; 
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  // --- RESET SECURISE ---
+  const viderMenu = async () => {
+      if(!checkSecurity()) return alert("Code incorrect ❌");
+      if(confirm("⚠️ ATTENTION : SUPPRESSION TOTALE DU MENU.\nCette action est irréversible.\n\nConfirmer ?")) {
+          setLoading(true);
+          const batch = writeBatch(db);
+          menu.forEach(p => { const ref = doc(db, "produits", p.id); batch.delete(ref); });
+          await batch.commit();
+          setLoading(false); alert("Menu vidé !");
+      }
+  };
 
   // --- NAVIGATION ---
   const handleStaffAccess = () => {
@@ -145,21 +232,13 @@ function App() {
       else setView('login'); 
   };
 
-  const checkSecurity = () => {
-      const code = prompt("🔒 Code de sécurité requis pour cette action :");
-      return code === SECURITY_CODE;
-  };
-
   const ajouterAuPanier = (itemFinal) => {
     if (itemFinal.isInfo) return alert("Ceci est une offre. Ajoutez vos pizzas normalement !");
     if (navigator.vibrate) navigator.vibrate(50);
     
-    // CORRECTION PRIX "GRATUIT" : On s'assure d'avoir un prix
     let safePrice = Number(itemFinal.prixFinal);
+    // Double sécurité anti-gratuit
     if (safePrice === 0 && itemFinal.variantes?.length > 0) {
-        // Si le prix de base est 0 mais qu'il y a des variantes, on prend le prix de la variante sélectionnée
-        // Mais ici 'itemFinal' est déjà l'objet final (produit + variante).
-        // Si ça vaut 0 ici, c'est une erreur de données.
         safePrice = itemFinal.prix || 0; 
     }
 
@@ -247,88 +326,6 @@ function App() {
 
   const supprimerProduit = async (id) => { if(confirm("Supprimer ?")) await deleteDoc(doc(db, "produits", id)); };
   
-  const viderMenu = async () => {
-      if(!checkSecurity()) return alert("Code incorrect"); // SECURITE
-      if(confirm("ATTENTION: Cela va supprimer TOUT le menu. Sûr ?")) {
-          setLoading(true);
-          const batch = writeBatch(db);
-          menu.forEach(p => { const ref = doc(db, "produits", p.id); batch.delete(ref); });
-          await batch.commit();
-          setLoading(false); alert("Menu vidé !");
-      }
-  };
-
-  const handleCSVImport = (e) => {
-    // SECURITE AVANT IMPORT
-    if(!checkSecurity()) {
-        e.target.value = null; // Reset input
-        return alert("Accès refusé. Import annulé.");
-    }
-
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
-      const text = evt.target.result;
-      const rows = text.split('\n').filter(r => r.trim() !== '');
-      let count = 0;
-
-      if(confirm(`Importer ${rows.length} lignes ?`)) {
-        setLoading(true);
-        const start = rows[0].toLowerCase().includes('catégorie') ? 1 : 0;
-
-        for (let i = start; i < rows.length; i++) {
-          const row = rows[i];
-          const tokens = row.split(','); 
-          
-          if (tokens.length >= 5) {
-             const cat = tokens[0].trim();
-             const name = tokens[1].trim();
-             const len = tokens.length;
-             const p3Raw = tokens[len - 1];
-             const p2Raw = tokens[len - 2];
-             const p1Raw = tokens[len - 3];
-             const descTokens = tokens.slice(2, len - 3);
-             const desc = descTokens.join(', ').replace(/"/g, '').trim();
-             const cleanPrice = (val) => val ? Number(val.toString().replace(/[^0-9.]/g, '')) : 0;
-             const p1 = cleanPrice(p1Raw.replace(',','.'));
-             const p2 = cleanPrice(p2Raw.replace(',','.'));
-             const p3 = cleanPrice(p3Raw.replace(',','.'));
-
-             let variantsList = [];
-             let finalPrice = p1; // Par défaut prix 1
-
-             if (p2 > 0 || p3 > 0) {
-                // S'il y a des variantes, on garde p1 comme finalPrice pour éviter le "0"
-                // ou on met 0 si on veut forcer le "dès..."
-                // ICI ON MET p1 POUR EVITER LE "GRATUIT"
-                finalPrice = p1 > 0 ? p1 : 0; 
-                
-                const catLower = cat.toLowerCase();
-                let n1 = "Standard", n2 = "Moyen", n3 = "Grand";
-                if (catLower.includes('tacos')) { n1 = "L"; n2 = "XL"; n3 = "XXL"; }
-                else if (catLower.includes('pizza')) { n1 = "M"; n2 = "L"; n3 = "XL"; } 
-                
-                if(p1 > 0) variantsList.push({ nom: n1, prix: p1 });
-                if(p2 > 0) variantsList.push({ nom: n2, prix: p2 });
-                if(p3 > 0) variantsList.push({ nom: n3, prix: p3 });
-             }
-
-             if(name && cat) {
-               await addDoc(collection(db, "produits"), {
-                 categorie: cat, nom: name, description: desc, prix: finalPrice, 
-                 image: '', variantes: variantsList, date: new Date(), available: true
-               });
-               count++;
-             }
-          }
-        }
-        setLoading(false); alert(`${count} produits importés !`);
-      }
-    };
-    reader.readAsText(file);
-  };
-
   // --- STYLES ---
   const btnStyle = { background: COLORS.primary, color: 'white', border: 'none', borderRadius: '12px', padding: '12px 20px', fontWeight: '600', cursor: 'pointer', width: '100%', fontSize: '1rem', boxShadow: '0 4px 6px rgba(168, 68, 56, 0.2)' };
   const inputStyle = { width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #E5E7EB', background: 'white', marginBottom: '10px', fontSize: '1rem', outline: 'none' };
@@ -398,17 +395,7 @@ function App() {
                 <h2 style={{margin:0}}>⚙️ Admin</h2>
                 <div style={{fontSize:'0.8rem', color: COLORS.success, background:'#ECFDF5', padding:'5px 10px', borderRadius:'10px'}}>🔊 Son Actif</div>
               </div>
-              <button onClick={viderMenu} style={{background: COLORS.danger, color:'white', border:'none', padding:'8px 15px', borderRadius:'8px', cursor:'pointer', fontWeight:'bold'}}>🗑️ Reset</button>
           </div>
-
-          <details style={{marginBottom:'20px', background:'#E0E7FF', padding:'15px', borderRadius:'10px'}}>
-             <summary style={{cursor:'pointer', fontWeight:'bold', color:'#3730A3'}}>📥 Importer CSV</summary>
-             <div style={{marginTop:'10px'}}>
-               <p style={{fontSize:'0.9rem'}}>Format: Cat, Nom, Desc, P1, P2, P3</p>
-               <input type="file" accept=".csv" onChange={handleCSVImport} />
-               {loading && <p>Importation...</p>}
-             </div>
-          </details>
 
           <h3 style={{marginTop:'30px'}}>Commandes ({commandes.filter(c => c.status !== 'Terminé').length})</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '20px', marginBottom:'40px' }}>
@@ -510,6 +497,24 @@ function App() {
                  <button onClick={saveProduit} style={{...btnStyle, width:'auto'}}>Ajouter</button>
              </div>
            </details>
+
+           {/* --- ZONE DANGEREUSE (CACHÉE EN BAS) --- */}
+           <details style={{marginTop:'50px', background:'#FEE2E2', padding:'15px', borderRadius:'10px', border:`1px solid ${COLORS.danger}`}}>
+             <summary style={{fontWeight:'bold', color: COLORS.danger, cursor:'pointer'}}>💀 ZONE DANGEREUSE (Import / Reset)</summary>
+             
+             {/* INPUT CACHÉ POUR CSV */}
+             <input type="file" accept=".csv" ref={fileInputRef} onChange={handleCSVImport} style={{display:'none'}} />
+             
+             <div style={{marginTop:'20px', display:'flex', gap:'10px', flexDirection:'column'}}>
+                <button onClick={triggerImport} style={{...btnStyle, background: 'white', color: COLORS.secondary, border:'1px solid #ccc'}}>
+                    📂 IMPORTER UN MENU (CSV)
+                </button>
+                <button onClick={viderMenu} style={{...btnStyle, background: COLORS.danger, color:'white'}}>
+                    🗑️ TOUT SUPPRIMER (RESET)
+                </button>
+             </div>
+           </details>
+
         </div>
       )}
 
