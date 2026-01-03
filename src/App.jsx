@@ -11,8 +11,7 @@ const LISTE_SAUCES = ["Algérienne Fait Maison", "Biggy Fait Maison", "Barbecue 
 
 const NOTIF_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
 
-// --- IMAGES (LIENS VERS DOSSIER PUBLIC) ---
-// Assure-toi que logo.png et icon.png sont dans le dossier 'public' !
+// --- IMAGES ---
 const logoImg = "/logo.png";
 const iconImg = "/icon.png";
 
@@ -52,6 +51,7 @@ function App() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   
+  // Admin manuel
   const [nom, setNom] = useState('');
   const [description, setDescription] = useState('');
   const [image, setImage] = useState('');
@@ -88,11 +88,8 @@ function App() {
 
   // --- LOGIQUE NAVIGATION ---
   const handleStaffAccess = () => {
-      if (user) {
-          setView('admin'); 
-      } else {
-          setView('login'); 
-      }
+      if (user) setView('admin'); 
+      else setView('login'); 
   };
 
   // --- LOGIQUE CLIENT ---
@@ -107,28 +104,38 @@ function App() {
 
   const ajouterAuPanier = (itemFinal) => {
     if (navigator.vibrate) navigator.vibrate(50);
-    setPanier([...panier, { ...itemFinal, uniqueId: Date.now() }]);
+    // FORCE LE PRIX EN NOMBRE POUR ÉVITER LES ERREURS DE CALCUL
+    const itemSafe = {
+        ...itemFinal,
+        prixFinal: Number(itemFinal.prixFinal) || 0, // Sécurité absolue
+        uniqueId: Date.now()
+    };
+    setPanier([...panier, itemSafe]);
     setSelectedProduct(null); 
   };
 
   const retirerDuPanier = (uid) => setPanier(panier.filter(i => i.uniqueId !== uid));
-  const total = panier.reduce((acc, i) => acc + Number(i.prixFinal), 0);
+  
+  // CALCUL TOTAL SECURISE
+  const total = panier.reduce((acc, i) => acc + (Number(i.prixFinal) || 0), 0);
 
   const envoyerCommande = async () => {
-    if (panier.length === 0) return alert("Panier vide !");
-    if (!clientNom || !clientTel) return alert("Nom et Tél obligatoires.");
-    if (typeCommande === 'livraison' && !adresse) return alert("Adresse obligatoire.");
+    // VALIDATION STRICTE
+    if (panier.length === 0) return alert("Votre panier est vide !");
+    if (!clientNom.trim()) return alert("❌ Le Nom est OBLIGATOIRE pour valider la commande.");
+    if (!clientTel.trim()) return alert("❌ Le Téléphone est OBLIGATOIRE pour valider la commande.");
+    if (typeCommande === 'livraison' && !adresse.trim()) return alert("❌ L'adresse est OBLIGATOIRE pour une livraison.");
 
     setLoading(true);
     try {
       await addDoc(collection(db, "commandes"), {
         client: clientNom, tel: clientTel, type: typeCommande, adresse, 
         commentaire: commentaire,
-        items: panier, total, date: new Date(), status: 'En attente'
+        items: panier, total: total, date: new Date(), status: 'En attente'
       });
       setPanier([]); setClientNom(''); setClientTel(''); setAdresse(''); setCommentaire('');
-      alert("✅ Commande envoyée !"); setView('client');
-    } catch (e) { alert("Erreur envoi"); }
+      alert("✅ Commande envoyée avec succès !"); setView('client');
+    } catch (e) { alert("Erreur réseau. Réessayez."); }
     setLoading(false);
   };
 
@@ -247,33 +254,20 @@ function App() {
   return (
     <div style={{ background: COLORS.bg, minHeight: '100vh', paddingBottom: '100px', color: COLORS.secondary }}>
       
-      {/* --- LANDING PAGE --- */}
+      {/* --- LANDING --- */}
       {view === 'landing' && (
         <div style={{
           position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', 
           background: '#1A1E29', color: 'white', zIndex: 2000, 
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '20px'
         }}>
-          {/* LOGO PNG (Public Folder) */}
-          <img src={logoImg} alt="Foodji Logo" style={{width: '220px', height: '220px', objectFit: 'contain', marginBottom: '40px'}} 
-               onError={(e) => {e.target.style.display='none';}} /> 
-          
+          <img src={logoImg} alt="Foodji" style={{width: '220px', height: '220px', objectFit: 'contain', marginBottom: '40px'}} onError={(e) => {e.target.style.display='none';}} /> 
           <p style={{fontSize: '1.2rem', color: '#9CA3AF', margin: '0 0 50px 0', maxWidth: '300px'}}>Le goût authentique, commandé en un clic.</p>
-          
           <button onClick={() => setView('client')} style={{
             background: COLORS.primary, color: 'white', border: 'none', padding: '20px 50px', 
-            borderRadius: '50px', fontSize: '1.3rem', fontWeight: 'bold', boxShadow: '0 5px 20px rgba(168, 68, 56, 0.4)', cursor:'pointer',
-            transform: 'scale(1)', transition: 'transform 0.2s'
-          }}>
-            VOIR LE MENU
-          </button>
-
-          <button onClick={handleStaffAccess} style={{
-            background: 'transparent', border: '1px solid #374151', color: '#6B7280', 
-            padding: '10px 25px', borderRadius: '30px', marginTop: '60px', fontSize: '0.8rem', cursor:'pointer'
-          }}>
-            Accès Staff
-          </button>
+            borderRadius: '50px', fontSize: '1.3rem', fontWeight: 'bold', boxShadow: '0 5px 20px rgba(168, 68, 56, 0.4)', cursor:'pointer'
+          }}>VOIR LE MENU</button>
+          <button onClick={handleStaffAccess} style={{background: 'transparent', border: '1px solid #374151', color: '#6B7280', padding: '10px 25px', borderRadius: '30px', marginTop: '60px', fontSize: '0.8rem', cursor:'pointer'}}>Accès Staff</button>
         </div>
       )}
 
@@ -285,9 +279,7 @@ function App() {
             <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '800', letterSpacing: '-0.5px', color: COLORS.secondary }}>Foodji</h1>
           </div>
           {user ? (
-            <button onClick={() => setView(view === 'admin' ? 'client' : 'admin')} style={{background: COLORS.secondary, color: 'white', border: 'none', padding: '8px 15px', borderRadius: '20px', fontSize:'0.8rem', fontWeight:'600'}}>
-              {view === 'admin' ? 'App' : 'Admin'}
-            </button>
+            <button onClick={() => setView(view === 'admin' ? 'client' : 'admin')} style={{background: COLORS.secondary, color: 'white', border: 'none', padding: '8px 15px', borderRadius: '20px', fontSize:'0.8rem', fontWeight:'600'}}>{view === 'admin' ? 'App' : 'Admin'}</button>
           ) : (
             view === 'client' && <button onClick={() => setView('login')} style={{background:'transparent', border:'none', fontSize:'1.2rem'}}>🔒</button>
           )}
@@ -323,9 +315,7 @@ function App() {
                 <h2 style={{margin:0}}>⚙️ Admin</h2>
                 <div style={{fontSize:'0.8rem', color: COLORS.success, background:'#ECFDF5', padding:'5px 10px', borderRadius:'10px'}}>🔊 Son Actif</div>
               </div>
-              <button onClick={viderMenu} style={{background: COLORS.danger, color:'white', border:'none', padding:'8px 15px', borderRadius:'8px', cursor:'pointer', fontWeight:'bold'}}>
-                  🗑️ Reset
-              </button>
+              <button onClick={viderMenu} style={{background: COLORS.danger, color:'white', border:'none', padding:'8px 15px', borderRadius:'8px', cursor:'pointer', fontWeight:'bold'}}>🗑️ Reset</button>
           </div>
 
           <details style={{marginBottom:'20px', background:'#E0E7FF', padding:'15px', borderRadius:'10px'}}>
@@ -473,7 +463,7 @@ function App() {
                         </div>
                     </div>
                     <div style={{display:'flex', gap:'15px', alignItems:'center'}}>
-                      <strong style={{color: COLORS.primary}}>{item.prixFinal} DH</strong>
+                      <strong style={{color: COLORS.primary}}>{Number(item.prixFinal) || 0} DH</strong>
                       <button onClick={() => retirerDuPanier(item.uniqueId)} style={{color:'#ccc', background:'transparent', border:'none', fontSize:'1.5rem'}}>×</button>
                     </div>
                   </div>
@@ -491,8 +481,8 @@ function App() {
                     }}>{t.replace('_',' ')}</button>
                   ))}
                 </div>
-                <input type="text" value={clientNom} onChange={e => setClientNom(e.target.value)} style={inputStyle} placeholder="Nom" />
-                <input type="tel" value={clientTel} onChange={e => setClientTel(e.target.value)} style={inputStyle} placeholder="Tél" />
+                <input type="text" value={clientNom} onChange={e => setClientNom(e.target.value)} style={{...inputStyle, border: !clientNom ? '1px solid red' : '1px solid #ddd'}} placeholder="Nom *" required />
+                <input type="tel" value={clientTel} onChange={e => setClientTel(e.target.value)} style={{...inputStyle, border: !clientTel ? '1px solid red' : '1px solid #ddd'}} placeholder="Tél *" required />
                 {typeCommande === 'livraison' && <textarea value={adresse} onChange={e => setAdresse(e.target.value)} style={{...inputStyle, height:'80px'}} placeholder="Adresse..." />}
                 
                 <textarea 
@@ -585,7 +575,8 @@ function ProductModal({ product, onClose, onAdd }) {
 
   const getCount = (opt, list) => list.filter(x => x === opt).length;
 
-  const currentPrice = selectedVar ? selectedVar.prix : product.prix;
+  // CONVERSION EN NOMBRE POUR EVITER LES ERREURS DANS LE PANIER
+  const currentPrice = selectedVar ? Number(selectedVar.prix) : Number(product.prix);
 
   return (
     <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.5)', zIndex:1000, display:'flex', alignItems:'flex-end', justifyContent:'center'}}>
@@ -669,7 +660,8 @@ function ProductModal({ product, onClose, onAdd }) {
                 alert(`Veuillez choisir au moins ${minChoix} options !`); 
                 return; 
             }
-            onAdd(product, selectedVar ? { ...selectedVar, optionsChoisies, sauces } : { optionsChoisies, sauces });
+            // PASSAGE DU PRIX SÉCURISÉ (CHIFFRE)
+            onAdd({ ...product, prixFinal: currentPrice }, selectedVar ? { ...selectedVar, optionsChoisies, sauces } : { optionsChoisies, sauces });
         }} style={{
             background: COLORS.primary, color: 'white', border: 'none', borderRadius: '12px', 
             padding: '15px', fontWeight: 'bold', width: '100%', marginTop: '30px', fontSize: '1.1rem',
