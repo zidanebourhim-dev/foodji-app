@@ -4,17 +4,17 @@ import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebas
 import { collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, query, writeBatch } from 'firebase/firestore';
 import './App.css';
 
-// --- IMPORTATION DES IMAGES (Méthode Sûre) ---
-// Assure-toi que logo.png et icon.png sont dans le dossier 'src' !
-import logoImg from './logo.png';
-import iconImg from './icon.png';
-
 // --- CONFIGURATION ---
 const LISTE_VIANDES = ["Poulet", "Viande Hachée", "Cordon Bleu", "Nuggets", "Poulet Crispy"];
 const LISTE_GARNITURES_PIZZA = ["Viande Hachée", "Poulet", "4 Fromages", "Cannibale", "Pepperoni", "Thon", "Charcuterie", "Végétarienne", "Fruits de Mer"];
 const LISTE_SAUCES = ["Algérienne Fait Maison", "Biggy Fait Maison", "Barbecue Fait Maison"];
 
 const NOTIF_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
+
+// --- IMAGES (LIENS VERS DOSSIER PUBLIC) ---
+// Assure-toi que logo.png et icon.png sont dans le dossier 'public' !
+const logoImg = "/logo.png";
+const iconImg = "/icon.png";
 
 // --- THEME ---
 const COLORS = {
@@ -86,12 +86,16 @@ function App() {
     return () => { unsubscribeAuth(); unsubscribeMenu(); unsubscribeCmd(); };
   }, [user]);
 
-  // --- LOGIQUE ---
+  // --- LOGIQUE NAVIGATION ---
   const handleStaffAccess = () => {
-      if (user) setView('admin'); 
-      else setView('login'); 
+      if (user) {
+          setView('admin'); 
+      } else {
+          setView('login'); 
+      }
   };
 
+  // --- LOGIQUE CLIENT ---
   const categoriesUniques = ['Tout', ...new Set(menu.map(p => p.categorie))];
 
   const menuClient = menu.filter(p => {
@@ -250,8 +254,9 @@ function App() {
           background: '#1A1E29', color: 'white', zIndex: 2000, 
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '20px'
         }}>
-          {/* IMAGE IMPORTEE */}
-          <img src={logoImg} alt="Foodji Logo" style={{width: '220px', height: '220px', objectFit: 'contain', marginBottom: '40px'}} /> 
+          {/* LOGO PNG (Public Folder) */}
+          <img src={logoImg} alt="Foodji Logo" style={{width: '220px', height: '220px', objectFit: 'contain', marginBottom: '40px'}} 
+               onError={(e) => {e.target.style.display='none';}} /> 
           
           <p style={{fontSize: '1.2rem', color: '#9CA3AF', margin: '0 0 50px 0', maxWidth: '300px'}}>Le goût authentique, commandé en un clic.</p>
           
@@ -272,7 +277,7 @@ function App() {
         </div>
       )}
 
-      {/* HEADER AVEC ICONE IMPORTEE */}
+      {/* HEADER */}
       {view !== 'landing' && (
         <div style={{ background: COLORS.card, padding: '15px 20px', position: 'sticky', top: 0, zIndex: 50, display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
           <div style={{display:'flex', alignItems:'center', gap:'10px', cursor:'pointer'}} onClick={() => setView('landing')}>
