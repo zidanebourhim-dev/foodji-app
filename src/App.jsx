@@ -9,7 +9,6 @@ const LISTE_VIANDES = ["Poulet", "Viande Hachée", "Cordon Bleu", "Nuggets", "Po
 const LISTE_GARNITURES_PIZZA = ["Viande Hachée", "Poulet", "4 Fromages", "Cannibale", "Pepperoni", "Thon", "Charcuterie", "Végétarienne", "Fruits de Mer"];
 const LISTE_SAUCES = ["Algérienne Fait Maison", "Biggy Fait Maison", "Barbecue Fait Maison"];
 
-// SON NOTIFICATION
 const NOTIF_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
 
 // --- THEME ---
@@ -30,7 +29,6 @@ function App() {
   const [menu, setMenu] = useState([]);
   const [commandes, setCommandes] = useState([]);
   
-  // Son
   const prevCommandesLength = useRef(0);
   const audioRef = useRef(new Audio(NOTIF_SOUND));
 
@@ -49,7 +47,6 @@ function App() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   
-  // Admin manuel
   const [nom, setNom] = useState('');
   const [description, setDescription] = useState('');
   const [image, setImage] = useState('');
@@ -63,7 +60,6 @@ function App() {
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (u) => {
       setUser(u);
-      if (u) setView('admin');
     });
     
     const unsubscribeMenu = onSnapshot(collection(db, "produits"), (snap) => {
@@ -75,9 +71,8 @@ function App() {
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       list.sort((a, b) => b.date.seconds - a.date.seconds);
       
-      // SON ADMIN
       if (list.length > prevCommandesLength.current && user) {
-          audioRef.current.play().catch(e => console.log("Clic requis"));
+          audioRef.current.play().catch(e => console.log("Clic requis pour son"));
       }
       prevCommandesLength.current = list.length;
       setCommandes(list);
@@ -85,6 +80,15 @@ function App() {
 
     return () => { unsubscribeAuth(); unsubscribeMenu(); unsubscribeCmd(); };
   }, [user]);
+
+  // --- LOGIQUE NAVIGATION ---
+  const handleStaffAccess = () => {
+      if (user) {
+          setView('admin'); 
+      } else {
+          setView('login'); 
+      }
+  };
 
   // --- LOGIQUE CLIENT ---
   const categoriesUniques = ['Tout', ...new Set(menu.map(p => p.categorie))];
@@ -238,30 +242,31 @@ function App() {
   return (
     <div style={{ background: COLORS.bg, minHeight: '100vh', paddingBottom: '100px', color: COLORS.secondary }}>
       
-      {/* --- LANDING PAGE --- */}
+      {/* --- LANDING PAGE (V27 - LOGO BRUT) --- */}
       {view === 'landing' && (
         <div style={{
           position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', 
           background: '#1A1E29', color: 'white', zIndex: 2000, 
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '20px'
         }}>
-          {/* LOGO PNG ICI */}
-          <img src="/logo.PNG" alt="Foodji Logo" style={{width: '180px', height: '180px', objectFit: 'contain', marginBottom: '20px', borderRadius: '20px'}} 
+          {/* LOGO PNG BRUT */}
+          <img src="/logo.PNG" alt="Foodji Logo" style={{width: '180px', height: '180px', objectFit: 'contain', marginBottom: '30px'}} 
                onError={(e) => {e.target.style.display='none';}} /> 
           
-          <h1 style={{fontSize: '3rem', margin: 0, color: '#A84438'}}>Foodji</h1>
-          <p style={{fontSize: '1.2rem', color: '#9CA3AF', margin: '10px 0 40px 0'}}>Le goût authentique, en un clic.</p>
+          <h1 style={{fontSize: '3rem', margin: 0, color: '#A84438', fontFamily: 'sans-serif', fontWeight: '800'}}>Foodji</h1>
+          <p style={{fontSize: '1.2rem', color: '#9CA3AF', margin: '10px 0 50px 0', maxWidth: '300px'}}>Le goût authentique, commandé en un clic.</p>
           
           <button onClick={() => setView('client')} style={{
-            background: COLORS.primary, color: 'white', border: 'none', padding: '18px 40px', 
-            borderRadius: '50px', fontSize: '1.2rem', fontWeight: 'bold', boxShadow: '0 0 20px rgba(168, 68, 56, 0.5)', cursor:'pointer'
+            background: COLORS.primary, color: 'white', border: 'none', padding: '20px 50px', 
+            borderRadius: '50px', fontSize: '1.3rem', fontWeight: 'bold', boxShadow: '0 5px 20px rgba(168, 68, 56, 0.4)', cursor:'pointer',
+            transform: 'scale(1)', transition: 'transform 0.2s'
           }}>
-            COMMANDER
+            VOIR LE MENU
           </button>
 
-          <button onClick={() => setView('login')} style={{
+          <button onClick={handleStaffAccess} style={{
             background: 'transparent', border: '1px solid #374151', color: '#6B7280', 
-            padding: '10px 20px', borderRadius: '30px', marginTop: '50px', fontSize: '0.8rem'
+            padding: '10px 25px', borderRadius: '30px', marginTop: '60px', fontSize: '0.8rem', cursor:'pointer'
           }}>
             Accès Staff
           </button>
@@ -271,13 +276,13 @@ function App() {
       {/* HEADER */}
       {view !== 'landing' && (
         <div style={{ background: COLORS.card, padding: '15px 20px', position: 'sticky', top: 0, zIndex: 50, display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-          <div style={{display:'flex', alignItems:'center', gap:'10px'}} onClick={() => setView('landing')}>
-            <img src="/logo.PNG" style={{height:'30px', borderRadius:'5px'}} onError={(e)=>e.target.style.display='none'}/>
+          <div style={{display:'flex', alignItems:'center', gap:'10px', cursor:'pointer'}} onClick={() => setView('landing')}>
+            <img src="/logo.PNG" style={{height:'35px'}} onError={(e)=>e.target.style.display='none'}/>
             <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '800', letterSpacing: '-0.5px', color: COLORS.secondary }}>Foodji</h1>
           </div>
           {user ? (
             <button onClick={() => setView(view === 'admin' ? 'client' : 'admin')} style={{background: COLORS.secondary, color: 'white', border: 'none', padding: '8px 15px', borderRadius: '20px', fontSize:'0.8rem', fontWeight:'600'}}>
-              {view === 'admin' ? 'Voir App' : 'Admin'}
+              {view === 'admin' ? 'App' : 'Admin'}
             </button>
           ) : (
             view === 'client' && <button onClick={() => setView('login')} style={{background:'transparent', border:'none', fontSize:'1.2rem'}}>🔒</button>
@@ -300,7 +305,7 @@ function App() {
           <h2 style={{marginBottom: '20px'}}>Staff Access</h2>
           <input type="email" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} style={inputStyle}/>
           <input type="password" placeholder="Mot de passe" value={password} onChange={e=>setPassword(e.target.value)} style={inputStyle}/>
-          <button onClick={async (e)=>{e.preventDefault(); try{await signInWithEmailAndPassword(auth,email,password)}catch(e){alert('Erreur')}}} style={btnStyle}>Connexion</button>
+          <button onClick={async (e)=>{e.preventDefault(); try{await signInWithEmailAndPassword(auth,email,password); setView('admin');}catch(e){alert('Erreur')}}} style={btnStyle}>Connexion</button>
           <button onClick={() => setView('landing')} style={{marginTop:'20px', background:'transparent', border:'none', color: COLORS.textLight}}>Retour</button>
         </div>
       )}
@@ -350,6 +355,7 @@ function App() {
                     <li key={i} style={{padding:'6px 0', borderBottom:'1px dashed #eee', lineHeight:'1.4'}}>
                       <strong>{it.nom}</strong> 
                       {it.varianteNom && <span style={{color: COLORS.textLight}}> ({it.varianteNom})</span>}
+                      {/* Affichage intelligent des quantités */}
                       {it.sauces && it.sauces.length > 0 && <div style={{fontSize:'0.85rem', color:'#555', marginLeft:'10px'}}>Sauces: {formatOptions(it.sauces)}</div>}
                       {it.optionsChoisies && it.optionsChoisies.length > 0 && <div style={{fontSize:'0.85rem', color:'#555', marginLeft:'10px'}}>+ {formatOptions(it.optionsChoisies)}</div>}
                     </li>
