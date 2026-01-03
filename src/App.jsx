@@ -5,6 +5,7 @@ import { collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, query, write
 import './App.css';
 
 // --- CONFIGURATION ---
+const SECURITY_CODE = "1234"; // Code pour Importer/Reset
 const LISTE_VIANDES = ["Poulet", "Viande Hachée", "Cordon Bleu", "Nuggets", "Poulet Crispy"];
 const LISTE_GARNITURES_PIZZA = ["Viande Hachée", "Poulet", "4 Fromages", "Cannibale", "Pepperoni", "Thon", "Charcuterie", "Végétarienne", "Fruits de Mer"];
 const LISTE_SAUCES = ["Algérienne Fait Maison", "Biggy Fait Maison", "Barbecue Fait Maison"];
@@ -23,7 +24,8 @@ const COLORS = {
   card: '#FFFFFF',       
   success: '#10B981',
   danger: '#EF4444',
-  warning: '#F59E0B',    
+  warning: '#F59E0B',
+  promo: '#D97706',    
   textLight: '#6B7280'   
 };
 
@@ -38,7 +40,7 @@ function App() {
 
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [categorieActive, setCategorieActive] = useState(''); 
-  const [adminCategorie, setAdminCategorie] = useState(''); // Plus de 'Tout' par défaut
+  const [adminCategorie, setAdminCategorie] = useState(''); // Plus de 'Tout'
 
   const [panier, setPanier] = useState([]);
   const [clientNom, setClientNom] = useState('');
@@ -51,7 +53,7 @@ function App() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   
-  // Admin manuel
+  // Admin form
   const [nom, setNom] = useState('');
   const [description, setDescription] = useState('');
   const [image, setImage] = useState('');
@@ -77,7 +79,7 @@ function App() {
       list.sort((a, b) => b.date.seconds - a.date.seconds);
       
       if (list.length > prevCommandesLength.current && user) {
-          audioRef.current.play().catch(e => console.log("Clic requis"));
+          audioRef.current.play().catch(e => console.log("Clic requis pour son"));
       }
       prevCommandesLength.current = list.length;
       setCommandes(list);
@@ -86,36 +88,36 @@ function App() {
     return () => { unsubscribeAuth(); unsubscribeMenu(); unsubscribeCmd(); };
   }, [user]);
 
-  // --- LOGIQUE CATEGORIES DYNAMIQUES (ADMIN & CLIENT) ---
-  // On récupère la liste réelle des catégories présentes dans la base de données
+  // --- LOGIQUE CATEGORIES ---
   const categoriesReelles = [...new Set(menu.map(p => p.categorie))];
 
-  // Initialisation des onglets par défaut s'ils sont vides
+  // Init Admin Tab
   useEffect(() => {
-      if (categoriesReelles.length > 0) {
-          if (!adminCategorie) setAdminCategorie(categoriesReelles[0]);
-          // Pour le client, on gère le dimanche plus bas, mais on initialise ici aussi au cas où
-          if (!categorieActive && new Date().getDay() !== 0) setCategorieActive(categoriesReelles[0]);
+      if (categoriesReelles.length > 0 && !adminCategorie) {
+          setAdminCategorie(categoriesReelles[0]);
       }
-  }, [menu, adminCategorie, categorieActive]);
+  }, [menu, adminCategorie]);
 
-
-  // --- LOGIQUE CLIENT SPECIFIQUE (PROMO DIMANCHE) ---
+  // Init Client Tab & Promo
   const isDimanche = new Date().getDay() === 0;
   let categoriesClient = [...categoriesReelles];
-  
   if (isDimanche) {
       categoriesClient = ['🔥 PROMOTIONS', ...categoriesReelles];
-      if (!categorieActive) setCategorieActive('🔥 PROMOTIONS');
   }
+  useEffect(() => {
+      if (categoriesClient.length > 0 && !categorieActive) {
+          setCategorieActive(categoriesClient[0]);
+      }
+  }, [menu, categorieActive, isDimanche]);
 
-  // Filtrage Menu Client
+
+  // --- FILTRAGE CLIENT ---
   let menuClient = [];
   if (categorieActive === '🔥 PROMOTIONS') {
       menuClient = [{
           id: 'promo-sunday',
           nom: '2 PIZZAS ACHETÉES = 1 OFFERTE',
-          description: 'Offre valable uniquement le dimanche. Ajoutez 3 pizzas au panier, la moins chère sera offerte en caisse !',
+          description: 'Offre du Dimanche : Ajoutez 3 pizzas, la moins chère est offerte en caisse !',
           categorie: '🔥 PROMOTIONS',
           prix: 0,
           image: 'https://img.freepik.com/free-vector/pizza-time-promo-banner_23-2148967986.jpg',
@@ -126,9 +128,16 @@ function App() {
       menuClient = menu.filter(p => p.categorie === categorieActive && p.available !== false);
   }
 
-  // Filtrage Menu Admin (Strict, pas de 'Tout')
-  const menuAdmin = menu.filter(p => p.categorie === adminCategorie);
-
+  // --- FILTRAGE ADMIN (Nouveau système Onglet RUPTURE) ---
+  let menuAdmin = [];
+  if (adminCategorie === 'RUPTURE') {
+      menuAdmin = menu.filter(p => p.available === false);
+  } else {
+      // Affiche les produits de la catégorie (même s'ils sont désactivés, pour les gérer)
+      // OU on affiche que les actifs ici ? 
+      // Le mieux : Afficher tout de la catégorie pour pouvoir désactiver.
+      menuAdmin = menu.filter(p => p.categorie === adminCategorie);
+  }
 
   // --- NAVIGATION ---
   const handleStaffAccess = () => {
@@ -136,12 +145,27 @@ function App() {
       else setView('login'); 
   };
 
+  const checkSecurity = () => {
+      const code = prompt("🔒 Code de sécurité requis pour cette action :");
+      return code === SECURITY_CODE;
+  };
+
   const ajouterAuPanier = (itemFinal) => {
-    if (itemFinal.isInfo) return alert("Ceci est une offre informative. Ajoutez directement vos pizzas !");
+    if (itemFinal.isInfo) return alert("Ceci est une offre. Ajoutez vos pizzas normalement !");
     if (navigator.vibrate) navigator.vibrate(50);
+    
+    // CORRECTION PRIX "GRATUIT" : On s'assure d'avoir un prix
+    let safePrice = Number(itemFinal.prixFinal);
+    if (safePrice === 0 && itemFinal.variantes?.length > 0) {
+        // Si le prix de base est 0 mais qu'il y a des variantes, on prend le prix de la variante sélectionnée
+        // Mais ici 'itemFinal' est déjà l'objet final (produit + variante).
+        // Si ça vaut 0 ici, c'est une erreur de données.
+        safePrice = itemFinal.prix || 0; 
+    }
+
     const itemSafe = {
         ...itemFinal,
-        prixFinal: Number(itemFinal.prixFinal) || 0, 
+        prixFinal: safePrice, 
         uniqueId: Date.now()
     };
     setPanier([...panier, itemSafe]);
@@ -149,7 +173,6 @@ function App() {
   };
 
   const retirerDuPanier = (uid) => setPanier(panier.filter(i => i.uniqueId !== uid));
-  
   const total = panier.reduce((acc, i) => acc + (Number(i.prixFinal) || 0), 0);
 
   const envoyerCommande = async () => {
@@ -161,7 +184,7 @@ function App() {
     
     if (!telClean) return alert("Téléphone obligatoire.");
     if (!marocRegex.test(telClean)) {
-        return alert("❌ Numéro invalide !\nIl doit commencer par 06 ou 07 et contenir 10 chiffres.");
+        return alert("❌ Numéro invalide (06... ou 07... sur 10 chiffres)");
     }
 
     if (typeCommande === 'livraison' && !adresse.trim()) return alert("Adresse obligatoire.");
@@ -225,6 +248,7 @@ function App() {
   const supprimerProduit = async (id) => { if(confirm("Supprimer ?")) await deleteDoc(doc(db, "produits", id)); };
   
   const viderMenu = async () => {
+      if(!checkSecurity()) return alert("Code incorrect"); // SECURITE
       if(confirm("ATTENTION: Cela va supprimer TOUT le menu. Sûr ?")) {
           setLoading(true);
           const batch = writeBatch(db);
@@ -235,6 +259,12 @@ function App() {
   };
 
   const handleCSVImport = (e) => {
+    // SECURITE AVANT IMPORT
+    if(!checkSecurity()) {
+        e.target.value = null; // Reset input
+        return alert("Accès refusé. Import annulé.");
+    }
+
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
@@ -266,19 +296,23 @@ function App() {
              const p3 = cleanPrice(p3Raw.replace(',','.'));
 
              let variantsList = [];
-             let finalPrice = p1;
+             let finalPrice = p1; // Par défaut prix 1
 
              if (p2 > 0 || p3 > 0) {
-                finalPrice = 0; 
+                // S'il y a des variantes, on garde p1 comme finalPrice pour éviter le "0"
+                // ou on met 0 si on veut forcer le "dès..."
+                // ICI ON MET p1 POUR EVITER LE "GRATUIT"
+                finalPrice = p1 > 0 ? p1 : 0; 
+                
                 const catLower = cat.toLowerCase();
                 let n1 = "Standard", n2 = "Moyen", n3 = "Grand";
                 if (catLower.includes('tacos')) { n1 = "L"; n2 = "XL"; n3 = "XXL"; }
                 else if (catLower.includes('pizza')) { n1 = "M"; n2 = "L"; n3 = "XL"; } 
+                
                 if(p1 > 0) variantsList.push({ nom: n1, prix: p1 });
                 if(p2 > 0) variantsList.push({ nom: n2, prix: p2 });
                 if(p3 > 0) variantsList.push({ nom: n3, prix: p3 });
              }
-             if (variantsList.length === 0 && p1 > 0) finalPrice = p1;
 
              if(name && cat) {
                await addDoc(collection(db, "produits"), {
@@ -424,7 +458,7 @@ function App() {
 
           <div style={{marginTop:'40px', borderTop:'2px solid #eee', paddingTop:'20px'}}>
              <h3 style={{marginBottom:'15px'}}>📦 Menu</h3>
-             {/* MENU ADMIN DYNAMIQUE ET SANS 'TOUT' */}
+             {/* ONGLETS ADMIN */}
              <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '15px', display:'flex', gap:'10px' }}>
               {categoriesReelles.map(c => (
                 <button key={c} onClick={() => setAdminCategorie(c)} style={{
@@ -433,6 +467,14 @@ function App() {
                     color:adminCategorie===c?'white':'black', cursor:'pointer'
                 }}>{c}</button>
               ))}
+              
+              {/* ONGLET SPECIAL RUPTURE */}
+              <button onClick={() => setAdminCategorie('RUPTURE')} style={{
+                  padding:'8px 15px', borderRadius:'20px', border:'none', 
+                  background: adminCategorie==='RUPTURE'?COLORS.danger:'#FEE2E2', 
+                  color: adminCategorie==='RUPTURE'?'white':COLORS.danger, 
+                  fontWeight:'bold', cursor:'pointer'
+              }}>🚫 RUPTURE</button>
              </div>
 
              {menuAdmin.map(p => (
@@ -453,6 +495,8 @@ function App() {
                 <button onClick={()=>supprimerProduit(p.id)} style={{color:'red', border:'none', background:'transparent', cursor:'pointer'}}>X</button>
               </div>
             ))}
+            
+            {menuAdmin.length === 0 && <div style={{textAlign:'center', padding:'20px', color:'#999'}}>Aucun article ici.</div>}
           </div>
           
            <details style={{marginTop:'30px', background:'white', padding:'15px', borderRadius:'10px'}}>
@@ -488,7 +532,13 @@ function App() {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-            {menuClient.map((plat) => (
+            {menuClient.map((plat) => {
+              // CORRECTION PRIX AFFICHAGE (Eviter le Gratuit si variante existe)
+              const displayPrice = plat.prix > 0 
+                  ? plat.prix 
+                  : (plat.variantes?.length > 0 ? Math.min(...plat.variantes.map(v=>v.prix)) : 0);
+
+              return (
               <div key={plat.id} onClick={() => setSelectedProduct(plat)} style={{ ...cardStyle, padding: 0, overflow: 'hidden', display:'flex', flexDirection:'column', cursor: 'pointer', position: 'relative' }}>
                 <div style={{ height: '140px', background: '#eee', backgroundImage: `url(${plat.image || 'https://via.placeholder.com/300?text=Foodji'})`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
                     {plat.isInfo && <div style={{position:'absolute', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.4)', display:'flex', alignItems:'center', justifyContent:'center', color:'white', fontWeight:'bold', fontSize:'1.2rem', textAlign:'center', padding:'10px'}}>2 + 1 OFFERTE</div>}
@@ -500,13 +550,13 @@ function App() {
                   </div>
                   <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                      <span style={{ fontWeight: '700', fontSize: '1rem', color: COLORS.primary }}>
-                       {plat.prix > 0 ? (plat.variantes?.length > 0 ? `dès ${Math.min(...plat.variantes.map(v=>v.prix))} DH` : `${plat.prix} DH`) : 'GRATUIT'}
+                       {displayPrice > 0 ? (plat.variantes?.length > 0 ? `dès ${displayPrice} DH` : `${displayPrice} DH`) : 'GRATUIT'}
                      </span>
                      <div style={{background: COLORS.secondary, color: 'white', width: '32px', height: '32px', borderRadius: '50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.2rem'}}>+</div>
                   </div>
                 </div>
               </div>
-            ))}
+            )})}
           </div>
           {menuClient.length === 0 && <div style={{textAlign:'center', marginTop:'50px', color: COLORS.textLight}}>Aucun plat disponible.</div>}
         </div>
