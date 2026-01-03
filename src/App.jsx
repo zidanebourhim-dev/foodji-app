@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { db, auth } from './firebase';
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
-import { collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, query } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, query, writeBatch } from 'firebase/firestore';
 import './App.css';
 
-// --- CONFIGURATION DES OPTIONS (Ce qui manque dans ton Excel) ---
+// --- OPTIONS (A modifier selon tes besoins réels) ---
 const LISTE_VIANDES = ["Viande Hachée", "Poulet", "Dinde", "Nuggets", "Cordon Bleu", "Merguez"];
 const LISTE_GARNITURES_PIZZA = ["Champignons", "Poivrons", "Thon", "Viande Hachée", "Poulet", "Jambon", "Oignons", "Olives"];
 const LISTE_SAUCES = ["Algérienne", "Biggy", "Blanche", "Barbecue", "Samouraï", "Cheesy"];
@@ -21,27 +21,22 @@ const COLORS = {
 };
 
 function App() {
-  // --- ETATS GLOBAUX ---
+  // --- ETATS ---
   const [user, setUser] = useState(null);
   const [view, setView] = useState('client'); 
   const [menu, setMenu] = useState([]);
   const [commandes, setCommandes] = useState([]);
   
-  // NOUVEAU : Produit sélectionné pour le détail (Modal)
   const [selectedProduct, setSelectedProduct] = useState(null);
-
-  // Filtres
   const [categorieActive, setCategorieActive] = useState('Tout'); 
   const [adminCategorie, setAdminCategorie] = useState('Tout');
 
-  // Panier & Client
   const [panier, setPanier] = useState([]);
   const [clientNom, setClientNom] = useState('');
   const [clientTel, setClientTel] = useState('');
   const [typeCommande, setTypeCommande] = useState('sur_place');
   const [adresse, setAdresse] = useState('');
   
-  // Admin Login
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -64,15 +59,12 @@ function App() {
     return () => { unsubscribeAuth(); unsubscribeMenu(); unsubscribeCmd(); };
   }, []);
 
-  // --- LOGIQUE CATÉGORIES DYNAMIQUES ---
-  // On récupère toutes les catégories uniques présentes dans le menu + 'Tout'
+  // --- LOGIQUE CLIENT ---
   const categoriesUniques = ['Tout', ...new Set(menu.map(p => p.categorie))];
 
-  // --- LOGIQUE CLIENT ---
   const menuClient = menu.filter(p => {
     const isCatOK = categorieActive === 'Tout' ? true : p.categorie === categorieActive;
-    const isAvailable = p.available !== false; 
-    return isCatOK && isAvailable;
+    return isCatOK && p.available !== false;
   });
 
   const menuAdmin = adminCategorie === 'Tout' ? menu : menu.filter(p => p.categorie === adminCategorie);
@@ -80,8 +72,7 @@ function App() {
   const ajouterAuPanier = (itemFinal) => {
     if (navigator.vibrate) navigator.vibrate(50);
     setPanier([...panier, { ...itemFinal, uniqueId: Date.now() }]);
-    setSelectedProduct(null); // Ferme le modal
-    // alert("Ajouté au panier !"); // Optionnel
+    setSelectedProduct(null); 
   };
 
   const retirerDuPanier = (uid) => setPanier(panier.filter(i => i.uniqueId !== uid));
@@ -107,7 +98,6 @@ function App() {
   const toggleAvailability = async (item) => {
     await updateDoc(doc(db, "produits", item.id), { available: (item.available === false ? true : false) });
   };
-
   const copierOdoo = (cmd) => {
     let t = `Nom: ${cmd.client}\nTél: ${cmd.tel}\n`;
     t += cmd.type === 'livraison' ? `Livraison: ${cmd.adresse}` : `Mode: ${cmd.type === 'sur_place' ? 'Sur Place' : 'Emporter'}`;
@@ -116,7 +106,6 @@ function App() {
   const changerStatus = async (id, st) => await updateDoc(doc(db, "commandes", id), { status: st });
   const supprimerCmd = async (id) => { if(confirm("Supprimer ?")) await deleteDoc(doc(db, "commandes", id)); };
   
-  // Image Update
   const updateProductImage = async (id, file) => {
     if(!file) return;
     const reader = new FileReader(); reader.readAsDataURL(file);
@@ -133,33 +122,60 @@ function App() {
   };
 
   const supprimerProduit = async (id) => { if(confirm("Supprimer ?")) await deleteDoc(doc(db, "produits", id)); };
+  
+  // NOUVEAU : Supprimer tout le menu pour repartir à zéro
+  const viderMenu = async () => {
+      if(confirm("ATTENTION: Cela va supprimer TOUS les plats du menu. Êtes-vous sûr ?")) {
+          setLoading(true);
+          const batch = writeBatch(db);
+          menu.forEach(p => {
+              const ref = doc(db, "produits", p.id);
+              batch.delete(ref);
+          });
+          await batch.commit();
+          setLoading(false);
+          alert("Menu vidé ! Vous pouvez réimporter le CSV.");
+      }
+  };
 
-  // --- IMPORT CSV (FORMAT DE TON FICHIER) ---
+  // --- IMPORT CSV ROBUSTE ---
   const handleCSVImport = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = async (evt) => {
       const text = evt.target.result;
-      const rows = text.split('\n');
+      const rows = text.split('\n').filter(line => line.trim() !== ''); // Enlève les lignes vides
       let count = 0;
-      if(confirm(`Importer environ ${rows.length} lignes ?`)) {
+
+      if(confirm(`Importer ${rows.length} lignes ?`)) {
         setLoading(true);
-        // On saute la ligne 1 si c'est les entêtes (Catégorie, Nom...)
-        const startIndex = rows[0].includes('Catégorie') ? 1 : 0;
+        
+        // On essaie de détecter le séparateur (; ou ,)
+        const firstLine = rows[0];
+        const separator = firstLine.includes(';') ? ';' : ',';
+
+        // Sauter la ligne d'entête si elle contient "Catégorie"
+        const startIndex = firstLine.toLowerCase().includes('catégorie') ? 1 : 0;
 
         for (let i = startIndex; i < rows.length; i++) {
           const row = rows[i];
-          // Détection séparateur ; ou ,
-          const cols = row.includes(';') ? row.split(';') : row.split(',');
+          // Utilisation d'un split basique (Attention aux ; dans les descriptions)
+          const cols = row.split(separator);
           
           if (cols.length >= 4) {
              const cat = cols[0]?.trim(); 
              const name = cols[1]?.trim(); 
-             const desc = cols[2]?.trim();
+             const desc = cols[2]?.trim().replace(/"/g, ''); // Enlève les guillemets éventuels
              
-             // Nettoyage Prix (Ton fichier a des entêtes "Prix Taille 1" etc, on prend les index 3, 4, 5)
-             const cleanPrice = (val) => val ? Number(val.toString().replace(/[^0-9.]/g, '')) : 0;
+             // --- CORRECTION PRIX (Gestion de la virgule 35,00 -> 35.00) ---
+             const cleanPrice = (val) => {
+                 if (!val) return 0;
+                 // Remplace virgule par point, enlève tout sauf chiffres et point
+                 let s = val.toString().replace(',', '.').replace(/[^0-9.]/g, '');
+                 return parseFloat(s) || 0;
+             };
+
              const p1 = cleanPrice(cols[3]);
              const p2 = cleanPrice(cols[4]);
              const p3 = cleanPrice(cols[5]);
@@ -167,14 +183,14 @@ function App() {
              let variantsList = [];
              let finalPrice = p1;
 
-             // Logique Variantes Automatiques
+             // Logique Variantes
              if (p2 > 0 || p3 > 0) {
-                finalPrice = 0; 
+                finalPrice = 0; // Le prix affiché sera "dès X"
                 const catLower = cat.toLowerCase();
                 let n1 = "Standard", n2 = "Moyen", n3 = "Grand";
                 
                 if (catLower.includes('tacos')) { n1 = "L"; n2 = "XL"; n3 = "XXL"; }
-                else if (catLower.includes('pizza')) { n1 = "Junior"; n2 = "Senior"; n3 = "Mega"; } // Ou M, L...
+                else if (catLower.includes('pizza')) { n1 = "Junior"; n2 = "Senior"; n3 = "Mega"; }
 
                 if(p1 > 0) variantsList.push({ nom: n1, prix: p1 });
                 if(p2 > 0) variantsList.push({ nom: n2, prix: p2 });
@@ -190,7 +206,8 @@ function App() {
              }
           }
         }
-        setLoading(false); alert(`${count} produits importés !`);
+        setLoading(false); 
+        alert(`${count} produits importés avec succès !`);
       }
     };
     reader.readAsText(file);
@@ -219,7 +236,7 @@ function App() {
         )}
       </div>
 
-      {/* --- MODAL PRODUIT DETAIL (LE COEUR DU SYSTEME) --- */}
+      {/* --- MODAL PRODUIT DETAIL (POUR TACOS/PIZZA) --- */}
       {selectedProduct && (
         <ProductModal 
           product={selectedProduct} 
@@ -243,21 +260,24 @@ function App() {
       {view === 'admin' && user && (
         <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
           
+          <div style={{marginBottom:'20px', display:'flex', gap:'10px', alignItems:'center'}}>
+              <h2 style={{margin:0}}>⚙️ Admin</h2>
+              <button onClick={viderMenu} style={{background: COLORS.danger, color:'white', border:'none', padding:'8px 15px', borderRadius:'8px', cursor:'pointer', fontWeight:'bold'}}>
+                  🗑️ TOUT SUPPRIMER (Reset)
+              </button>
+          </div>
+
           <details style={{marginBottom:'20px', background:'#E0E7FF', padding:'15px', borderRadius:'10px'}}>
              <summary style={{cursor:'pointer', fontWeight:'bold', color:'#3730A3'}}>📥 Importer CSV (Nouveau Format)</summary>
              <div style={{marginTop:'10px'}}>
-               <p style={{fontSize:'0.9rem'}}>Colonnes: Catégorie, Nom, Description, Prix 1, Prix 2, Prix 3</p>
+               <p style={{fontSize:'0.9rem'}}>Format: Catégorie;Nom;Desc;Prix1;Prix2;Prix3</p>
                <input type="file" accept=".csv" onChange={handleCSVImport} />
                {loading && <p>Importation...</p>}
              </div>
           </details>
 
-          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px'}}>
-             <h2 style={{fontSize:'1.5rem', fontWeight:'bold'}}>🔥 Cuisine</h2>
-             <span style={{background: COLORS.primary, color:'white', padding:'5px 12px', borderRadius:'20px', fontWeight:'bold'}}>{commandes.filter(c => c.status !== 'Terminé').length} en cours</span>
-          </div>
-          
-          {/* LISTE COMMANDES ADMIN */}
+          {/* LISTE COMMANDES */}
+          <h3 style={{marginTop:'30px'}}>Commandes en cours ({commandes.filter(c => c.status !== 'Terminé').length})</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '20px', marginBottom:'40px' }}>
             {commandes.map(cmd => (
               <div key={cmd.id} style={{ ...cardStyle, borderLeft: cmd.status === 'Terminé' ? '5px solid #ccc' : `5px solid ${COLORS.success}` }}>
@@ -275,12 +295,7 @@ function App() {
                     <li key={i} style={{padding:'6px 0', borderBottom:'1px dashed #eee', lineHeight:'1.4'}}>
                       <strong>{it.nom}</strong> 
                       {it.varianteNom && <span style={{color: COLORS.textLight}}> ({it.varianteNom})</span>}
-                      {/* Affichage des options choisies (Viandes, etc.) */}
-                      {it.optionsChoisies && it.optionsChoisies.length > 0 && (
-                        <div style={{fontSize:'0.85rem', color:'#555', marginLeft:'10px'}}>
-                           + {it.optionsChoisies.join(', ')}
-                        </div>
-                      )}
+                      {it.optionsChoisies && it.optionsChoisies.length > 0 && <div style={{fontSize:'0.85rem', color:'#555', marginLeft:'10px'}}>+ {it.optionsChoisies.join(', ')}</div>}
                     </li>
                   ))}
                 </ul>
@@ -295,8 +310,7 @@ function App() {
 
           {/* GESTION STOCK */}
           <div style={{marginTop:'40px', borderTop:'2px solid #eee', paddingTop:'20px'}}>
-             <h3 style={{marginBottom:'15px'}}>📦 Gérer le Menu & Stock</h3>
-             
+             <h3 style={{marginBottom:'15px'}}>📦 Gérer le Menu</h3>
              <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '15px', display:'flex', gap:'10px' }}>
               {categoriesUniques.map(c => (
                 <button key={c} onClick={() => setAdminCategorie(c)} style={{padding:'8px 15px', borderRadius:'20px', border:'none', background: adminCategorie===c?COLORS.secondary:'#eee', color:adminCategorie===c?'white':'black', cursor:'pointer'}}>{c}</button>
@@ -306,18 +320,16 @@ function App() {
              {menuAdmin.map(p => (
               <div key={p.id} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px', borderBottom:'1px solid #f0f0f0', background: p.available === false ? '#FFF5F5' : 'white', opacity: p.available === false ? 0.7 : 1}}>
                 <div style={{display:'flex', alignItems:'center', gap:'15px'}}>
-                  {/* Switch */}
                   <div onClick={() => toggleAvailability(p)} style={{width:'50px', height:'26px', background: p.available !== false ? COLORS.success : '#ccc', borderRadius:'20px', position:'relative', cursor:'pointer', transition:'0.3s'}}>
                     <div style={{width:'20px', height:'20px', background:'white', borderRadius:'50%', position:'absolute', top:'3px', left: p.available !== false ? '27px' : '3px', transition:'0.3s'}}></div>
                   </div>
-                  {/* Photo Edit */}
                   <div style={{width:'40px', height:'40px', background:'#eee', borderRadius:'5px', overflow:'hidden', position:'relative'}}>
                     {p.image && <img src={p.image} style={{width:'100%', height:'100%', objectFit:'cover'}} />}
                     <input type="file" onChange={(e)=>updateProductImage(p.id, e.target.files[0])} style={{position:'absolute', top:0, left:0, width:'100%', height:'100%', opacity:0, cursor:'pointer'}} />
                   </div>
                   <div>
                     <div style={{fontWeight:'bold', textDecoration: p.available === false ? 'line-through' : 'none'}}>{p.nom}</div>
-                    <div style={{fontSize:'0.8rem', color: COLORS.textLight}}>{p.categorie}</div>
+                    <div style={{fontSize:'0.8rem', color: COLORS.textLight}}>{p.categorie} • {p.variantes?.length > 0 ? 'Multi-tailles' : p.prix + ' DH'}</div>
                   </div>
                 </div>
                 <button onClick={()=>supprimerProduit(p.id)} style={{color:'red', border:'none', background:'transparent', cursor:'pointer'}}>X</button>
@@ -330,7 +342,6 @@ function App() {
       {/* --- CLIENT MENU --- */}
       {view === 'client' && (
         <div style={{ padding: '20px' }}>
-          
           <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '20px', scrollbarWidth: 'none', display:'flex', gap:'10px' }}>
             {categoriesUniques.map(c => (
               <button key={c} onClick={() => setCategorieActive(c)} style={{
@@ -364,6 +375,7 @@ function App() {
               </div>
             ))}
           </div>
+          {menuClient.length === 0 && <div style={{textAlign:'center', marginTop:'50px', color: COLORS.textLight}}>Aucun plat disponible.</div>}
         </div>
       )}
 
@@ -371,7 +383,7 @@ function App() {
       {view === 'panier' && (
         <div style={{ padding: '20px', background: 'white', minHeight: '100vh' }}>
           <h2 style={{color: COLORS.secondary}}>🛒 Panier</h2>
-          {panier.length === 0 ? <p>Vide.</p> : (
+          {panier.length === 0 ? <p>Panier vide.</p> : (
             <>
               <div style={{marginBottom:'30px'}}>
                 {panier.map(item => (
@@ -392,7 +404,7 @@ function App() {
                 <div style={{textAlign:'right', fontSize:'1.5rem', fontWeight:'800', marginTop:'20px', color: COLORS.secondary}}>Total : {total} DH</div>
               </div>
               <div style={{background: COLORS.bg, padding: '20px', borderRadius: '16px'}}>
-                <h3 style={{marginTop:0, fontSize:'1.1rem', marginBottom:'15px'}}>Info</h3>
+                <h3 style={{marginTop:0, fontSize:'1.1rem', marginBottom:'15px'}}>Finaliser</h3>
                 <div style={{display:'flex', gap:'10px', marginBottom:'15px'}}>
                   {['sur_place', 'emporter', 'livraison'].map(t => (
                     <button key={t} onClick={() => setTypeCommande(t)} style={{
@@ -431,56 +443,37 @@ function App() {
   );
 }
 
-// --- COMPOSANT MODAL PRODUIT (POP-UP) ---
+// --- MODAL PRODUIT (POP-UP INTELLIGENT) ---
 function ProductModal({ product, onClose, onAdd }) {
   const [selectedVar, setSelectedVar] = useState(product.variantes && product.variantes.length > 0 ? product.variantes[0] : null);
   const [optionsChoisies, setOptionsChoisies] = useState([]);
 
-  const hasVariants = product.variantes && product.variantes.length > 0;
-  
-  // LOGIQUE COMPLEXE : Calcul du max de choix (Viandes ou Garnitures)
+  // LOGIQUE DE CHOIX DYNAMIQUE
   let maxChoix = 0;
   let listeOptions = [];
   let titreOptions = "";
-
   const nomLower = product.nom.toLowerCase();
   const catLower = product.categorie.toLowerCase();
   
-  // Règle 1: Tacos Mixte
+  // Tacos
   if (catLower.includes('tacos') && (nomLower.includes('mixte') || selectedVar)) {
       listeOptions = LISTE_VIANDES;
       titreOptions = "Choisissez vos viandes";
-      // Si taille L -> 2 choix, XL -> 3 choix, XXL -> 4 choix (EXEMPLE A AJUSTER)
       if (selectedVar?.nom === 'L') maxChoix = 2;
       else if (selectedVar?.nom === 'XL') maxChoix = 3;
       else if (selectedVar?.nom === 'XXL') maxChoix = 4;
-      else maxChoix = 1; // Tacos simple
+      else maxChoix = 1; 
   }
-  // Règle 2: Pizzas Saisons
+  // Pizzas
   else if (catLower.includes('pizza')) {
-      if (nomLower.includes('2 saisons')) { maxChoix = 2; listeOptions = LISTE_GARNITURES_PIZZA; titreOptions = "2 Garnitures au choix"; }
-      if (nomLower.includes('4 saisons')) { maxChoix = 4; listeOptions = LISTE_GARNITURES_PIZZA; titreOptions = "4 Garnitures au choix"; }
+      if (nomLower.includes('2 saisons')) { maxChoix = 2; listeOptions = LISTE_GARNITURES_PIZZA; titreOptions = "2 Garnitures"; }
+      if (nomLower.includes('4 saisons')) { maxChoix = 4; listeOptions = LISTE_GARNITURES_PIZZA; titreOptions = "4 Garnitures"; }
   }
 
-  // Gestion click option
   const toggleOption = (opt) => {
-    if (optionsChoisies.includes(opt)) {
-      setOptionsChoisies(optionsChoisies.filter(o => o !== opt));
-    } else {
-      if (optionsChoisies.length < maxChoix) {
-        setOptionsChoisies([...optionsChoisies, opt]);
-      } else {
-        alert(`Maximum ${maxChoix} choix !`);
-      }
-    }
-  };
-
-  const handleAdd = () => {
-      // Vérif si le client a fait tous ses choix (Optionnel, on peut laisser moins)
-      if (maxChoix > 0 && optionsChoisies.length < maxChoix) {
-          if(!confirm(`Vous n'avez choisi que ${optionsChoisies.length} options sur ${maxChoix}. Continuer ?`)) return;
-      }
-      onAdd(product, selectedVar ? { ...selectedVar, optionsChoisies } : { optionsChoisies });
+    if (optionsChoisies.includes(opt)) setOptionsChoisies(optionsChoisies.filter(o => o !== opt));
+    else if (optionsChoisies.length < maxChoix) setOptionsChoisies([...optionsChoisies, opt]);
+    else alert(`Maximum ${maxChoix} choix !`);
   };
 
   return (
@@ -494,13 +487,13 @@ function ProductModal({ product, onClose, onAdd }) {
         <p style={{color: COLORS.textLight, marginTop:'5px'}}>{product.description}</p>
         
         {/* Choix Taille */}
-        {hasVariants && (
+        {product.variantes && product.variantes.length > 0 && (
             <div style={{marginTop:'20px'}}>
                 <div style={{fontWeight:'bold', marginBottom:'10px'}}>Taille</div>
                 <div style={{display:'flex', gap:'10px', flexWrap:'wrap'}}>
                     {product.variantes.map(v => (
                         <button key={v.nom} 
-                            onClick={() => { setSelectedVar(v); setOptionsChoisies([]); }} // Reset options si changement taille
+                            onClick={() => { setSelectedVar(v); setOptionsChoisies([]); }} 
                             style={{
                                 padding:'10px 20px', borderRadius:'8px', border: selectedVar?.nom === v.nom ? `2px solid ${COLORS.primary}` : '1px solid #ddd',
                                 background: selectedVar?.nom === v.nom ? '#FFF5F5' : 'white', fontWeight:'bold'
@@ -512,7 +505,7 @@ function ProductModal({ product, onClose, onAdd }) {
             </div>
         )}
 
-        {/* Choix Options (Viandes / Garnitures) */}
+        {/* Choix Options */}
         {maxChoix > 0 && (
             <div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}>
                 <div style={{fontWeight:'bold', marginBottom:'5px'}}>{titreOptions} <small style={{color: COLORS.primary}}>({optionsChoisies.length}/{maxChoix})</small></div>
@@ -531,8 +524,10 @@ function ProductModal({ product, onClose, onAdd }) {
             </div>
         )}
 
-        {/* Bouton Ajouter */}
-        <button onClick={handleAdd} style={{
+        <button onClick={() => {
+            if (maxChoix > 0 && optionsChoisies.length < maxChoix) { if(!confirm("Choix incomplets. Continuer ?")) return; }
+            onAdd(product, selectedVar ? { ...selectedVar, optionsChoisies } : { optionsChoisies });
+        }} style={{
             background: COLORS.primary, color: 'white', border: 'none', borderRadius: '12px', 
             padding: '15px', fontWeight: 'bold', width: '100%', marginTop: '30px', fontSize: '1.1rem'
         }}>
