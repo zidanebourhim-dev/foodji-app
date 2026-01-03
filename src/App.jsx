@@ -242,7 +242,7 @@ function App() {
   return (
     <div style={{ background: COLORS.bg, minHeight: '100vh', paddingBottom: '100px', color: COLORS.secondary }}>
       
-      {/* --- LANDING PAGE (V27 - LOGO BRUT) --- */}
+      {/* --- LANDING PAGE (LOGO MINUSCULE) --- */}
       {view === 'landing' && (
         <div style={{
           position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', 
@@ -250,7 +250,7 @@ function App() {
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '20px'
         }}>
           {/* LOGO PNG BRUT */}
-          <img src="/logo.PNG" alt="Foodji Logo" style={{width: '180px', height: '180px', objectFit: 'contain', marginBottom: '30px'}} 
+          <img src="/logo.png" alt="Foodji Logo" style={{width: '180px', height: '180px', objectFit: 'contain', marginBottom: '30px'}} 
                onError={(e) => {e.target.style.display='none';}} /> 
           
           <h1 style={{fontSize: '3rem', margin: 0, color: '#A84438', fontFamily: 'sans-serif', fontWeight: '800'}}>Foodji</h1>
@@ -273,11 +273,11 @@ function App() {
         </div>
       )}
 
-      {/* HEADER */}
+      {/* HEADER (AVEC LOGO MINUSCULE) */}
       {view !== 'landing' && (
         <div style={{ background: COLORS.card, padding: '15px 20px', position: 'sticky', top: 0, zIndex: 50, display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
           <div style={{display:'flex', alignItems:'center', gap:'10px', cursor:'pointer'}} onClick={() => setView('landing')}>
-            <img src="/logo.PNG" style={{height:'35px'}} onError={(e)=>e.target.style.display='none'}/>
+            <img src="/logo.png" style={{height:'35px'}} onError={(e)=>e.target.style.display='none'}/>
             <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '800', letterSpacing: '-0.5px', color: COLORS.secondary }}>Foodji</h1>
           </div>
           {user ? (
@@ -355,7 +355,6 @@ function App() {
                     <li key={i} style={{padding:'6px 0', borderBottom:'1px dashed #eee', lineHeight:'1.4'}}>
                       <strong>{it.nom}</strong> 
                       {it.varianteNom && <span style={{color: COLORS.textLight}}> ({it.varianteNom})</span>}
-                      {/* Affichage intelligent des quantités */}
                       {it.sauces && it.sauces.length > 0 && <div style={{fontSize:'0.85rem', color:'#555', marginLeft:'10px'}}>Sauces: {formatOptions(it.sauces)}</div>}
                       {it.optionsChoisies && it.optionsChoisies.length > 0 && <div style={{fontSize:'0.85rem', color:'#555', marginLeft:'10px'}}>+ {formatOptions(it.optionsChoisies)}</div>}
                     </li>
