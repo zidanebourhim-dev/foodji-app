@@ -23,7 +23,8 @@ const COLORS = {
   card: '#FFFFFF',       
   success: '#10B981',
   danger: '#EF4444',
-  warning: '#F59E0B',    
+  warning: '#F59E0B',
+  promo: '#D97706', // Couleur Or/Promo    
   textLight: '#6B7280'   
 };
 
@@ -37,8 +38,9 @@ function App() {
   const audioRef = useRef(new Audio(NOTIF_SOUND));
 
   const [selectedProduct, setSelectedProduct] = useState(null);
-  const [categorieActive, setCategorieActive] = useState('Tout'); 
-  const [adminCategorie, setAdminCategorie] = useState('Tout');
+  // On initialise vide, on le remplira au chargement du menu
+  const [categorieActive, setCategorieActive] = useState(''); 
+  const [adminCategorie, setAdminCategorie] = useState('Tout'); // Admin garde 'Tout' pour gestion facile
 
   const [panier, setPanier] = useState([]);
   const [clientNom, setClientNom] = useState('');
@@ -76,9 +78,8 @@ function App() {
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       list.sort((a, b) => b.date.seconds - a.date.seconds);
       
-      // SON ADMIN (Si connecté)
       if (list.length > prevCommandesLength.current && user) {
-          audioRef.current.play().catch(e => console.log("Clic requis"));
+          audioRef.current.play().catch(e => console.log("Clic requis pour son"));
       }
       prevCommandesLength.current = list.length;
       setCommandes(list);
@@ -87,23 +88,57 @@ function App() {
     return () => { unsubscribeAuth(); unsubscribeMenu(); unsubscribeCmd(); };
   }, [user]);
 
-  // --- LOGIQUE NAVIGATION ---
+  // --- LOGIQUE CLIENT & PROMO ---
+  
+  // Vérifie si c'est Dimanche (0 = Dimanche)
+  const isDimanche = new Date().getDay() === 0;
+
+  // Construction des catégories dynamiques (SANS 'TOUT')
+  let categoriesUniques = [...new Set(menu.map(p => p.categorie))];
+  
+  // Si Dimanche, on ajoute "PROMOTIONS" au début
+  if (isDimanche) {
+      categoriesUniques = ['🔥 PROMOTIONS', ...categoriesUniques];
+  }
+
+  // Sélectionne la 1ère catégorie par défaut au chargement
+  useEffect(() => {
+      if (categoriesUniques.length > 0 && !categorieActive) {
+          setCategorieActive(categoriesUniques[0]);
+      }
+  }, [menu, isDimanche]);
+
+  // Filtrage du menu
+  let menuClient = [];
+  if (categorieActive === '🔥 PROMOTIONS') {
+      // On injecte manuellement l'offre du dimanche
+      menuClient = [{
+          id: 'promo-sunday',
+          nom: '2 PIZZAS ACHETÉES = 1 OFFERTE',
+          description: 'Offre valable uniquement le dimanche. Ajoutez 3 pizzas au panier, la moins chère sera offerte en caisse !',
+          categorie: '🔥 PROMOTIONS',
+          prix: 0,
+          image: 'https://img.freepik.com/free-vector/pizza-time-promo-banner_23-2148967986.jpg', // Image générique ou ton lien
+          available: true,
+          isInfo: true // Marqueur spécial pour dire que c'est une info
+      }];
+  } else {
+      menuClient = menu.filter(p => {
+        return p.categorie === categorieActive && p.available !== false;
+      });
+  }
+
+  // --- NAVIGATION ---
   const handleStaffAccess = () => {
       if (user) setView('admin'); 
       else setView('login'); 
   };
 
-  // --- LOGIQUE CLIENT ---
-  const categoriesUniques = ['Tout', ...new Set(menu.map(p => p.categorie))];
-
-  const menuClient = menu.filter(p => {
-    const isCatOK = categorieActive === 'Tout' ? true : p.categorie === categorieActive;
-    return isCatOK && p.available !== false;
-  });
-
   const menuAdmin = adminCategorie === 'Tout' ? menu : menu.filter(p => p.categorie === adminCategorie);
 
   const ajouterAuPanier = (itemFinal) => {
+    if (itemFinal.isInfo) return alert("Ceci est une offre informative. Ajoutez directement vos 3 pizzas au panier !");
+    
     if (navigator.vibrate) navigator.vibrate(50);
     const itemSafe = {
         ...itemFinal,
@@ -122,8 +157,7 @@ function App() {
     if (panier.length === 0) return alert("Panier vide !");
     if (!clientNom.trim()) return alert("Nom obligatoire.");
     
-    // --- VALIDATION TÉLÉPHONE MAROCAIN (06 ou 07 + 8 chiffres) ---
-    const telClean = clientTel.replace(/\s/g, ''); // Enlève les espaces
+    const telClean = clientTel.replace(/\s/g, ''); 
     const marocRegex = /^(06|07)\d{8}$/;
     
     if (!telClean) return alert("Téléphone obligatoire.");
@@ -363,21 +397,18 @@ function App() {
                 <ul style={{listStyle:'none', marginBottom:'15px'}}>
                   {cmd.items.map((it, i) => (
                     <li key={i} style={{padding:'8px 0', borderBottom:'1px dashed #eee', lineHeight:'1.4'}}>
-                      {/* AFFICHAGE CLAIR ADMIN (Catégorie, Nom, Taille, Prix) */}
                       <div style={{display:'flex', alignItems:'center', gap:'10px', marginBottom:'2px'}}>
                           <span style={{fontSize:'0.75rem', fontWeight:'bold', color: COLORS.primary, background:'#FEE2E2', padding:'2px 6px', borderRadius:'4px'}}>
                               [{it.categorie.toUpperCase()}]
                           </span>
                           <strong style={{fontSize:'1.1rem'}}>{it.nom}</strong>
                       </div>
-
                       <div style={{display:'flex', justifyContent:'space-between', color: COLORS.secondary}}>
                           <span>
                               {it.varianteNom && <strong style={{color: COLORS.secondary, fontSize:'0.95rem'}}>({it.varianteNom})</strong>}
                           </span>
                           <strong style={{color: COLORS.textLight}}>{it.prixFinal} DH</strong>
                       </div>
-
                       {it.sauces && it.sauces.length > 0 && <div style={{fontSize:'0.85rem', color:'#555', marginLeft:'10px', marginTop:'2px'}}>Sauces: {formatOptions(it.sauces)}</div>}
                       {it.optionsChoisies && it.optionsChoisies.length > 0 && <div style={{fontSize:'0.85rem', color:'#555', marginLeft:'10px', marginTop:'2px'}}>+ {formatOptions(it.optionsChoisies)}</div>}
                     </li>
@@ -395,7 +426,8 @@ function App() {
           <div style={{marginTop:'40px', borderTop:'2px solid #eee', paddingTop:'20px'}}>
              <h3 style={{marginBottom:'15px'}}>📦 Menu</h3>
              <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '15px', display:'flex', gap:'10px' }}>
-              {categoriesUniques.map(c => (
+              <button onClick={() => setAdminCategorie('Tout')} style={{padding:'8px 15px', borderRadius:'20px', border:'none', background: adminCategorie==='Tout'?COLORS.secondary:'#eee', color:adminCategorie==='Tout'?'white':'black', cursor:'pointer'}}>Tout</button>
+              {['Burgers', 'Pizzas', 'Tacos', 'Pâtes', 'Salades'].map(c => (
                 <button key={c} onClick={() => setAdminCategorie(c)} style={{padding:'8px 15px', borderRadius:'20px', border:'none', background: adminCategorie===c?COLORS.secondary:'#eee', color:adminCategorie===c?'white':'black', cursor:'pointer'}}>{c}</button>
               ))}
              </div>
@@ -437,11 +469,13 @@ function App() {
       {/* --- CLIENT --- */}
       {view === 'client' && (
         <div style={{ padding: '20px' }}>
+          
+          {/* CATEGORIES SANS 'TOUT' */}
           <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '20px', scrollbarWidth: 'none', display:'flex', gap:'10px' }}>
             {categoriesUniques.map(c => (
               <button key={c} onClick={() => setCategorieActive(c)} style={{
                   border: 'none', display:'inline-block', padding:'10px 20px', borderRadius:'25px', 
-                  background: categorieActive === c ? COLORS.secondary : 'white', 
+                  background: categorieActive === c ? (c === '🔥 PROMOTIONS' ? COLORS.promo : COLORS.secondary) : 'white', 
                   color: categorieActive === c ? 'white' : COLORS.secondary,
                   fontWeight:'600', fontSize:'0.9rem', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', 
                   cursor: 'pointer', transition: '0.2s'
@@ -454,7 +488,9 @@ function App() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
             {menuClient.map((plat) => (
               <div key={plat.id} onClick={() => setSelectedProduct(plat)} style={{ ...cardStyle, padding: 0, overflow: 'hidden', display:'flex', flexDirection:'column', cursor: 'pointer', position: 'relative' }}>
-                <div style={{ height: '140px', background: '#eee', backgroundImage: `url(${plat.image || 'https://via.placeholder.com/300?text=Foodji'})`, backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
+                <div style={{ height: '140px', background: '#eee', backgroundImage: `url(${plat.image || 'https://via.placeholder.com/300?text=Foodji'})`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
+                    {plat.isInfo && <div style={{position:'absolute', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.4)', display:'flex', alignItems:'center', justifyContent:'center', color:'white', fontWeight:'bold', fontSize:'1.2rem', textAlign:'center', padding:'10px'}}>2 + 1 OFFERTE</div>}
+                </div>
                 <div style={{ padding: '12px', flex: 1, display:'flex', flexDirection:'column', justifyContent:'space-between' }}>
                   <div>
                     <h4 style={{ margin: '0 0 5px 0', fontSize: '1rem', fontWeight:'700', color: COLORS.secondary }}>{plat.nom}</h4>
@@ -462,7 +498,7 @@ function App() {
                   </div>
                   <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                      <span style={{ fontWeight: '700', fontSize: '1rem', color: COLORS.primary }}>
-                       {plat.variantes?.length > 0 ? `dès ${Math.min(...plat.variantes.map(v=>v.prix))} DH` : `${plat.prix} DH`}
+                       {plat.prix > 0 ? (plat.variantes?.length > 0 ? `dès ${Math.min(...plat.variantes.map(v=>v.prix))} DH` : `${plat.prix} DH`) : 'GRATUIT'}
                      </span>
                      <div style={{background: COLORS.secondary, color: 'white', width: '32px', height: '32px', borderRadius: '50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.2rem'}}>+</div>
                   </div>
@@ -470,7 +506,7 @@ function App() {
               </div>
             ))}
           </div>
-          {menuClient.length === 0 && <div style={{textAlign:'center', marginTop:'50px', color: COLORS.textLight}}>Aucun plat.</div>}
+          {menuClient.length === 0 && <div style={{textAlign:'center', marginTop:'50px', color: COLORS.textLight}}>Aucun plat disponible.</div>}
         </div>
       )}
 
@@ -484,7 +520,6 @@ function App() {
                 {panier.map(item => (
                   <div key={item.uniqueId} style={{display:'flex', justifyContent:'space-between', padding:'15px 0', borderBottom:'1px solid #f0f0f0'}}>
                     <div>
-                        {/* RECAP CLIENT CLAIR (Categorie et Taille) */}
                         <div style={{fontSize:'0.75rem', fontWeight:'bold', color: COLORS.primary, marginBottom:'2px'}}>
                             {item.categorie.toUpperCase()}
                         </div>
