@@ -11,7 +11,7 @@ const LISTE_SAUCES = ["Algérienne Fait Maison", "Biggy Fait Maison", "Barbecue 
 
 const NOTIF_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
 
-// --- IMAGES ---
+// --- IMAGES (Dossier Public) ---
 const logoImg = "/logo.png";
 const iconImg = "/icon.png";
 
@@ -76,6 +76,7 @@ function App() {
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       list.sort((a, b) => b.date.seconds - a.date.seconds);
       
+      // SON ADMIN STRICTEMENT (Si user connecté)
       if (list.length > prevCommandesLength.current && user) {
           audioRef.current.play().catch(e => console.log("Clic requis pour son"));
       }
@@ -104,10 +105,10 @@ function App() {
 
   const ajouterAuPanier = (itemFinal) => {
     if (navigator.vibrate) navigator.vibrate(50);
-    // FORCE LE PRIX EN NOMBRE POUR ÉVITER LES ERREURS DE CALCUL
+    // FORCE LE PRIX EN NOMBRE
     const itemSafe = {
         ...itemFinal,
-        prixFinal: Number(itemFinal.prixFinal) || 0, // Sécurité absolue
+        prixFinal: Number(itemFinal.prixFinal) || 0, 
         uniqueId: Date.now()
     };
     setPanier([...panier, itemSafe]);
@@ -116,15 +117,13 @@ function App() {
 
   const retirerDuPanier = (uid) => setPanier(panier.filter(i => i.uniqueId !== uid));
   
-  // CALCUL TOTAL SECURISE
   const total = panier.reduce((acc, i) => acc + (Number(i.prixFinal) || 0), 0);
 
   const envoyerCommande = async () => {
-    // VALIDATION STRICTE
-    if (panier.length === 0) return alert("Votre panier est vide !");
-    if (!clientNom.trim()) return alert("❌ Le Nom est OBLIGATOIRE pour valider la commande.");
-    if (!clientTel.trim()) return alert("❌ Le Téléphone est OBLIGATOIRE pour valider la commande.");
-    if (typeCommande === 'livraison' && !adresse.trim()) return alert("❌ L'adresse est OBLIGATOIRE pour une livraison.");
+    if (panier.length === 0) return alert("Panier vide !");
+    if (!clientNom.trim()) return alert("Nom obligatoire.");
+    if (!clientTel.trim()) return alert("Tél obligatoire.");
+    if (typeCommande === 'livraison' && !adresse.trim()) return alert("Adresse obligatoire.");
 
     setLoading(true);
     try {
@@ -134,8 +133,8 @@ function App() {
         items: panier, total: total, date: new Date(), status: 'En attente'
       });
       setPanier([]); setClientNom(''); setClientTel(''); setAdresse(''); setCommentaire('');
-      alert("✅ Commande envoyée avec succès !"); setView('client');
-    } catch (e) { alert("Erreur réseau. Réessayez."); }
+      alert("✅ Commande envoyée !"); setView('client');
+    } catch (e) { alert("Erreur réseau"); }
     setLoading(false);
   };
 
@@ -147,7 +146,17 @@ function App() {
     let t = `Nom: ${cmd.client}\nTél: ${cmd.tel}\n`;
     t += cmd.type === 'livraison' ? `Livraison: ${cmd.adresse}` : `Mode: ${cmd.type === 'sur_place' ? 'Sur Place' : 'Emporter'}`;
     if(cmd.commentaire) t += `\nNOTE: ${cmd.commentaire}`;
-    navigator.clipboard.writeText(t).then(() => alert("📋 Copié pour Odoo !"));
+    
+    // Ajout du détail de la commande pour faciliter la copie
+    t += `\n-- Commande --\n`;
+    cmd.items.forEach(it => {
+        t += `${it.categorie} - ${it.nom} (${it.varianteNom || 'Standard'}) : ${it.prixFinal}DH\n`;
+        if(it.sauces) t += `  Sauces: ${formatOptions(it.sauces)}\n`;
+        if(it.optionsChoisies) t += `  Options: ${formatOptions(it.optionsChoisies)}\n`;
+    });
+    t += `TOTAL: ${cmd.total} DH`;
+
+    navigator.clipboard.writeText(t).then(() => alert("📋 Copié !"));
   };
   const changerStatus = async (id, st) => await updateDoc(doc(db, "commandes", id), { status: st });
   const supprimerCmd = async (id) => { if(confirm("Supprimer ?")) await deleteDoc(doc(db, "commandes", id)); };
@@ -335,7 +344,7 @@ function App() {
                   <div><strong style={{fontSize:'1.2rem', display:'block'}}>{cmd.client}</strong><div style={{color: COLORS.textLight, marginTop:'4px'}}>📞 {cmd.tel}</div></div>
                   <div style={{textAlign:'right'}}>
                     <div style={{fontSize:'1.3rem', fontWeight:'bold', color: COLORS.primary}}>{cmd.total} DH</div>
-                    <button onClick={() => copierOdoo(cmd)} style={{marginTop:'5px', background: COLORS.secondary, color:'white', border:'none', padding:'6px 12px', borderRadius:'6px', fontSize:'0.75rem', cursor:'pointer'}}>📋 ODOO</button>
+                    <button onClick={() => copierOdoo(cmd)} style={{marginTop:'5px', background: COLORS.secondary, color:'white', border:'none', padding:'6px 12px', borderRadius:'6px', fontSize:'0.75rem', cursor:'pointer'}}>📋 COPIER</button>
                   </div>
                 </div>
                 
@@ -346,11 +355,26 @@ function App() {
                 
                 <ul style={{listStyle:'none', marginBottom:'15px'}}>
                   {cmd.items.map((it, i) => (
-                    <li key={i} style={{padding:'6px 0', borderBottom:'1px dashed #eee', lineHeight:'1.4'}}>
-                      <strong>{it.nom}</strong> 
-                      {it.varianteNom && <span style={{color: COLORS.textLight}}> ({it.varianteNom})</span>}
-                      {it.sauces && it.sauces.length > 0 && <div style={{fontSize:'0.85rem', color:'#555', marginLeft:'10px'}}>Sauces: {formatOptions(it.sauces)}</div>}
-                      {it.optionsChoisies && it.optionsChoisies.length > 0 && <div style={{fontSize:'0.85rem', color:'#555', marginLeft:'10px'}}>+ {formatOptions(it.optionsChoisies)}</div>}
+                    <li key={i} style={{padding:'8px 0', borderBottom:'1px dashed #eee', lineHeight:'1.4'}}>
+                      
+                      {/* AFFICHAGE CLAIR POUR ADMIN */}
+                      <div style={{display:'flex', alignItems:'center', gap:'10px', marginBottom:'2px'}}>
+                          <span style={{fontSize:'0.75rem', fontWeight:'bold', color: COLORS.primary, background:'#FEE2E2', padding:'2px 6px', borderRadius:'4px'}}>
+                              [{it.categorie.toUpperCase()}]
+                          </span>
+                          <strong style={{fontSize:'1.1rem'}}>{it.nom}</strong>
+                      </div>
+
+                      <div style={{display:'flex', justifyContent:'space-between', color: COLORS.secondary}}>
+                          <span>
+                              {it.varianteNom && <strong style={{color: COLORS.secondary}}>({it.varianteNom})</strong>}
+                          </span>
+                          <strong style={{color: COLORS.textLight}}>{it.prixFinal} DH</strong>
+                      </div>
+
+                      {/* OPTIONS */}
+                      {it.sauces && it.sauces.length > 0 && <div style={{fontSize:'0.85rem', color:'#555', marginLeft:'10px', marginTop:'2px'}}>Sauces: {formatOptions(it.sauces)}</div>}
+                      {it.optionsChoisies && it.optionsChoisies.length > 0 && <div style={{fontSize:'0.85rem', color:'#555', marginLeft:'10px', marginTop:'2px'}}>+ {formatOptions(it.optionsChoisies)}</div>}
                     </li>
                   ))}
                 </ul>
@@ -575,7 +599,6 @@ function ProductModal({ product, onClose, onAdd }) {
 
   const getCount = (opt, list) => list.filter(x => x === opt).length;
 
-  // CONVERSION EN NOMBRE POUR EVITER LES ERREURS DANS LE PANIER
   const currentPrice = selectedVar ? Number(selectedVar.prix) : Number(product.prix);
 
   return (
@@ -660,7 +683,6 @@ function ProductModal({ product, onClose, onAdd }) {
                 alert(`Veuillez choisir au moins ${minChoix} options !`); 
                 return; 
             }
-            // PASSAGE DU PRIX SÉCURISÉ (CHIFFRE)
             onAdd({ ...product, prixFinal: currentPrice }, selectedVar ? { ...selectedVar, optionsChoisies, sauces } : { optionsChoisies, sauces });
         }} style={{
             background: COLORS.primary, color: 'white', border: 'none', borderRadius: '12px', 
