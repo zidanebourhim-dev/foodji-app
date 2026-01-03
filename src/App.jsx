@@ -20,8 +20,6 @@ function App() {
   const [view, setView] = useState('client'); 
   const [menu, setMenu] = useState([]);
   const [commandes, setCommandes] = useState([]);
-  
-  // NOUVEAU : Filtre Catégorie
   const [categorieActive, setCategorieActive] = useState('Tout');
 
   // Panier & Client
@@ -41,8 +39,6 @@ function App() {
   const [prixBase, setPrixBase] = useState('');
   const [variantes, setVariantes] = useState([]);
   const [loading, setLoading] = useState(false);
-
-  // Temps admin
   const [tempVarNom, setTempVarNom] = useState('');
   const [tempVarPrix, setTempVarPrix] = useState('');
   
@@ -64,20 +60,16 @@ function App() {
     return () => { unsubscribeAuth(); unsubscribeMenu(); unsubscribeCmd(); };
   }, []);
 
-  // --- LOGIQUE PANIER ---
+  // --- PANIER ---
   const ajouterAuPanier = (plat, variante = null) => {
-    // Petit effet de vibration tactile si supporté par le téléphone
     if (navigator.vibrate) navigator.vibrate(50);
-    
     setPanier([...panier, {
       ...plat,
       uniqueId: Date.now(),
       prixFinal: variante ? variante.prix : plat.prix,
       varianteNom: variante ? variante.nom : null
     }]);
-    // NOTE: Plus d'alert() ici, c'est silencieux.
   };
-
   const retirerDuPanier = (uid) => setPanier(panier.filter(i => i.uniqueId !== uid));
   const total = panier.reduce((acc, i) => acc + Number(i.prixFinal), 0);
 
@@ -97,10 +89,7 @@ function App() {
     setLoading(false);
   };
 
-  // --- FILTRAGE DU MENU ---
-  const menuFiltre = categorieActive === 'Tout' 
-    ? menu 
-    : menu.filter(p => p.categorie === categorieActive);
+  const menuFiltre = categorieActive === 'Tout' ? menu : menu.filter(p => p.categorie === categorieActive);
 
   // --- ADMIN UTILS ---
   const copierOdoo = (cmd) => {
@@ -111,17 +100,26 @@ function App() {
   const changerStatus = async (id, st) => await updateDoc(doc(db, "commandes", id), { status: st });
   const supprimerCmd = async (id) => { if(confirm("Supprimer ?")) await deleteDoc(doc(db, "commandes", id)); };
   
-  const handleImage = (e) => {
-    const file = e.target.files[0]; if(!file) return;
+  const handleImage = (e) => { processImage(e.target.files[0], setImage); };
+  
+  const processImage = (file, callback) => {
+    if(!file) return;
     const reader = new FileReader(); reader.readAsDataURL(file);
     reader.onload = (evt) => {
       const img = document.createElement("img"); img.src = evt.target.result;
       img.onload = () => {
         const c = document.createElement("canvas"); const ctx = c.getContext("2d");
         const s = 800/img.width; c.width=800; c.height=img.height*s;
-        ctx.drawImage(img,0,0,c.width,c.height); setImage(c.toDataURL("image/jpeg", 0.7));
+        ctx.drawImage(img,0,0,c.width,c.height); callback(c.toDataURL("image/jpeg", 0.7));
       }
     };
+  };
+
+  const updateProductImage = async (id, file) => {
+    processImage(file, async (base64) => {
+      await updateDoc(doc(db, "produits", id), { image: base64 });
+      alert("Image mise à jour !");
+    });
   };
 
   const saveProduit = async () => {
@@ -130,6 +128,78 @@ function App() {
     setNom(''); setDescription(''); setImage(''); setPrixBase(''); setVariantes([]); setLoading(false); alert("Plat ajouté");
   };
   const supprimerProduit = async (id) => { if(confirm("Supprimer ?")) await deleteDoc(doc(db, "produits", id)); };
+
+  // --- IMPORT CSV INTELLIGENT (TACOS/PIZZA) ---
+  const handleCSVImport = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      const text = evt.target.result;
+      const rows = text.split('\n');
+      let count = 0;
+
+      if(confirm(`Importer ${rows.length} lignes ?\nAttention : Supprimez les plats de test avant.`)) {
+        setLoading(true);
+        for (let row of rows) {
+          const cols = row.includes(';') ? row.split(';') : row.split(',');
+          
+          if (cols.length >= 4) {
+             const cat = cols[0].trim(); // Colonne A
+             const name = cols[1].trim(); // Colonne B
+             const desc = cols[2].trim(); // Colonne C
+             
+             // Prix (Col D, E, F)
+             const p1 = cols[3] ? Number(cols[3].trim().replace(/[^0-9.]/g, '')) : 0;
+             const p2 = cols[4] ? Number(cols[4].trim().replace(/[^0-9.]/g, '')) : 0;
+             const p3 = cols[5] ? Number(cols[5].trim().replace(/[^0-9.]/g, '')) : 0;
+
+             let variantsList = [];
+             let finalPrice = p1;
+
+             // --- LOGIQUE DE NOMMAGE INTELLIGENTE ---
+             if (p2 > 0 || p3 > 0) {
+                finalPrice = 0; 
+                const catLower = cat.toLowerCase();
+                
+                // Noms par défaut
+                let n1 = "Standard", n2 = "Moyen", n3 = "Grand";
+
+                // Si c'est un Tacos (3 tailles: L, XL, XXL)
+                if (catLower.includes('tacos')) {
+                    n1 = "L"; n2 = "XL"; n3 = "XXL";
+                }
+                // Si c'est une Pizza (2 tailles: M, L)
+                else if (catLower.includes('pizza')) {
+                    n1 = "M"; n2 = "L"; n3 = "XL";
+                }
+
+                if(p1 > 0) variantsList.push({ nom: n1, prix: p1 });
+                if(p2 > 0) variantsList.push({ nom: n2, prix: p2 });
+                if(p3 > 0) variantsList.push({ nom: n3, prix: p3 });
+             }
+
+             if(name) {
+               await addDoc(collection(db, "produits"), {
+                 categorie: cat || 'Autre',
+                 nom: name,
+                 description: desc,
+                 prix: finalPrice,
+                 image: '',
+                 variantes: variantsList,
+                 date: new Date()
+               });
+               count++;
+             }
+          }
+        }
+        setLoading(false);
+        alert(`${count} produits importés !`);
+      }
+    };
+    reader.readAsText(file);
+  };
 
   // --- STYLES ---
   const btnStyle = { background: COLORS.primary, color: 'white', border: 'none', borderRadius: '12px', padding: '12px 20px', fontWeight: '600', cursor: 'pointer', width: '100%', fontSize: '1rem', boxShadow: '0 4px 6px rgba(168, 68, 56, 0.2)' };
@@ -168,6 +238,20 @@ function App() {
       {/* --- ADMIN DASHBOARD --- */}
       {view === 'admin' && user && (
         <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
+          
+          {/* IMPORT CSV */}
+          <details style={{marginBottom:'20px', background:'#E0E7FF', padding:'15px', borderRadius:'10px'}}>
+             <summary style={{cursor:'pointer', fontWeight:'bold', color:'#3730A3'}}>📥 Importer Menu Excel (CSV)</summary>
+             <div style={{marginTop:'10px'}}>
+               <p style={{fontSize:'0.9rem', marginBottom:'10px'}}>
+                 Format: <code>Catégorie;Nom;Desc;Prix1;Prix2;Prix3</code><br/>
+                 <small>Détection automatique des tailles (L/XL pour Tacos, M/L pour Pizzas)</small>
+               </p>
+               <input type="file" accept=".csv" onChange={handleCSVImport} />
+               {loading && <p>Importation...</p>}
+             </div>
+          </details>
+
           <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px'}}>
              <h2 style={{fontSize:'1.5rem', fontWeight:'bold'}}>🔥 Cuisine</h2>
              <span style={{background: COLORS.primary, color:'white', padding:'5px 12px', borderRadius:'20px', fontWeight:'bold'}}>{commandes.filter(c => c.status !== 'Terminé').length} en cours</span>
@@ -194,7 +278,7 @@ function App() {
           </div>
 
           <div style={{marginTop:'50px', background:'white', padding:'25px', borderRadius:'16px'}}>
-            <h3 style={{marginBottom:'20px'}}>➕ Ajouter un Plat</h3>
+            <h3 style={{marginBottom:'20px'}}>➕ Ajouter un Plat (Manuel)</h3>
             <div style={{display:'grid', gridTemplateColumns:'1fr 2fr', gap:'20px'}}>
               <div style={{border:'2px dashed #ddd', borderRadius:'12px', display:'flex', alignItems:'center', justifyContent:'center', height:'100px', overflow:'hidden', position:'relative'}}>
                  {image ? <img src={image} style={{width:'100%', height:'100%', objectFit:'cover'}} /> : <span style={{color:'#aaa'}}>Photo</span>}
@@ -218,8 +302,23 @@ function App() {
                <div style={{marginTop:'5px', fontSize:'0.9rem', color: COLORS.textLight}}>{variantes.map(v=>`${v.nom} (${v.prix}dh) • `)}</div>
             </div>
             <button onClick={saveProduit} style={{...btnStyle, marginTop:'20px'}}>Enregistrer au Menu</button>
+            
             <h4 style={{marginTop:'30px'}}>Gérer le stock actuel</h4>
-            {menu.map(p => <div key={p.id} style={{display:'flex', justifyContent:'space-between', padding:'8px', borderBottom:'1px solid #f0f0f0'}}><span>{p.nom}</span><button onClick={()=>supprimerProduit(p.id)} style={{color:'red', border:'none', background:'transparent'}}>Supprimer</button></div>)}
+            {menu.map(p => (
+              <div key={p.id} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px', borderBottom:'1px solid #f0f0f0'}}>
+                <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+                  <div style={{width:'40px', height:'40px', background:'#eee', borderRadius:'5px', overflow:'hidden', position:'relative'}}>
+                    {p.image && <img src={p.image} style={{width:'100%', height:'100%', objectFit:'cover'}} />}
+                    <input type="file" onChange={(e)=>updateProductImage(p.id, e.target.files[0])} style={{position:'absolute', top:0, left:0, width:'100%', height:'100%', opacity:0, cursor:'pointer'}} title="Changer la photo" />
+                  </div>
+                  <div>
+                    <div style={{fontWeight:'bold'}}>{p.nom}</div>
+                    <div style={{fontSize:'0.8rem', color: COLORS.textLight}}>{p.categorie} - {p.prix || 'Variantes'} DH</div>
+                  </div>
+                </div>
+                <button onClick={()=>supprimerProduit(p.id)} style={{color:'red', border:'none', background:'transparent', cursor:'pointer'}}>Supprimer</button>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -228,15 +327,13 @@ function App() {
       {view === 'client' && (
         <div style={{ padding: '20px' }}>
           
-          {/* CATEGORIES FILTRES (FONCTIONNELS MAINTENANT) */}
           <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '20px', scrollbarWidth: 'none', display:'flex', gap:'10px' }}>
             {['Tout', 'Burgers', 'Pizzas', 'Tacos'].map(c => (
               <button 
                 key={c} 
                 onClick={() => setCategorieActive(c)}
                 style={{
-                  border: 'none',
-                  display:'inline-block', padding:'10px 20px', borderRadius:'25px', 
+                  border: 'none', display:'inline-block', padding:'10px 20px', borderRadius:'25px', 
                   background: categorieActive === c ? COLORS.secondary : 'white', 
                   color: categorieActive === c ? 'white' : COLORS.secondary,
                   fontWeight:'600', fontSize:'0.9rem', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', 
@@ -248,21 +345,16 @@ function App() {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-            {/* On affiche menuFiltre au lieu de menu complet */}
             {menuFiltre.map((plat) => (
               <div 
                 key={plat.id} 
-                // TOUTE LA CARTE EST CLIQUABLE MAINTENANT
                 onClick={() => {
                   if(plat.variantes?.length > 0) { ajouterAuPanier(plat, plat.variantes[0]); } 
                   else { ajouterAuPanier(plat); }
                 }}
                 style={{ ...cardStyle, padding: 0, overflow: 'hidden', display:'flex', flexDirection:'column', cursor: 'pointer', position: 'relative' }}
               >
-                {/* Image */}
-                <div style={{ height: '140px', background: '#eee', backgroundImage: `url(${plat.image || 'https://via.placeholder.com/300'})`, backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
-                
-                {/* Contenu */}
+                <div style={{ height: '140px', background: '#eee', backgroundImage: `url(${plat.image || 'https://via.placeholder.com/300?text=Foodji'})`, backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
                 <div style={{ padding: '12px', flex: 1, display:'flex', flexDirection:'column', justifyContent:'space-between' }}>
                   <div>
                     <h4 style={{ margin: '0 0 5px 0', fontSize: '1rem', fontWeight:'700', color: COLORS.secondary }}>{plat.nom}</h4>
@@ -279,13 +371,11 @@ function App() {
             ))}
           </div>
           
-          {/* Message vide si rien dans la catégorie */}
           {menuFiltre.length === 0 && (
             <div style={{textAlign:'center', marginTop:'50px', color: COLORS.textLight}}>
-              Aucun plat dans cette catégorie pour le moment.
+              Aucun plat dans cette catégorie.
             </div>
           )}
-
         </div>
       )}
 
@@ -293,7 +383,6 @@ function App() {
       {view === 'panier' && (
         <div style={{ padding: '20px', background: 'white', minHeight: '100vh' }}>
           <h2 style={{color: COLORS.secondary}}>🛒 Votre Panier</h2>
-          
           {panier.length === 0 ? <p>Panier vide.</p> : (
             <>
               <div style={{marginBottom:'30px'}}>
@@ -308,7 +397,6 @@ function App() {
                 ))}
                 <div style={{textAlign:'right', fontSize:'1.5rem', fontWeight:'800', marginTop:'20px', color: COLORS.secondary}}>Total : {total} DH</div>
               </div>
-              
               <div style={{background: COLORS.bg, padding: '20px', borderRadius: '16px'}}>
                 <h3 style={{marginTop:0, fontSize:'1.1rem', marginBottom:'15px'}}>Finaliser</h3>
                 <div style={{display:'flex', gap:'10px', marginBottom:'15px'}}>
@@ -345,7 +433,6 @@ function App() {
           <span style={{fontWeight:'800', fontSize:'1.1rem'}}>{total} DH</span>
         </div>
       )}
-
     </div>
   );
 }
