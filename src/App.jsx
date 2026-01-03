@@ -11,7 +11,7 @@ const LISTE_SAUCES = ["Algérienne Fait Maison", "Biggy Fait Maison", "Barbecue 
 
 const NOTIF_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
 
-// --- IMAGES (Dossier Public) ---
+// --- IMAGES ---
 const logoImg = "/logo.png";
 const iconImg = "/icon.png";
 
@@ -76,9 +76,9 @@ function App() {
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       list.sort((a, b) => b.date.seconds - a.date.seconds);
       
-      // SON ADMIN STRICTEMENT (Si user connecté)
+      // SON ADMIN (Si connecté)
       if (list.length > prevCommandesLength.current && user) {
-          audioRef.current.play().catch(e => console.log("Clic requis pour son"));
+          audioRef.current.play().catch(e => console.log("Clic requis"));
       }
       prevCommandesLength.current = list.length;
       setCommandes(list);
@@ -105,7 +105,6 @@ function App() {
 
   const ajouterAuPanier = (itemFinal) => {
     if (navigator.vibrate) navigator.vibrate(50);
-    // FORCE LE PRIX EN NOMBRE
     const itemSafe = {
         ...itemFinal,
         prixFinal: Number(itemFinal.prixFinal) || 0, 
@@ -122,13 +121,22 @@ function App() {
   const envoyerCommande = async () => {
     if (panier.length === 0) return alert("Panier vide !");
     if (!clientNom.trim()) return alert("Nom obligatoire.");
-    if (!clientTel.trim()) return alert("Tél obligatoire.");
+    
+    // --- VALIDATION TÉLÉPHONE MAROCAIN (06 ou 07 + 8 chiffres) ---
+    const telClean = clientTel.replace(/\s/g, ''); // Enlève les espaces
+    const marocRegex = /^(06|07)\d{8}$/;
+    
+    if (!telClean) return alert("Téléphone obligatoire.");
+    if (!marocRegex.test(telClean)) {
+        return alert("❌ Numéro invalide !\nIl doit commencer par 06 ou 07 et contenir 10 chiffres.");
+    }
+
     if (typeCommande === 'livraison' && !adresse.trim()) return alert("Adresse obligatoire.");
 
     setLoading(true);
     try {
       await addDoc(collection(db, "commandes"), {
-        client: clientNom, tel: clientTel, type: typeCommande, adresse, 
+        client: clientNom, tel: telClean, type: typeCommande, adresse, 
         commentaire: commentaire,
         items: panier, total: total, date: new Date(), status: 'En attente'
       });
@@ -147,10 +155,9 @@ function App() {
     t += cmd.type === 'livraison' ? `Livraison: ${cmd.adresse}` : `Mode: ${cmd.type === 'sur_place' ? 'Sur Place' : 'Emporter'}`;
     if(cmd.commentaire) t += `\nNOTE: ${cmd.commentaire}`;
     
-    // Ajout du détail de la commande pour faciliter la copie
     t += `\n-- Commande --\n`;
     cmd.items.forEach(it => {
-        t += `${it.categorie} - ${it.nom} (${it.varianteNom || 'Standard'}) : ${it.prixFinal}DH\n`;
+        t += `[${it.categorie}] ${it.nom} (${it.varianteNom || 'Standard'}) : ${it.prixFinal}DH\n`;
         if(it.sauces) t += `  Sauces: ${formatOptions(it.sauces)}\n`;
         if(it.optionsChoisies) t += `  Options: ${formatOptions(it.optionsChoisies)}\n`;
     });
@@ -356,8 +363,7 @@ function App() {
                 <ul style={{listStyle:'none', marginBottom:'15px'}}>
                   {cmd.items.map((it, i) => (
                     <li key={i} style={{padding:'8px 0', borderBottom:'1px dashed #eee', lineHeight:'1.4'}}>
-                      
-                      {/* AFFICHAGE CLAIR POUR ADMIN */}
+                      {/* AFFICHAGE CLAIR ADMIN (Catégorie, Nom, Taille, Prix) */}
                       <div style={{display:'flex', alignItems:'center', gap:'10px', marginBottom:'2px'}}>
                           <span style={{fontSize:'0.75rem', fontWeight:'bold', color: COLORS.primary, background:'#FEE2E2', padding:'2px 6px', borderRadius:'4px'}}>
                               [{it.categorie.toUpperCase()}]
@@ -367,12 +373,11 @@ function App() {
 
                       <div style={{display:'flex', justifyContent:'space-between', color: COLORS.secondary}}>
                           <span>
-                              {it.varianteNom && <strong style={{color: COLORS.secondary}}>({it.varianteNom})</strong>}
+                              {it.varianteNom && <strong style={{color: COLORS.secondary, fontSize:'0.95rem'}}>({it.varianteNom})</strong>}
                           </span>
                           <strong style={{color: COLORS.textLight}}>{it.prixFinal} DH</strong>
                       </div>
 
-                      {/* OPTIONS */}
                       {it.sauces && it.sauces.length > 0 && <div style={{fontSize:'0.85rem', color:'#555', marginLeft:'10px', marginTop:'2px'}}>Sauces: {formatOptions(it.sauces)}</div>}
                       {it.optionsChoisies && it.optionsChoisies.length > 0 && <div style={{fontSize:'0.85rem', color:'#555', marginLeft:'10px', marginTop:'2px'}}>+ {formatOptions(it.optionsChoisies)}</div>}
                     </li>
@@ -479,10 +484,16 @@ function App() {
                 {panier.map(item => (
                   <div key={item.uniqueId} style={{display:'flex', justifyContent:'space-between', padding:'15px 0', borderBottom:'1px solid #f0f0f0'}}>
                     <div>
-                        <div style={{fontWeight:'600'}}>{item.nom}</div>
+                        {/* RECAP CLIENT CLAIR (Categorie et Taille) */}
+                        <div style={{fontSize:'0.75rem', fontWeight:'bold', color: COLORS.primary, marginBottom:'2px'}}>
+                            {item.categorie.toUpperCase()}
+                        </div>
+                        <div style={{fontWeight:'600'}}>
+                            {item.nom} 
+                            {item.varianteNom && <span style={{color: COLORS.textLight}}> ({item.varianteNom})</span>}
+                        </div>
                         <div style={{color: COLORS.textLight, fontSize:'0.9rem'}}>
-                            {item.varianteNom}
-                            {item.sauces && item.sauces.length > 0 && <div>+ {formatOptions(item.sauces)}</div>}
+                            {item.sauces && item.sauces.length > 0 && <div>Sauces: {formatOptions(item.sauces)}</div>}
                             {item.optionsChoisies && item.optionsChoisies.length > 0 && <div>+ {formatOptions(item.optionsChoisies)}</div>}
                         </div>
                     </div>
@@ -506,7 +517,7 @@ function App() {
                   ))}
                 </div>
                 <input type="text" value={clientNom} onChange={e => setClientNom(e.target.value)} style={{...inputStyle, border: !clientNom ? '1px solid red' : '1px solid #ddd'}} placeholder="Nom *" required />
-                <input type="tel" value={clientTel} onChange={e => setClientTel(e.target.value)} style={{...inputStyle, border: !clientTel ? '1px solid red' : '1px solid #ddd'}} placeholder="Tél *" required />
+                <input type="tel" value={clientTel} onChange={e => setClientTel(e.target.value)} style={{...inputStyle, border: !clientTel ? '1px solid red' : '1px solid #ddd'}} placeholder="Tél (06/07...) *" required />
                 {typeCommande === 'livraison' && <textarea value={adresse} onChange={e => setAdresse(e.target.value)} style={{...inputStyle, height:'80px'}} placeholder="Adresse..." />}
                 
                 <textarea 
