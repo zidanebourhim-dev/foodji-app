@@ -42,7 +42,6 @@ function App() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   
-  // États manuels
   const [nom, setNom] = useState('');
   const [description, setDescription] = useState('');
   const [image, setImage] = useState('');
@@ -70,7 +69,7 @@ function App() {
     return () => { unsubscribeAuth(); unsubscribeMenu(); unsubscribeCmd(); };
   }, []);
 
-  // --- LOGIQUE CLIENT ---
+  // --- CLIENT ---
   const categoriesUniques = ['Tout', ...new Set(menu.map(p => p.categorie))];
 
   const menuClient = menu.filter(p => {
@@ -107,7 +106,7 @@ function App() {
     setLoading(false);
   };
 
-  // --- ADMIN UTILS ---
+  // --- ADMIN ---
   const toggleAvailability = async (item) => {
     await updateDoc(doc(db, "produits", item.id), { available: (item.available === false ? true : false) });
   };
@@ -120,19 +119,6 @@ function App() {
   const changerStatus = async (id, st) => await updateDoc(doc(db, "commandes", id), { status: st });
   const supprimerCmd = async (id) => { if(confirm("Supprimer ?")) await deleteDoc(doc(db, "commandes", id)); };
   
-  const handleImage = (e) => {
-      const file = e.target.files[0]; if(!file) return;
-      const reader = new FileReader(); reader.readAsDataURL(file);
-      reader.onload = (evt) => {
-        const img = document.createElement("img"); img.src = evt.target.result;
-        img.onload = () => {
-            const c = document.createElement("canvas"); const ctx = c.getContext("2d");
-            const s = 800/img.width; c.width=800; c.height=img.height*s;
-            ctx.drawImage(img,0,0,c.width,c.height); setImage(c.toDataURL("image/jpeg", 0.7));
-        }
-      };
-  };
-
   const updateProductImage = async (id, file) => {
     if(!file) return;
     const reader = new FileReader(); reader.readAsDataURL(file);
@@ -195,7 +181,7 @@ function App() {
              const descTokens = tokens.slice(2, len - 3);
              const desc = descTokens.join(', ').replace(/"/g, '').trim();
 
-             const cleanPrice = (val) => val ? Number(val.toString().replace(/[^0-9]/g, '')) : 0;
+             const cleanPrice = (val) => val ? Number(val.toString().replace(/[^0-9.]/g, '')) : 0;
              const p1 = cleanPrice(p1Raw);
              const p2 = cleanPrice(p2Raw);
              const p3 = cleanPrice(p3Raw);
@@ -320,8 +306,9 @@ function App() {
                     <li key={i} style={{padding:'6px 0', borderBottom:'1px dashed #eee', lineHeight:'1.4'}}>
                       <strong>{it.nom}</strong> 
                       {it.varianteNom && <span style={{color: COLORS.textLight}}> ({it.varianteNom})</span>}
-                      {it.sauces && it.sauces.length > 0 && <div style={{fontSize:'0.85rem', color:'#555', marginLeft:'10px'}}>Sauces: {it.sauces.join(', ')}</div>}
-                      {it.optionsChoisies && it.optionsChoisies.length > 0 && <div style={{fontSize:'0.85rem', color:'#555', marginLeft:'10px'}}>+ {it.optionsChoisies.join(', ')}</div>}
+                      {/* Affichage intelligent des quantités */}
+                      {it.sauces && it.sauces.length > 0 && <div style={{fontSize:'0.85rem', color:'#555', marginLeft:'10px'}}>Sauces: {formatOptions(it.sauces)}</div>}
+                      {it.optionsChoisies && it.optionsChoisies.length > 0 && <div style={{fontSize:'0.85rem', color:'#555', marginLeft:'10px'}}>+ {formatOptions(it.optionsChoisies)}</div>}
                     </li>
                   ))}
                 </ul>
@@ -429,8 +416,8 @@ function App() {
                         <div style={{fontWeight:'600'}}>{item.nom}</div>
                         <div style={{color: COLORS.textLight, fontSize:'0.9rem'}}>
                             {item.varianteNom}
-                            {item.sauces && item.sauces.length > 0 && <div>+ {item.sauces.join(', ')}</div>}
-                            {item.optionsChoisies && item.optionsChoisies.length > 0 && <div>+ {item.optionsChoisies.join(', ')}</div>}
+                            {item.sauces && item.sauces.length > 0 && <div>+ {formatOptions(item.sauces)}</div>}
+                            {item.optionsChoisies && item.optionsChoisies.length > 0 && <div>+ {formatOptions(item.optionsChoisies)}</div>}
                         </div>
                     </div>
                     <div style={{display:'flex', gap:'15px', alignItems:'center'}}>
@@ -456,7 +443,6 @@ function App() {
                 <input type="tel" value={clientTel} onChange={e => setClientTel(e.target.value)} style={inputStyle} placeholder="Tél" />
                 {typeCommande === 'livraison' && <textarea value={adresse} onChange={e => setAdresse(e.target.value)} style={{...inputStyle, height:'80px'}} placeholder="Adresse..." />}
                 
-                {/* COMMENTAIRE */}
                 <textarea 
                     value={commentaire} 
                     onChange={e => setCommentaire(e.target.value)} 
@@ -491,6 +477,14 @@ function App() {
   );
 }
 
+// Fonction utilitaire pour grouper les options identiques (ex: "Poulet, Poulet" -> "Poulet x2")
+function formatOptions(list) {
+    if(!list) return "";
+    const counts = {};
+    list.forEach(x => { counts[x] = (counts[x] || 0) + 1; });
+    return Object.entries(counts).map(([name, count]) => count > 1 ? `${name} x${count}` : name).join(', ');
+}
+
 // --- MODAL PRODUIT ---
 function ProductModal({ product, onClose, onAdd }) {
   const [selectedVar, setSelectedVar] = useState(product.variantes && product.variantes.length > 0 ? product.variantes[0] : null);
@@ -498,7 +492,7 @@ function ProductModal({ product, onClose, onAdd }) {
   const [sauces, setSauces] = useState([]); 
 
   let maxChoix = 0;
-  let minChoix = 0; // NOUVEAU
+  let minChoix = 0;
   let listeOptions = [];
   let titreOptions = "";
   
@@ -524,17 +518,25 @@ function ProductModal({ product, onClose, onAdd }) {
       if (nomLower.includes('4 saisons')) { maxChoix = 4; minChoix = 4; listeOptions = LISTE_GARNITURES_PIZZA; titreOptions = "4 Garnitures"; }
   }
 
-  const toggleOption = (opt) => {
-    if (optionsChoisies.includes(opt)) setOptionsChoisies(optionsChoisies.filter(o => o !== opt));
-    else if (optionsChoisies.length < maxChoix) setOptionsChoisies([...optionsChoisies, opt]);
-    else alert(`Maximum ${maxChoix} choix !`);
+  // Fonctions de compteur (Ajouter/Enlever une option)
+  const incrementOption = (opt, currentList, setList, max) => {
+      if (currentList.length < max) {
+          setList([...currentList, opt]);
+      } else {
+          // Petit effet de secousse ou alerte (ici juste rien)
+      }
   };
 
-  const toggleSauce = (s) => {
-      if (sauces.includes(s)) setSauces(sauces.filter(x => x !== s));
-      else if (sauces.length < 2) setSauces([...sauces, s]); 
-      else alert("Max 2 sauces");
+  const decrementOption = (opt, currentList, setList) => {
+      const index = currentList.indexOf(opt);
+      if (index > -1) {
+          const newList = [...currentList];
+          newList.splice(index, 1);
+          setList(newList);
+      }
   };
+
+  const getCount = (opt, list) => list.filter(x => x === opt).length;
 
   const currentPrice = selectedVar ? selectedVar.prix : product.prix;
 
@@ -570,41 +572,47 @@ function ProductModal({ product, onClose, onAdd }) {
         {/* Choix Sauces (TOUS LES TACOS) */}
         {isTacos && (
             <div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}>
-                <div style={{fontWeight:'bold', marginBottom:'5px'}}>Sauces Maison (Max 2)</div>
-                <div style={{display:'flex', flexWrap:'wrap', gap:'8px'}}>
-                    {LISTE_SAUCES.map(s => (
-                        <button key={s} onClick={() => toggleSauce(s)}
-                            style={{
-                                padding:'8px 12px', borderRadius:'20px', border:'1px solid #ddd', fontSize:'0.9rem',
-                                background: sauces.includes(s) ? COLORS.secondary : 'white',
-                                color: sauces.includes(s) ? 'white' : 'black'
-                            }}>
-                            {s}
-                        </button>
-                    ))}
+                <div style={{fontWeight:'bold', marginBottom:'10px'}}>Sauces Maison <small style={{color:COLORS.textLight}}>(Max 2)</small></div>
+                <div style={{display:'flex', flexDirection:'column', gap:'10px'}}>
+                    {LISTE_SAUCES.map(s => {
+                        const count = getCount(s, sauces);
+                        return (
+                            <div key={s} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'1px dashed #eee'}}>
+                                <span>{s}</span>
+                                <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+                                    {count > 0 && <button onClick={() => decrementOption(s, sauces, setSauces)} style={{width:'30px', height:'30px', borderRadius:'50%', border:'1px solid #ddd', background:'white', fontWeight:'bold'}}>-</button>}
+                                    {count > 0 && <span style={{fontWeight:'bold'}}>{count}</span>}
+                                    <button onClick={() => incrementOption(s, sauces, setSauces, 2)} style={{width:'30px', height:'30px', borderRadius:'50%', border:'none', background:COLORS.secondary, color:'white', fontWeight:'bold'}}>+</button>
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
         )}
 
-        {/* Choix Options (Viandes / Garnitures) */}
+        {/* Choix Options (Viandes / Garnitures) avec Compteurs */}
         {maxChoix > 0 && (
             <div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}>
-                <div style={{fontWeight:'bold', marginBottom:'5px'}}>
-                    {titreOptions} <small style={{color: optionsChoisies.length < minChoix ? 'red' : COLORS.success}}>
+                <div style={{fontWeight:'bold', marginBottom:'10px'}}>
+                    {titreOptions} <small style={{color: optionsChoisies.length < minChoix ? COLORS.danger : COLORS.success}}>
                         ({optionsChoisies.length}/{maxChoix}) {minChoix > 0 ? `- Min ${minChoix}` : ''}
                     </small>
                 </div>
-                <div style={{display:'flex', flexWrap:'wrap', gap:'8px'}}>
-                    {listeOptions.map(opt => (
-                        <button key={opt} onClick={() => toggleOption(opt)}
-                            style={{
-                                padding:'8px 12px', borderRadius:'20px', border:'1px solid #ddd', fontSize:'0.9rem',
-                                background: optionsChoisies.includes(opt) ? COLORS.secondary : 'white',
-                                color: optionsChoisies.includes(opt) ? 'white' : 'black'
-                            }}>
-                            {opt}
-                        </button>
-                    ))}
+                <div style={{display:'flex', flexDirection:'column', gap:'10px'}}>
+                    {listeOptions.map(opt => {
+                        const count = getCount(opt, optionsChoisies);
+                        return (
+                            <div key={opt} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'1px dashed #eee'}}>
+                                <span>{opt}</span>
+                                <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+                                    {count > 0 && <button onClick={() => decrementOption(opt, optionsChoisies, setOptionsChoisies)} style={{width:'30px', height:'30px', borderRadius:'50%', border:'1px solid #ddd', background:'white', fontWeight:'bold'}}>-</button>}
+                                    {count > 0 && <span style={{fontWeight:'bold'}}>{count}</span>}
+                                    <button onClick={() => incrementOption(opt, optionsChoisies, setOptionsChoisies, maxChoix)} style={{width:'30px', height:'30px', borderRadius:'50%', border:'none', background:COLORS.primary, color:'white', fontWeight:'bold'}}>+</button>
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
         )}
