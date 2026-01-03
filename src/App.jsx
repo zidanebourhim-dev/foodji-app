@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { db, auth } from './firebase';
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
 import { collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, query, writeBatch } from 'firebase/firestore';
@@ -8,6 +8,9 @@ import './App.css';
 const LISTE_VIANDES = ["Poulet", "Viande Hachée", "Cordon Bleu", "Nuggets", "Poulet Crispy"];
 const LISTE_GARNITURES_PIZZA = ["Viande Hachée", "Poulet", "4 Fromages", "Cannibale", "Pepperoni", "Thon", "Charcuterie", "Végétarienne", "Fruits de Mer"];
 const LISTE_SAUCES = ["Algérienne Fait Maison", "Biggy Fait Maison", "Barbecue Fait Maison"];
+
+// SON NOTIFICATION
+const NOTIF_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
 
 // --- THEME ---
 const COLORS = {
@@ -23,10 +26,14 @@ const COLORS = {
 
 function App() {
   const [user, setUser] = useState(null);
-  const [view, setView] = useState('client'); 
+  const [view, setView] = useState('landing'); 
   const [menu, setMenu] = useState([]);
   const [commandes, setCommandes] = useState([]);
   
+  // Son
+  const prevCommandesLength = useRef(0);
+  const audioRef = useRef(new Audio(NOTIF_SOUND));
+
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [categorieActive, setCategorieActive] = useState('Tout'); 
   const [adminCategorie, setAdminCategorie] = useState('Tout');
@@ -42,6 +49,7 @@ function App() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   
+  // Admin manuel
   const [nom, setNom] = useState('');
   const [description, setDescription] = useState('');
   const [image, setImage] = useState('');
@@ -57,19 +65,28 @@ function App() {
       setUser(u);
       if (u) setView('admin');
     });
+    
     const unsubscribeMenu = onSnapshot(collection(db, "produits"), (snap) => {
       setMenu(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
+
     const q = query(collection(db, "commandes"));
     const unsubscribeCmd = onSnapshot(q, (snap) => {
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       list.sort((a, b) => b.date.seconds - a.date.seconds);
+      
+      // SON ADMIN
+      if (list.length > prevCommandesLength.current && user) {
+          audioRef.current.play().catch(e => console.log("Clic requis"));
+      }
+      prevCommandesLength.current = list.length;
       setCommandes(list);
     });
-    return () => { unsubscribeAuth(); unsubscribeMenu(); unsubscribeCmd(); };
-  }, []);
 
-  // --- CLIENT ---
+    return () => { unsubscribeAuth(); unsubscribeMenu(); unsubscribeCmd(); };
+  }, [user]);
+
+  // --- LOGIQUE CLIENT ---
   const categoriesUniques = ['Tout', ...new Set(menu.map(p => p.categorie))];
 
   const menuClient = menu.filter(p => {
@@ -106,7 +123,7 @@ function App() {
     setLoading(false);
   };
 
-  // --- ADMIN ---
+  // --- ADMIN UTILS ---
   const toggleAvailability = async (item) => {
     await updateDoc(doc(db, "produits", item.id), { available: (item.available === false ? true : false) });
   };
@@ -172,19 +189,16 @@ function App() {
           if (tokens.length >= 5) {
              const cat = tokens[0].trim();
              const name = tokens[1].trim();
-
              const len = tokens.length;
              const p3Raw = tokens[len - 1];
              const p2Raw = tokens[len - 2];
              const p1Raw = tokens[len - 3];
-
              const descTokens = tokens.slice(2, len - 3);
              const desc = descTokens.join(', ').replace(/"/g, '').trim();
-
              const cleanPrice = (val) => val ? Number(val.toString().replace(/[^0-9.]/g, '')) : 0;
-             const p1 = cleanPrice(p1Raw);
-             const p2 = cleanPrice(p2Raw);
-             const p3 = cleanPrice(p3Raw);
+             const p1 = cleanPrice(p1Raw.replace(',','.'));
+             const p2 = cleanPrice(p2Raw.replace(',','.'));
+             const p3 = cleanPrice(p3Raw.replace(',','.'));
 
              let variantsList = [];
              let finalPrice = p1;
@@ -193,17 +207,13 @@ function App() {
                 finalPrice = 0; 
                 const catLower = cat.toLowerCase();
                 let n1 = "Standard", n2 = "Moyen", n3 = "Grand";
-                
                 if (catLower.includes('tacos')) { n1 = "L"; n2 = "XL"; n3 = "XXL"; }
                 else if (catLower.includes('pizza')) { n1 = "M"; n2 = "L"; n3 = "XL"; } 
-
                 if(p1 > 0) variantsList.push({ nom: n1, prix: p1 });
                 if(p2 > 0) variantsList.push({ nom: n2, prix: p2 });
                 if(p3 > 0) variantsList.push({ nom: n3, prix: p3 });
              }
-             if (variantsList.length === 0 && p1 > 0) {
-                 finalPrice = p1;
-             }
+             if (variantsList.length === 0 && p1 > 0) finalPrice = p1;
 
              if(name && cat) {
                await addDoc(collection(db, "produits"), {
@@ -214,8 +224,7 @@ function App() {
              }
           }
         }
-        setLoading(false); 
-        alert(`${count} produits importés !`);
+        setLoading(false); alert(`${count} produits importés !`);
       }
     };
     reader.readAsText(file);
@@ -229,20 +238,52 @@ function App() {
   return (
     <div style={{ background: COLORS.bg, minHeight: '100vh', paddingBottom: '100px', color: COLORS.secondary }}>
       
-      {/* HEADER */}
-      <div style={{ background: COLORS.card, padding: '15px 20px', position: 'sticky', top: 0, zIndex: 50, display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-        <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
-          <div style={{width:'30px', height:'30px', background: COLORS.primary, borderRadius: '8px 0 8px 0'}}></div>
-          <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '800', letterSpacing: '-0.5px', color: COLORS.secondary }}>Foodji</h1>
-        </div>
-        {user ? (
-          <button onClick={() => setView(view === 'admin' ? 'client' : 'admin')} style={{background: COLORS.secondary, color: 'white', border: 'none', padding: '8px 15px', borderRadius: '20px', fontSize:'0.8rem', fontWeight:'600'}}>
-            {view === 'admin' ? 'Voir App' : 'Admin'}
+      {/* --- LANDING PAGE --- */}
+      {view === 'landing' && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', 
+          background: '#1A1E29', color: 'white', zIndex: 2000, 
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '20px'
+        }}>
+          {/* LOGO PNG ICI */}
+          <img src="/logo.PNG" alt="Foodji Logo" style={{width: '180px', height: '180px', objectFit: 'contain', marginBottom: '20px', borderRadius: '20px'}} 
+               onError={(e) => {e.target.style.display='none';}} /> 
+          
+          <h1 style={{fontSize: '3rem', margin: 0, color: '#A84438'}}>Foodji</h1>
+          <p style={{fontSize: '1.2rem', color: '#9CA3AF', margin: '10px 0 40px 0'}}>Le goût authentique, en un clic.</p>
+          
+          <button onClick={() => setView('client')} style={{
+            background: COLORS.primary, color: 'white', border: 'none', padding: '18px 40px', 
+            borderRadius: '50px', fontSize: '1.2rem', fontWeight: 'bold', boxShadow: '0 0 20px rgba(168, 68, 56, 0.5)', cursor:'pointer'
+          }}>
+            COMMANDER
           </button>
-        ) : (
-          view === 'client' && <button onClick={() => setView('login')} style={{background:'transparent', border:'none', fontSize:'1.2rem'}}>🔒</button>
-        )}
-      </div>
+
+          <button onClick={() => setView('login')} style={{
+            background: 'transparent', border: '1px solid #374151', color: '#6B7280', 
+            padding: '10px 20px', borderRadius: '30px', marginTop: '50px', fontSize: '0.8rem'
+          }}>
+            Accès Staff
+          </button>
+        </div>
+      )}
+
+      {/* HEADER */}
+      {view !== 'landing' && (
+        <div style={{ background: COLORS.card, padding: '15px 20px', position: 'sticky', top: 0, zIndex: 50, display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+          <div style={{display:'flex', alignItems:'center', gap:'10px'}} onClick={() => setView('landing')}>
+            <img src="/logo.PNG" style={{height:'30px', borderRadius:'5px'}} onError={(e)=>e.target.style.display='none'}/>
+            <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '800', letterSpacing: '-0.5px', color: COLORS.secondary }}>Foodji</h1>
+          </div>
+          {user ? (
+            <button onClick={() => setView(view === 'admin' ? 'client' : 'admin')} style={{background: COLORS.secondary, color: 'white', border: 'none', padding: '8px 15px', borderRadius: '20px', fontSize:'0.8rem', fontWeight:'600'}}>
+              {view === 'admin' ? 'Voir App' : 'Admin'}
+            </button>
+          ) : (
+            view === 'client' && <button onClick={() => setView('login')} style={{background:'transparent', border:'none', fontSize:'1.2rem'}}>🔒</button>
+          )}
+        </div>
+      )}
 
       {/* --- MODAL --- */}
       {selectedProduct && (
@@ -260,25 +301,28 @@ function App() {
           <input type="email" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} style={inputStyle}/>
           <input type="password" placeholder="Mot de passe" value={password} onChange={e=>setPassword(e.target.value)} style={inputStyle}/>
           <button onClick={async (e)=>{e.preventDefault(); try{await signInWithEmailAndPassword(auth,email,password)}catch(e){alert('Erreur')}}} style={btnStyle}>Connexion</button>
-          <button onClick={() => setView('client')} style={{marginTop:'20px', background:'transparent', border:'none', color: COLORS.textLight}}>Retour</button>
+          <button onClick={() => setView('landing')} style={{marginTop:'20px', background:'transparent', border:'none', color: COLORS.textLight}}>Retour</button>
         </div>
       )}
 
-      {/* --- ADMIN --- */}
+      {/* --- ADMIN DASHBOARD --- */}
       {view === 'admin' && user && (
         <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
           
-          <div style={{marginBottom:'20px', display:'flex', gap:'10px', alignItems:'center'}}>
-              <h2 style={{margin:0}}>⚙️ Admin</h2>
+          <div style={{marginBottom:'20px', display:'flex', gap:'10px', alignItems:'center', justifyContent:'space-between'}}>
+              <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+                <h2 style={{margin:0}}>⚙️ Admin</h2>
+                <div style={{fontSize:'0.8rem', color: COLORS.success, background:'#ECFDF5', padding:'5px 10px', borderRadius:'10px'}}>🔊 Son Actif</div>
+              </div>
               <button onClick={viderMenu} style={{background: COLORS.danger, color:'white', border:'none', padding:'8px 15px', borderRadius:'8px', cursor:'pointer', fontWeight:'bold'}}>
-                  🗑️ Reset Menu
+                  🗑️ Reset
               </button>
           </div>
 
           <details style={{marginBottom:'20px', background:'#E0E7FF', padding:'15px', borderRadius:'10px'}}>
              <summary style={{cursor:'pointer', fontWeight:'bold', color:'#3730A3'}}>📥 Importer CSV</summary>
              <div style={{marginTop:'10px'}}>
-               <p style={{fontSize:'0.9rem'}}>Le fichier doit avoir : Cat, Nom, Desc, P1, P2, P3.</p>
+               <p style={{fontSize:'0.9rem'}}>Format: Cat, Nom, Desc, P1, P2, P3</p>
                <input type="file" accept=".csv" onChange={handleCSVImport} />
                {loading && <p>Importation...</p>}
              </div>
@@ -306,7 +350,6 @@ function App() {
                     <li key={i} style={{padding:'6px 0', borderBottom:'1px dashed #eee', lineHeight:'1.4'}}>
                       <strong>{it.nom}</strong> 
                       {it.varianteNom && <span style={{color: COLORS.textLight}}> ({it.varianteNom})</span>}
-                      {/* Affichage intelligent des quantités */}
                       {it.sauces && it.sauces.length > 0 && <div style={{fontSize:'0.85rem', color:'#555', marginLeft:'10px'}}>Sauces: {formatOptions(it.sauces)}</div>}
                       {it.optionsChoisies && it.optionsChoisies.length > 0 && <div style={{fontSize:'0.85rem', color:'#555', marginLeft:'10px'}}>+ {formatOptions(it.optionsChoisies)}</div>}
                     </li>
@@ -477,7 +520,7 @@ function App() {
   );
 }
 
-// Fonction utilitaire pour grouper les options identiques (ex: "Poulet, Poulet" -> "Poulet x2")
+// Fonction utilitaire
 function formatOptions(list) {
     if(!list) return "";
     const counts = {};
@@ -501,29 +544,24 @@ function ProductModal({ product, onClose, onAdd }) {
   const isTacos = catLower.includes('tacos');
   const isMixte = isTacos && nomLower.includes('mixte');
 
-  // --- LOGIQUE TACOS MIXTE ---
   if (isMixte) {
       listeOptions = LISTE_VIANDES;
       titreOptions = "Choisissez vos viandes";
-      minChoix = 2; // TOUJOURS MIN 2
+      minChoix = 2; 
       
       if (selectedVar?.nom === 'L' || selectedVar?.nom === 'Standard') maxChoix = 2;
       else if (selectedVar?.nom === 'XL') maxChoix = 3;
       else if (selectedVar?.nom === 'XXL') maxChoix = 4;
       else maxChoix = 2;
   }
-  // --- PIZZAS ---
   else if (catLower.includes('pizza')) {
       if (nomLower.includes('2 saisons')) { maxChoix = 2; minChoix = 2; listeOptions = LISTE_GARNITURES_PIZZA; titreOptions = "2 Garnitures"; }
       if (nomLower.includes('4 saisons')) { maxChoix = 4; minChoix = 4; listeOptions = LISTE_GARNITURES_PIZZA; titreOptions = "4 Garnitures"; }
   }
 
-  // Fonctions de compteur (Ajouter/Enlever une option)
   const incrementOption = (opt, currentList, setList, max) => {
       if (currentList.length < max) {
           setList([...currentList, opt]);
-      } else {
-          // Petit effet de secousse ou alerte (ici juste rien)
       }
   };
 
