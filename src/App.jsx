@@ -4,7 +4,7 @@ import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebas
 import { collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, query, writeBatch } from 'firebase/firestore';
 import './App.css';
 
-// --- OPTIONS (A modifier selon tes besoins réels) ---
+// --- CONFIGURATION OPTIONS ---
 const LISTE_VIANDES = ["Viande Hachée", "Poulet", "Dinde", "Nuggets", "Cordon Bleu", "Merguez"];
 const LISTE_GARNITURES_PIZZA = ["Champignons", "Poivrons", "Thon", "Viande Hachée", "Poulet", "Jambon", "Oignons", "Olives"];
 const LISTE_SAUCES = ["Algérienne", "Biggy", "Blanche", "Barbecue", "Samouraï", "Cheesy"];
@@ -21,7 +21,6 @@ const COLORS = {
 };
 
 function App() {
-  // --- ETATS ---
   const [user, setUser] = useState(null);
   const [view, setView] = useState('client'); 
   const [menu, setMenu] = useState([]);
@@ -40,6 +39,16 @@ function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  
+  // États manuels
+  const [nom, setNom] = useState('');
+  const [description, setDescription] = useState('');
+  const [image, setImage] = useState('');
+  const [categorie, setCategorie] = useState('Burgers');
+  const [prixBase, setPrixBase] = useState('');
+  const [variantes, setVariantes] = useState([]);
+  const [tempVarNom, setTempVarNom] = useState('');
+  const [tempVarPrix, setTempVarPrix] = useState('');
 
   // --- DATA ---
   useEffect(() => {
@@ -106,6 +115,19 @@ function App() {
   const changerStatus = async (id, st) => await updateDoc(doc(db, "commandes", id), { status: st });
   const supprimerCmd = async (id) => { if(confirm("Supprimer ?")) await deleteDoc(doc(db, "commandes", id)); };
   
+  const handleImage = (e) => {
+      const file = e.target.files[0]; if(!file) return;
+      const reader = new FileReader(); reader.readAsDataURL(file);
+      reader.onload = (evt) => {
+        const img = document.createElement("img"); img.src = evt.target.result;
+        img.onload = () => {
+            const c = document.createElement("canvas"); const ctx = c.getContext("2d");
+            const s = 800/img.width; c.width=800; c.height=img.height*s;
+            ctx.drawImage(img,0,0,c.width,c.height); setImage(c.toDataURL("image/jpeg", 0.7));
+        }
+      };
+  };
+
   const updateProductImage = async (id, file) => {
     if(!file) return;
     const reader = new FileReader(); reader.readAsDataURL(file);
@@ -121,80 +143,87 @@ function App() {
     };
   };
 
+  const saveProduit = async () => {
+    if(!nom) return; setLoading(true);
+    await addDoc(collection(db, "produits"), { nom, description, categorie, image, date: new Date(), prix: variantes.length>0?0:Number(prixBase), variantes, available: true });
+    setNom(''); setDescription(''); setImage(''); setPrixBase(''); setVariantes([]); setLoading(false); alert("Plat ajouté");
+  };
+
   const supprimerProduit = async (id) => { if(confirm("Supprimer ?")) await deleteDoc(doc(db, "produits", id)); };
   
-  // NOUVEAU : Supprimer tout le menu pour repartir à zéro
   const viderMenu = async () => {
-      if(confirm("ATTENTION: Cela va supprimer TOUS les plats du menu. Êtes-vous sûr ?")) {
+      if(confirm("ATTENTION: Cela va supprimer TOUT le menu. Sûr ?")) {
           setLoading(true);
           const batch = writeBatch(db);
-          menu.forEach(p => {
-              const ref = doc(db, "produits", p.id);
-              batch.delete(ref);
-          });
+          menu.forEach(p => { const ref = doc(db, "produits", p.id); batch.delete(ref); });
           await batch.commit();
-          setLoading(false);
-          alert("Menu vidé ! Vous pouvez réimporter le CSV.");
+          setLoading(false); alert("Menu vidé !");
       }
   };
 
-  // --- IMPORT CSV ROBUSTE ---
+  // --- IMPORT CSV SPECIAL (LOGIQUE SANDWICH) ---
   const handleCSVImport = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = async (evt) => {
       const text = evt.target.result;
-      const rows = text.split('\n').filter(line => line.trim() !== ''); // Enlève les lignes vides
+      const rows = text.split('\n').filter(r => r.trim() !== '');
       let count = 0;
 
-      if(confirm(`Importer ${rows.length} lignes ?`)) {
+      if(confirm(`Importer ${rows.length} lignes ?\n(Assurez-vous d'avoir vidé le menu avant)`)) {
         setLoading(true);
-        
-        // On essaie de détecter le séparateur (; ou ,)
-        const firstLine = rows[0];
-        const separator = firstLine.includes(';') ? ';' : ',';
+        // Sauter la ligne d'entête si besoin
+        const start = rows[0].toLowerCase().includes('catégorie') ? 1 : 0;
 
-        // Sauter la ligne d'entête si elle contient "Catégorie"
-        const startIndex = firstLine.toLowerCase().includes('catégorie') ? 1 : 0;
-
-        for (let i = startIndex; i < rows.length; i++) {
+        for (let i = start; i < rows.length; i++) {
           const row = rows[i];
-          // Utilisation d'un split basique (Attention aux ; dans les descriptions)
-          const cols = row.split(separator);
+          // On splitte par la virgule (format standard CSV)
+          const tokens = row.split(','); 
           
-          if (cols.length >= 4) {
-             const cat = cols[0]?.trim(); 
-             const name = cols[1]?.trim(); 
-             const desc = cols[2]?.trim().replace(/"/g, ''); // Enlève les guillemets éventuels
-             
-             // --- CORRECTION PRIX (Gestion de la virgule 35,00 -> 35.00) ---
-             const cleanPrice = (val) => {
-                 if (!val) return 0;
-                 // Remplace virgule par point, enlève tout sauf chiffres et point
-                 let s = val.toString().replace(',', '.').replace(/[^0-9.]/g, '');
-                 return parseFloat(s) || 0;
-             };
+          // Il faut au moins 5 colonnes (Cat, Nom, Desc, P1, P2...)
+          if (tokens.length >= 5) {
+             // 1. LE DÉBUT
+             const cat = tokens[0].trim();
+             const name = tokens[1].trim();
 
-             const p1 = cleanPrice(cols[3]);
-             const p2 = cleanPrice(cols[4]);
-             const p3 = cleanPrice(cols[5]);
+             // 2. LA FIN (Les 3 derniers sont FORCÉMENT les prix, ou vides)
+             // On part de la fin du tableau pour être sûr
+             const len = tokens.length;
+             const p3Raw = tokens[len - 1];
+             const p2Raw = tokens[len - 2];
+             const p1Raw = tokens[len - 3];
+
+             // 3. LE MILIEU (Tout ce qui reste est la Description)
+             // On recolle les morceaux de description qui ont été coupés par des virgules
+             const descTokens = tokens.slice(2, len - 3);
+             const desc = descTokens.join(', ').replace(/"/g, '').trim();
+
+             // Nettoyage Prix
+             const cleanPrice = (val) => val ? Number(val.toString().replace(/[^0-9]/g, '')) : 0;
+             const p1 = cleanPrice(p1Raw);
+             const p2 = cleanPrice(p2Raw);
+             const p3 = cleanPrice(p3Raw);
 
              let variantsList = [];
              let finalPrice = p1;
 
-             // Logique Variantes
+             // Logique Variantes Automatiques
              if (p2 > 0 || p3 > 0) {
-                finalPrice = 0; // Le prix affiché sera "dès X"
+                finalPrice = 0; // Si variantes, on affiche 0 (ou le min)
                 const catLower = cat.toLowerCase();
                 let n1 = "Standard", n2 = "Moyen", n3 = "Grand";
                 
                 if (catLower.includes('tacos')) { n1 = "L"; n2 = "XL"; n3 = "XXL"; }
-                else if (catLower.includes('pizza')) { n1 = "Junior"; n2 = "Senior"; n3 = "Mega"; }
+                else if (catLower.includes('pizza')) { n1 = "M"; n2 = "L"; n3 = "XL"; } // M, L pour Pizza
 
                 if(p1 > 0) variantsList.push({ nom: n1, prix: p1 });
                 if(p2 > 0) variantsList.push({ nom: n2, prix: p2 });
                 if(p3 > 0) variantsList.push({ nom: n3, prix: p3 });
+             }
+             // Si pas de variante, le prix est P1. Si P1 est 0, c'est une erreur du fichier ou un gratuit.
+             if (variantsList.length === 0 && p1 > 0) {
+                 finalPrice = p1;
              }
 
              if(name && cat) {
@@ -207,7 +236,7 @@ function App() {
           }
         }
         setLoading(false); 
-        alert(`${count} produits importés avec succès !`);
+        alert(`${count} produits importés ! Vérifiez les prix.`);
       }
     };
     reader.readAsText(file);
@@ -236,7 +265,7 @@ function App() {
         )}
       </div>
 
-      {/* --- MODAL PRODUIT DETAIL (POUR TACOS/PIZZA) --- */}
+      {/* --- MODAL PRODUIT DETAIL --- */}
       {selectedProduct && (
         <ProductModal 
           product={selectedProduct} 
@@ -268,16 +297,15 @@ function App() {
           </div>
 
           <details style={{marginBottom:'20px', background:'#E0E7FF', padding:'15px', borderRadius:'10px'}}>
-             <summary style={{cursor:'pointer', fontWeight:'bold', color:'#3730A3'}}>📥 Importer CSV (Nouveau Format)</summary>
+             <summary style={{cursor:'pointer', fontWeight:'bold', color:'#3730A3'}}>📥 Importer CSV</summary>
              <div style={{marginTop:'10px'}}>
-               <p style={{fontSize:'0.9rem'}}>Format: Catégorie;Nom;Desc;Prix1;Prix2;Prix3</p>
+               <p style={{fontSize:'0.9rem'}}>Le fichier doit avoir : Cat, Nom, Desc, P1, P2, P3.</p>
                <input type="file" accept=".csv" onChange={handleCSVImport} />
                {loading && <p>Importation...</p>}
              </div>
           </details>
 
-          {/* LISTE COMMANDES */}
-          <h3 style={{marginTop:'30px'}}>Commandes en cours ({commandes.filter(c => c.status !== 'Terminé').length})</h3>
+          <h3 style={{marginTop:'30px'}}>Commandes ({commandes.filter(c => c.status !== 'Terminé').length})</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '20px', marginBottom:'40px' }}>
             {commandes.map(cmd => (
               <div key={cmd.id} style={{ ...cardStyle, borderLeft: cmd.status === 'Terminé' ? '5px solid #ccc' : `5px solid ${COLORS.success}` }}>
@@ -285,7 +313,7 @@ function App() {
                   <div><strong style={{fontSize:'1.2rem', display:'block'}}>{cmd.client}</strong><div style={{color: COLORS.textLight, marginTop:'4px'}}>📞 {cmd.tel}</div></div>
                   <div style={{textAlign:'right'}}>
                     <div style={{fontSize:'1.3rem', fontWeight:'bold', color: COLORS.primary}}>{cmd.total} DH</div>
-                    <button onClick={() => copierOdoo(cmd)} style={{marginTop:'5px', background: COLORS.secondary, color:'white', border:'none', padding:'6px 12px', borderRadius:'6px', fontSize:'0.75rem', cursor:'pointer'}}>📋 COPIER ODOO</button>
+                    <button onClick={() => copierOdoo(cmd)} style={{marginTop:'5px', background: COLORS.secondary, color:'white', border:'none', padding:'6px 12px', borderRadius:'6px', fontSize:'0.75rem', cursor:'pointer'}}>📋 ODOO</button>
                   </div>
                 </div>
                 {cmd.type === 'livraison' && <div style={{background:'#FEF3C7', color:'#D97706', padding:'8px', borderRadius:'8px', fontSize:'0.9rem', marginBottom:'10px'}}>🛵 <strong>{cmd.adresse}</strong></div>}
@@ -308,9 +336,8 @@ function App() {
             ))}
           </div>
 
-          {/* GESTION STOCK */}
           <div style={{marginTop:'40px', borderTop:'2px solid #eee', paddingTop:'20px'}}>
-             <h3 style={{marginBottom:'15px'}}>📦 Gérer le Menu</h3>
+             <h3 style={{marginBottom:'15px'}}>📦 Menu</h3>
              <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '15px', display:'flex', gap:'10px' }}>
               {categoriesUniques.map(c => (
                 <button key={c} onClick={() => setAdminCategorie(c)} style={{padding:'8px 15px', borderRadius:'20px', border:'none', background: adminCategorie===c?COLORS.secondary:'#eee', color:adminCategorie===c?'white':'black', cursor:'pointer'}}>{c}</button>
@@ -329,13 +356,30 @@ function App() {
                   </div>
                   <div>
                     <div style={{fontWeight:'bold', textDecoration: p.available === false ? 'line-through' : 'none'}}>{p.nom}</div>
-                    <div style={{fontSize:'0.8rem', color: COLORS.textLight}}>{p.categorie} • {p.variantes?.length > 0 ? 'Multi-tailles' : p.prix + ' DH'}</div>
+                    <div style={{fontSize:'0.8rem', color: COLORS.textLight}}>
+                         {p.variantes && p.variantes.length > 0 
+                            ? p.variantes.map(v => `${v.nom}:${v.prix}`).join(' | ') 
+                            : `${p.prix} DH`}
+                    </div>
                   </div>
                 </div>
                 <button onClick={()=>supprimerProduit(p.id)} style={{color:'red', border:'none', background:'transparent', cursor:'pointer'}}>X</button>
               </div>
             ))}
           </div>
+          
+           {/* FORM MANUEL (Replié par défaut) */}
+           <details style={{marginTop:'30px', background:'white', padding:'15px', borderRadius:'10px'}}>
+             <summary>Ajout Manuel</summary>
+             <div style={{marginTop:'10px'}}>
+                 <input placeholder="Nom" value={nom} onChange={e=>setNom(e.target.value)} style={inputStyle} />
+                 <div style={{display:'flex', gap:'10px'}}>
+                   <select value={categorie} onChange={e=>setCategorie(e.target.value)} style={{...inputStyle, width:'50%'}}><option>Burgers</option><option>Pizzas</option><option>Tacos</option></select>
+                   <input type="number" placeholder="Prix" value={prixBase} onChange={e=>setPrixBase(e.target.value)} style={{...inputStyle, width:'50%'}} />
+                 </div>
+                 <button onClick={saveProduit} style={{...btnStyle, width:'auto'}}>Ajouter</button>
+             </div>
+           </details>
         </div>
       )}
 
@@ -367,7 +411,7 @@ function App() {
                   </div>
                   <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                      <span style={{ fontWeight: '700', fontSize: '1rem', color: COLORS.primary }}>
-                       {plat.variantes?.length > 0 ? `dès ${Math.min(...plat.variantes.map(v=>v.prix))} DH` : `${plat.prix} DH`}
+                       {plat.variantes?.length > 0 ? `${Math.min(...plat.variantes.map(v=>v.prix))} DH` : `${plat.prix} DH`}
                      </span>
                      <div style={{background: COLORS.secondary, color: 'white', width: '32px', height: '32px', borderRadius: '50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.2rem'}}>+</div>
                   </div>
@@ -375,7 +419,7 @@ function App() {
               </div>
             ))}
           </div>
-          {menuClient.length === 0 && <div style={{textAlign:'center', marginTop:'50px', color: COLORS.textLight}}>Aucun plat disponible.</div>}
+          {menuClient.length === 0 && <div style={{textAlign:'center', marginTop:'50px', color: COLORS.textLight}}>Aucun plat.</div>}
         </div>
       )}
 
@@ -443,12 +487,12 @@ function App() {
   );
 }
 
-// --- MODAL PRODUIT (POP-UP INTELLIGENT) ---
+// --- MODAL PRODUIT ---
 function ProductModal({ product, onClose, onAdd }) {
   const [selectedVar, setSelectedVar] = useState(product.variantes && product.variantes.length > 0 ? product.variantes[0] : null);
   const [optionsChoisies, setOptionsChoisies] = useState([]);
 
-  // LOGIQUE DE CHOIX DYNAMIQUE
+  // LOGIQUE COMPLEXE
   let maxChoix = 0;
   let listeOptions = [];
   let titreOptions = "";
@@ -458,11 +502,11 @@ function ProductModal({ product, onClose, onAdd }) {
   // Tacos
   if (catLower.includes('tacos') && (nomLower.includes('mixte') || selectedVar)) {
       listeOptions = LISTE_VIANDES;
-      titreOptions = "Choisissez vos viandes";
+      titreOptions = "Viandes";
       if (selectedVar?.nom === 'L') maxChoix = 2;
       else if (selectedVar?.nom === 'XL') maxChoix = 3;
       else if (selectedVar?.nom === 'XXL') maxChoix = 4;
-      else maxChoix = 1; 
+      else maxChoix = 1;
   }
   // Pizzas
   else if (catLower.includes('pizza')) {
@@ -473,8 +517,10 @@ function ProductModal({ product, onClose, onAdd }) {
   const toggleOption = (opt) => {
     if (optionsChoisies.includes(opt)) setOptionsChoisies(optionsChoisies.filter(o => o !== opt));
     else if (optionsChoisies.length < maxChoix) setOptionsChoisies([...optionsChoisies, opt]);
-    else alert(`Maximum ${maxChoix} choix !`);
+    else alert(`Max ${maxChoix}`);
   };
+
+  const currentPrice = selectedVar ? selectedVar.prix : product.prix;
 
   return (
     <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.5)', zIndex:1000, display:'flex', alignItems:'flex-end', justifyContent:'center'}}>
@@ -531,7 +577,7 @@ function ProductModal({ product, onClose, onAdd }) {
             background: COLORS.primary, color: 'white', border: 'none', borderRadius: '12px', 
             padding: '15px', fontWeight: 'bold', width: '100%', marginTop: '30px', fontSize: '1.1rem'
         }}>
-            Ajouter au panier - {selectedVar ? selectedVar.prix : product.prix} DH
+            Ajouter au panier - {currentPrice} DH
         </button>
       </div>
     </div>
