@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { db, auth } from './firebase';
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
 import { collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, query } from 'firebase/firestore';
@@ -14,11 +14,11 @@ function App() {
   // --- ETATS PANIER & CLIENT ---
   const [panier, setPanier] = useState([]);
   const [clientNom, setClientNom] = useState('');
-  const [clientTel, setClientTel] = useState(''); // NOUVEAU : Téléphone
-  const [typeCommande, setTypeCommande] = useState('sur_place'); // 'sur_place', 'emporter', 'livraison'
-  const [adresse, setAdresse] = useState(''); // Pour livraison
+  const [clientTel, setClientTel] = useState('');
+  const [typeCommande, setTypeCommande] = useState('sur_place');
+  const [adresse, setAdresse] = useState('');
   
-  // --- ETATS LOGIN & ADMIN ---
+  // --- ETATS ADMIN ---
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [nom, setNom] = useState('');
@@ -30,13 +30,12 @@ function App() {
   const [options, setOptions] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // Etats temporaires admin
   const [tempVarNom, setTempVarNom] = useState('');
   const [tempVarPrix, setTempVarPrix] = useState('');
   const [tempOptNom, setTempOptNom] = useState('');
   const [tempOptPrix, setTempOptPrix] = useState('');
 
-  // --- 1. SURVEILLANCE TEMPS RÉEL ---
+  // --- 1. SURVEILLANCE ---
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
@@ -89,15 +88,15 @@ function App() {
       await addDoc(collection(db, "commandes"), {
         client: clientNom,
         tel: clientTel,
-        type: typeCommande, // Sur place, emporter, livraison
-        adresse: adresse, // Si livraison
+        type: typeCommande,
+        adresse: adresse,
         items: panier,
         total: calculerTotal(),
         date: new Date(),
         status: 'En attente'
       });
       setPanier([]); setClientNom(''); setClientTel(''); setAdresse('');
-      alert("✅ Commande reçue ! On vous appelle pour confirmer.");
+      alert("✅ Commande envoyée !");
       setView('client');
     } catch (error) {
       alert("Erreur réseau");
@@ -112,7 +111,24 @@ function App() {
   };
   
   const supprimerCommande = async (id) => {
-    if(window.confirm("Supprimer ?")) await deleteDoc(doc(db, "commandes", id));
+    if(window.confirm("Supprimer l'historique ?")) await deleteDoc(doc(db, "commandes", id));
+  };
+
+  // --- LE BOUTON MAGIQUE ODOO ---
+  const copierInfosClient = (cmd) => {
+    let texte = `Nom: ${cmd.client}\nTél: ${cmd.tel}\n`;
+    
+    if (cmd.type === 'livraison') {
+        texte += `Livraison: ${cmd.adresse}`;
+    } else {
+        texte += `Mode: ${cmd.type === 'sur_place' ? 'Sur Place' : 'À Emporter'}`;
+    }
+
+    navigator.clipboard.writeText(texte).then(() => {
+      // Petite alerte discrète ou changement de couleur bouton idéalement, 
+      // ici simple alert pour confirmer
+      alert("📋 Infos copiées pour Odoo !"); 
+    });
   };
 
   // --- OUTILS ADMIN ---
@@ -131,8 +147,6 @@ function App() {
     };
   };
   const ajouterVariante = (e) => { e.preventDefault(); if (tempVarNom && tempVarPrix) { setVariantes([...variantes, { nom: tempVarNom, prix: Number(tempVarPrix) }]); setTempVarNom(''); setTempVarPrix(''); } };
-  const ajouterOption = (e) => { e.preventDefault(); if (tempOptNom) { setOptions([...options, { nom: tempOptNom, prix: Number(tempOptPrix) }]); setTempOptNom(''); setTempOptPrix(''); } };
-  
   const sauvegarderProduit = async () => {
     if (!nom) return; setLoading(true);
     await addDoc(collection(db, "produits"), { nom, description, categorie, image, date: new Date(), prix: variantes.length > 0 ? 0 : Number(prixBase), variantes, options });
@@ -149,7 +163,7 @@ function App() {
         <h2 style={{margin:0, fontSize: '1.2rem'}}>Foodji</h2>
         {user ? (
           <button onClick={() => setView(view === 'admin' ? 'client' : 'admin')} style={{background:'white', color:'black', border:'none', padding:'5px 10px', borderRadius:'4px', cursor:'pointer'}}>
-            {view === 'admin' ? 'App Client' : 'Dashboard'}
+            {view === 'admin' ? 'Aller sur l\'App' : 'Dashboard'}
           </button>
         ) : (
           view === 'client' && <button onClick={() => setView('login')} style={{background:'transparent', border:'none', color:'#333'}}>🔒</button>
@@ -169,93 +183,115 @@ function App() {
         </div>
       )}
 
-      {/* --- VUE ADMIN (DASHBOARD) --- */}
+      {/* --- VUE ADMIN (TABLETTE) --- */}
       {view === 'admin' && user && (
-        <div style={{ padding: '15px' }}>
+        <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
           
-          {/* SECTION COMMANDES */}
+          {/* DASHBOARD COMMANDES */}
           <div style={{ marginBottom: '30px' }}>
             <h2 style={{borderBottom: '2px solid black', paddingBottom: '10px'}}>🔥 Commandes ({commandes.filter(c => c.status !== 'Terminé').length})</h2>
-            {commandes.length === 0 && <p style={{color:'#888'}}>En attente de commandes...</p>}
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
               {commandes.map(cmd => (
                 <div key={cmd.id} style={{ 
-                  background: cmd.status === 'Terminé' ? '#eee' : 'white', 
-                  borderLeft: cmd.status === 'Terminé' ? '5px solid gray' : '5px solid #00C851',
-                  padding: '15px', borderRadius: '8px', boxShadow: '0 2px 5px rgba(0,0,0,0.1)' 
+                  background: cmd.status === 'Terminé' ? '#e9ecef' : 'white', 
+                  borderTop: cmd.status === 'Terminé' ? '4px solid gray' : '4px solid #00C851',
+                  padding: '20px', borderRadius: '8px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' 
                 }}>
-                  {/* Header Commande */}
-                  <div style={{display:'flex', justifyContent:'space-between', marginBottom:'5px'}}>
-                    <strong style={{fontSize:'1.1em'}}>{cmd.client}</strong>
-                    <div style={{fontWeight:'bold', fontSize:'1.1em'}}>{cmd.total} DH</div>
-                  </div>
-                  
-                  {/* Détails Client */}
-                  <div style={{fontSize:'0.9em', color:'#555', marginBottom:'10px', display:'flex', flexDirection:'column', gap:'2px'}}>
-                    <span>📞 <a href={`tel:${cmd.tel}`} style={{color:'blue', textDecoration:'none'}}>{cmd.tel}</a></span>
-                    <span style={{fontWeight:'bold', color: cmd.type === 'livraison' ? 'orange' : 'black'}}>
-                      {cmd.type === 'livraison' ? `🛵 Livraison : ${cmd.adresse}` : (cmd.type === 'emporter' ? '🛍️ À Emporter' : '🍽️ Sur Place')}
-                    </span>
+                  {/* Info Client & BOUTON COPIER */}
+                  <div style={{borderBottom: '1px solid #eee', paddingBottom: '15px', marginBottom: '10px'}}>
+                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom: '10px'}}>
+                       <div>
+                         <strong style={{fontSize:'1.3em', display:'block'}}>{cmd.client}</strong>
+                         <div style={{color:'#555', marginTop:'2px'}}>📞 {cmd.tel}</div>
+                       </div>
+                       <div style={{textAlign:'right'}}>
+                          <span style={{fontWeight:'bold', fontSize:'1.2em', color: '#00C851', display:'block'}}>{cmd.total} DH</span>
+                          {/* BOUTON COPIER MAGIQUE */}
+                          <button 
+                             onClick={() => copierInfosClient(cmd)}
+                             style={{
+                               marginTop:'5px', background:'#6c757d', color:'white', 
+                               border:'none', borderRadius:'4px', padding:'5px 10px', 
+                               fontSize:'0.8em', cursor:'pointer', fontWeight:'bold'
+                             }}>
+                             📋 COPIER CLIENT
+                          </button>
+                       </div>
+                    </div>
+
+                    {/* LIGNE ADRESSE (Si livraison) */}
+                    {cmd.type === 'livraison' && (
+                       <div style={{background:'#fff3cd', padding:'8px', borderRadius:'5px', marginTop:'5px', fontSize:'0.9em'}}>
+                           🛵 <strong>{cmd.adresse}</strong>
+                       </div>
+                    )}
+                    
+                    {/* Badge Type */}
+                    <div style={{marginTop: '10px'}}>
+                         {cmd.type === 'emporter' && <span style={{background:'#d1ecf1', padding:'4px 8px', borderRadius:'3px', fontSize:'0.9em'}}>🛍️ À Emporter</span>}
+                         {cmd.type === 'sur_place' && <span style={{background:'#d4edda', padding:'4px 8px', borderRadius:'3px', fontSize:'0.9em'}}>🍽️ Sur Place</span>}
+                    </div>
                   </div>
 
-                  {/* Liste Items */}
-                  <ul style={{paddingLeft: '20px', margin:'5px 0', color: '#444', borderTop:'1px solid #eee', paddingTop:'10px'}}>
+                  {/* Liste des Plats */}
+                  <ul style={{paddingLeft: '20px', margin:'10px 0', color: '#444', lineHeight: '1.6'}}>
                     {cmd.items.map((item, idx) => (
                       <li key={idx}>
-                        {item.nom} {item.varianteNom && `(${item.varianteNom})`} 
-                        {item.options && item.options.map(o => ` + ${o.nom}`)}
+                        <strong>{item.nom}</strong> {item.varianteNom && <span style={{color:'#666'}}>({item.varianteNom})</span>}
                       </li>
                     ))}
                   </ul>
 
                   {/* Actions */}
-                  <div style={{marginTop: '15px', display: 'flex', gap: '10px'}}>
+                  <div style={{marginTop: '20px', display: 'flex', gap: '10px'}}>
                     {cmd.status !== 'Terminé' && (
-                      <button onClick={() => changerStatus(cmd.id, 'Terminé')} style={{flex:1, background: 'black', color: 'white', border: 'none', padding: '10px', borderRadius: '5px', fontWeight: 'bold'}}>
-                        OK (SERVI)
+                      <button onClick={() => changerStatus(cmd.id, 'Terminé')} style={{flex: 1, background: 'black', color: 'white', border: 'none', padding: '12px', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer', fontSize:'1em'}}>
+                        SERVI
                       </button>
                     )}
-                    <button onClick={() => supprimerCommande(cmd.id)} style={{background: 'transparent', color: 'red', border: '1px solid #ddd', padding: '5px 10px', borderRadius: '5px'}}>
+                    
+                    <button onClick={() => supprimerCommande(cmd.id)} style={{background: 'white', color: 'red', border: '1px solid #ddd', padding: '10px', borderRadius: '5px', cursor: 'pointer'}}>
                       X
                     </button>
+                  </div>
+                  <div style={{fontSize: '0.7em', color: '#aaa', marginTop: '10px', textAlign: 'right'}}>
+                    {new Date(cmd.date.seconds * 1000).toLocaleString()}
                   </div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* AJOUTER PLAT (Replié) */}
-          <details style={{background: '#fff', padding: '10px', borderRadius: '8px', border: '1px solid #ddd'}}>
-            <summary style={{fontWeight: 'bold', cursor: 'pointer'}}>➕ Gérer le Menu</summary>
-            <div style={{marginTop: '15px'}}>
+          {/* GESTION MENU (ADMIN) */}
+          <details style={{background: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #ddd', marginTop: '40px'}}>
+            <summary style={{fontWeight: 'bold', cursor: 'pointer', fontSize:'1.1em'}}>➕ Gérer le Menu</summary>
+            <div style={{marginTop: '20px', maxWidth: '600px'}}>
                <label style={{display:'block', fontWeight:'bold', marginBottom:'5px'}}>Nouveau Plat</label>
-               <input type="file" onChange={handleImageUpload} style={{marginBottom: '10px', width:'100%'}} />
-               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  <select value={categorie} onChange={e => setCategorie(e.target.value)} style={{padding: '10px', background:'white', border:'1px solid #ccc'}}><option>Burgers</option><option>Pizzas</option><option>Tacos</option></select>
-                  <input placeholder="Nom" value={nom} onChange={e => setNom(e.target.value)} style={{padding: '10px', border:'1px solid #ccc'}} />
+               <input type="file" onChange={handleImageUpload} style={{marginBottom: '15px', width:'100%'}} />
+               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
+                  <select value={categorie} onChange={e => setCategorie(e.target.value)} style={{padding: '12px', border:'1px solid #ccc', borderRadius:'5px'}}><option>Burgers</option><option>Pizzas</option><option>Tacos</option></select>
+                  <input placeholder="Nom du plat" value={nom} onChange={e => setNom(e.target.value)} style={{padding: '12px', border:'1px solid #ccc', borderRadius:'5px'}} />
                </div>
                
-               {/* Variantes Admin */}
-               <div style={{marginTop:'10px', background:'#f0f8ff', padding:'10px', borderRadius:'5px'}}>
-                 <small>Variantes (Taille)</small>
-                 <div style={{display:'flex', gap:'5px'}}>
-                   <input placeholder="Nom" value={tempVarNom} onChange={e => setTempVarNom(e.target.value)} style={{flex:1, padding:'5px'}}/>
-                   <input type="number" placeholder="Prix" value={tempVarPrix} onChange={e => setTempVarPrix(e.target.value)} style={{width:'60px', padding:'5px'}}/>
-                   <button onClick={ajouterVariante}>+</button>
+               <div style={{background:'#f8f9fa', padding:'15px', borderRadius:'5px', marginBottom: '15px'}}>
+                 <small style={{fontWeight:'bold'}}>Variantes (ex: Taille)</small>
+                 <div style={{display:'flex', gap:'10px', marginTop:'5px'}}>
+                   <input placeholder="Nom (ex: Mega)" value={tempVarNom} onChange={e => setTempVarNom(e.target.value)} style={{flex:1, padding:'8px'}}/>
+                   <input type="number" placeholder="Prix" value={tempVarPrix} onChange={e => setTempVarPrix(e.target.value)} style={{width:'80px', padding:'8px'}}/>
+                   <button onClick={ajouterVariante} style={{cursor:'pointer'}}>OK</button>
                  </div>
-                 <div style={{fontSize:'0.8em'}}>{variantes.map(v=>`${v.nom}-${v.prix}dh `)}</div>
+                 <div style={{fontSize:'0.9em', marginTop:'5px'}}>{variantes.map(v=>`${v.nom}-${v.prix}dh | `)}</div>
                </div>
 
-               {variantes.length === 0 && <input type="number" placeholder="Prix Unique" value={prixBase} onChange={e => setPrixBase(e.target.value)} style={{width:'100%', marginTop:'10px', padding:'10px'}} />}
+               {variantes.length === 0 && <input type="number" placeholder="Prix Unique (DH)" value={prixBase} onChange={e => setPrixBase(e.target.value)} style={{width:'100%', padding:'12px', marginBottom: '15px', border:'1px solid #ccc', borderRadius:'5px'}} />}
                
-               <button onClick={sauvegarderProduit} style={{width:'100%', marginTop:'15px', background:'blue', color:'white', padding:'12px', border:'none', fontWeight:'bold'}}>Enregistrer</button>
+               <button onClick={sauvegarderProduit} style={{width:'100%', padding:'15px', background:'#007bff', color:'white', border:'none', borderRadius:'5px', fontWeight:'bold', cursor:'pointer'}}>Enregistrer le plat</button>
                
-               <h4 style={{marginTop:'20px'}}>Supprimer un plat</h4>
-               {menu.map(p => <div key={p.id} style={{display:'flex', justifyContent:'space-between', padding:'5px', borderBottom:'1px solid #eee'}}><span>{p.nom}</span><button onClick={()=>supprimerProduit(p.id)} style={{color:'red', border:'none', background:'transparent'}}>X</button></div>)}
+               <h4 style={{marginTop:'30px', borderTop:'1px solid #eee', paddingTop:'10px'}}>Supprimer un plat existant</h4>
+               {menu.map(p => <div key={p.id} style={{display:'flex', justifyContent:'space-between', padding:'8px', borderBottom:'1px solid #f1f1f1'}}><span>{p.nom}</span><button onClick={()=>supprimerProduit(p.id)} style={{color:'red', border:'none', background:'transparent', cursor:'pointer'}}>Supprimer</button></div>)}
             </div>
           </details>
-          <div style={{textAlign: 'center', marginTop: '30px'}}><button onClick={handleLogout} style={{color: 'red', background: 'transparent', border: 'none'}}>Déconnexion</button></div>
         </div>
       )}
 
@@ -294,7 +330,6 @@ function App() {
         <div style={{ padding: '20px', background: 'white', minHeight: '100vh' }}>
           <h2 style={{marginTop:0}}>Mon Panier 🛒</h2>
           
-          {/* Liste Items */}
           {panier.length === 0 ? <p>Panier vide.</p> : (
             <>
               <div style={{marginBottom:'20px'}}>
@@ -310,41 +345,27 @@ function App() {
                 <div style={{textAlign:'right', fontSize:'1.2em', fontWeight:'bold', marginTop:'15px'}}>Total : {calculerTotal()} DH</div>
               </div>
               
-              {/* Formulaire Client */}
               <div style={{background: '#f9f9f9', padding: '20px', borderRadius: '15px'}}>
                 <h3 style={{marginTop:0, fontSize:'1.1em'}}>Coordonnées</h3>
-                
-                {/* Choix Type */}
                 <div style={{display:'flex', gap:'10px', marginBottom:'15px'}}>
                   {['sur_place', 'emporter', 'livraison'].map(t => (
-                    <button key={t} 
-                      onClick={() => setTypeCommande(t)}
-                      style={{
-                        flex:1, padding:'10px 5px', borderRadius:'8px', border:'1px solid #ddd', 
-                        background: typeCommande === t ? 'black' : 'white',
-                        color: typeCommande === t ? 'white' : 'black',
-                        fontSize: '0.9em'
-                      }}>
+                    <button key={t} onClick={() => setTypeCommande(t)} style={{flex:1, padding:'10px 5px', borderRadius:'8px', border:'1px solid #ddd', background: typeCommande === t ? 'black' : 'white', color: typeCommande === t ? 'white' : 'black', fontSize: '0.9em'}}>
                       {t === 'sur_place' ? 'Sur Place' : (t === 'emporter' ? 'Emporter' : 'Livraison')}
                     </button>
                   ))}
                 </div>
-
                 <label style={{display:'block', marginBottom:'5px', fontSize:'0.9em'}}>Nom complet *</label>
                 <input type="text" value={clientNom} onChange={e => setClientNom(e.target.value)} style={{width:'100%', padding:'12px', marginBottom:'10px', border:'1px solid #ddd', borderRadius:'8px'}} placeholder="Ex: Karim B." />
-                
                 <label style={{display:'block', marginBottom:'5px', fontSize:'0.9em'}}>Téléphone *</label>
                 <input type="tel" value={clientTel} onChange={e => setClientTel(e.target.value)} style={{width:'100%', padding:'12px', marginBottom:'10px', border:'1px solid #ddd', borderRadius:'8px'}} placeholder="06..." />
-                
                 {typeCommande === 'livraison' && (
                   <>
-                    <label style={{display:'block', marginBottom:'5px', fontSize:'0.9em'}}>Adresse de livraison *</label>
-                    <textarea value={adresse} onChange={e => setAdresse(e.target.value)} style={{width:'100%', padding:'12px', marginBottom:'10px', border:'1px solid #ddd', borderRadius:'8px'}} placeholder="Quartier, Rue..." />
+                    <label style={{display:'block', marginBottom:'5px', fontSize:'0.9em'}}>Adresse *</label>
+                    <textarea value={adresse} onChange={e => setAdresse(e.target.value)} style={{width:'100%', padding:'12px', marginBottom:'10px', border:'1px solid #ddd', borderRadius:'8px'}} placeholder="Adresse..." />
                   </>
                 )}
-                
                 <button onClick={envoyerCommande} disabled={loading} style={{width:'100%', padding:'15px', background:'#00C851', color:'white', border:'none', borderRadius:'8px', fontSize:'1.1em', fontWeight:'bold', marginTop:'10px'}}>
-                  {loading ? 'Envoi...' : 'CONFIRMER LA COMMANDE'}
+                  {loading ? 'Envoi...' : 'CONFIRMER'}
                 </button>
               </div>
             </>
@@ -356,15 +377,10 @@ function App() {
       {/* --- BARRE FLOTTANTE PANIER --- */}
       {view === 'client' && panier.length > 0 && (
         <div onClick={() => setView('panier')} style={{
-          position: 'fixed', bottom: '20px', left: '5%', width: '90%', 
-          background: 'black', color: 'white', padding: '15px', 
-          borderRadius: '50px', display: 'flex', justifyContent: 'space-between', 
-          alignItems: 'center', boxShadow: '0 5px 15px rgba(0,0,0,0.3)', cursor: 'pointer', zIndex: 999
+          position: 'fixed', bottom: '20px', left: '5%', width: '90%', background: 'black', color: 'white', padding: '15px', borderRadius: '50px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 5px 15px rgba(0,0,0,0.3)', cursor: 'pointer', zIndex: 999
         }}>
           <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
-            <span style={{background:'white', color:'black', width:'25px', height:'25px', borderRadius:'50%', display:'flex', justifyContent:'center', alignItems:'center', fontWeight:'bold', fontSize:'0.9em'}}>
-              {panier.length}
-            </span>
+            <span style={{background:'white', color:'black', width:'25px', height:'25px', borderRadius:'50%', display:'flex', justifyContent:'center', alignItems:'center', fontWeight:'bold', fontSize:'0.9em'}}>{panier.length}</span>
             <span style={{fontSize:'0.9em'}}>Voir panier</span>
           </div>
           <span style={{fontWeight:'bold', fontSize:'1em'}}>{calculerTotal()} DH</span>
@@ -375,4 +391,4 @@ function App() {
   );
 }
 
-export default App;
+export default App; 
