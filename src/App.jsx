@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
-import { db, auth } from './firebase'; // On importe l'auth
+import { db, auth } from './firebase';
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
 import { collection, addDoc, onSnapshot, doc, deleteDoc } from 'firebase/firestore';
 import './App.css';
 
 function App() {
   // --- ETATS GLOBAUX ---
-  const [user, setUser] = useState(null); // Est-ce que l'admin est connecté ?
-  const [view, setView] = useState('client'); // 'client', 'login', 'admin'
+  const [user, setUser] = useState(null);
+  const [view, setView] = useState('client');
   const [menu, setMenu] = useState([]);
   
   // --- ETATS LOGIN ---
@@ -24,22 +24,20 @@ function App() {
   const [variantes, setVariantes] = useState([]);
   const [options, setOptions] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  // Etats temporaires
   const [tempVarNom, setTempVarNom] = useState('');
   const [tempVarPrix, setTempVarPrix] = useState('');
   const [tempOptNom, setTempOptNom] = useState('');
   const [tempOptPrix, setTempOptPrix] = useState('');
 
-  // --- 1. SURVEILLANCE : QUI EST LÀ ? ---
+  // --- 1. SURVEILLANCE ---
   useEffect(() => {
-    // Vérifie si l'utilisateur est connecté via Firebase
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
-      if (currentUser) {
-        setView('admin'); // Si connecté, on montre l'admin direct
-      }
+      if (currentUser) setView('admin');
     });
 
-    // Charge le menu
     const unsubscribeData = onSnapshot(collection(db, "produits"), (snapshot) => {
       const liste = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setMenu(liste);
@@ -48,12 +46,11 @@ function App() {
     return () => { unsubscribeAuth(); unsubscribeData(); };
   }, []);
 
-  // --- 2. GESTION AUTHENTIFICATION ---
+  // --- 2. AUTHENTIFICATION ---
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      // Firebase gère le reste via onAuthStateChanged
       setLoginError('');
     } catch (error) {
       setLoginError("Email ou mot de passe incorrect.");
@@ -65,7 +62,7 @@ function App() {
     setView('client');
   };
 
-  // --- 3. FONCTION IMAGE ---
+  // --- 3. IMAGE ---
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -87,7 +84,7 @@ function App() {
     };
   };
 
-  // --- LOGIQUE ADMIN (Ajout) ---
+  // --- LOGIQUE ADMIN ---
   const ajouterVariante = (e) => { e.preventDefault(); if (tempVarNom && tempVarPrix) { setVariantes([...variantes, { nom: tempVarNom, prix: Number(tempVarPrix) }]); setTempVarNom(''); setTempVarPrix(''); } };
   const ajouterOption = (e) => { e.preventDefault(); if (tempOptNom) { setOptions([...options, { nom: tempOptNom, prix: Number(tempOptPrix) }]); setTempOptNom(''); setTempOptPrix(''); } };
 
@@ -101,7 +98,8 @@ function App() {
         variantes, options
       });
       setNom(''); setDescription(''); setImage(''); setPrixBase(''); setVariantes([]); setOptions([]);
-      document.getElementById('fileInput').value = ""; 
+      const fileInput = document.getElementById('fileInput');
+      if(fileInput) fileInput.value = ""; 
       alert("Plat ajouté !");
     } catch (error) { alert("Erreur d'enregistrement"); }
     setLoading(false);
@@ -111,13 +109,12 @@ function App() {
 
   // --- RENDU ---
   return (
-    <div style={{ fontFamily: 'sans-serif', maxWidth: '600px', margin: '0 auto', paddingBottom: '50px' }}>
+    // ICI : J'ai mis width 100% et supprimé le maxWidth
+    <div style={{ fontFamily: 'sans-serif', width: '100%', minHeight: '100vh', margin: 0, padding: 0, paddingBottom: '50px', background: '#f5f5f5' }}>
       
-      {/* HEADER NOIR */}
-      <div style={{ position: 'sticky', top: 0, background: 'black', padding: '15px', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 100 }}>
+      {/* HEADER PLEINE LARGEUR */}
+      <div style={{ position: 'sticky', top: 0, background: 'black', padding: '15px', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 100, width: '100%' }}>
         <h2 style={{margin:0, fontSize: '1.2rem'}}>Foodji App</h2>
-        
-        {/* Bouton Intelligent */}
         {user ? (
           <div style={{display:'flex', gap:'10px'}}>
              <button onClick={() => setView(view === 'admin' ? 'client' : 'admin')} style={{background:'white', color:'black', border:'none', padding:'5px 10px', borderRadius:'4px', cursor:'pointer'}}>
@@ -127,9 +124,7 @@ function App() {
           </div>
         ) : (
           view !== 'login' && (
-            <button onClick={() => setView('login')} style={{background:'transparent', color:'#aaa', border:'1px solid #555', padding:'5px 10px', borderRadius:'4px', fontSize:'0.8rem', cursor:'pointer'}}>
-              Admin ?
-            </button>
+            <button onClick={() => setView('login')} style={{background:'transparent', color:'#aaa', border:'1px solid #555', padding:'5px 10px', borderRadius:'4px', fontSize:'0.8rem', cursor:'pointer'}}>Admin ?</button>
           )
         )}
       </div>
@@ -150,68 +145,66 @@ function App() {
 
       {/* --- VUE ADMIN --- */}
       {view === 'admin' && user && (
-        <div style={{ padding: '20px' }}>
-          <div style={{ background: '#f8f9fa', padding: '15px', borderRadius: '12px', border: '1px solid #ddd' }}>
+        <div style={{ padding: '15px' }}>
+          <div style={{ background: '#fff', padding: '15px', borderRadius: '12px', boxShadow: '0 2px 5px rgba(0,0,0,0.1)' }}>
             <h3 style={{marginTop:0}}>Nouveau Plat</h3>
             <label style={{display:'block', marginBottom:'5px', fontWeight:'bold', fontSize: '0.9rem'}}>Photo</label>
-            <input id="fileInput" type="file" accept="image/*" onChange={handleImageUpload} style={{marginBottom: '10px'}} />
-            {image && <img src={image} style={{height: '60px', borderRadius: '5px', display: 'block', marginBottom: '10px'}} />}
+            <input id="fileInput" type="file" accept="image/*" onChange={handleImageUpload} style={{marginBottom: '10px', width: '100%'}} />
+            {image && <img src={image} style={{height: '80px', borderRadius: '5px', display: 'block', marginBottom: '10px'}} />}
             
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-              <select value={categorie} onChange={e => setCategorie(e.target.value)} style={{padding: '10px'}}>
+              <select value={categorie} onChange={e => setCategorie(e.target.value)} style={{padding: '12px', border: '1px solid #ccc', borderRadius: '5px', background: 'white'}}>
                 <option>Burgers</option><option>Pizzas</option><option>Tacos</option><option>Salades</option>
               </select>
-              <input placeholder="Nom" value={nom} onChange={e => setNom(e.target.value)} style={{padding: '10px'}} />
+              <input placeholder="Nom" value={nom} onChange={e => setNom(e.target.value)} style={{padding: '12px', border: '1px solid #ccc', borderRadius: '5px'}} />
             </div>
-            <textarea placeholder="Description" value={description} onChange={e => setDescription(e.target.value)} style={{width: '100%', marginTop: '10px', padding: '10px'}} />
+            <textarea placeholder="Description" value={description} onChange={e => setDescription(e.target.value)} style={{width: '100%', marginTop: '10px', padding: '10px', border: '1px solid #ccc', borderRadius: '5px'}} />
 
-            {/* Variantes & Options simplifiées visuellement */}
-            <div style={{ marginTop: '10px', padding: '10px', background: '#e3f2fd', borderRadius: '5px' }}>
+            <div style={{ marginTop: '10px', padding: '10px', background: '#f0f7ff', borderRadius: '5px' }}>
               <div style={{ display: 'flex', gap: '5px', marginBottom: '5px' }}>
-                <input placeholder="Taille (ex: L)" value={tempVarNom} onChange={e => setTempVarNom(e.target.value)} style={{flex: 1, padding: '5px'}} />
-                <input type="number" placeholder="Prix" value={tempVarPrix} onChange={e => setTempVarPrix(e.target.value)} style={{width: '50px', padding: '5px'}} />
-                <button onClick={ajouterVariante} style={{background: 'blue', color: 'white', border: 'none'}}>+</button>
+                <input placeholder="Taille (ex: L)" value={tempVarNom} onChange={e => setTempVarNom(e.target.value)} style={{flex: 1, padding: '8px', border: '1px solid #ddd'}} />
+                <input type="number" placeholder="Prix" value={tempVarPrix} onChange={e => setTempVarPrix(e.target.value)} style={{width: '60px', padding: '8px', border: '1px solid #ddd'}} />
+                <button onClick={ajouterVariante} style={{background: 'blue', color: 'white', border: 'none', width: '30px', borderRadius: '3px'}}>+</button>
               </div>
               <div style={{fontSize: '0.8em'}}>{variantes.map(v => `${v.nom} (${v.prix}dh) `)}</div>
             </div>
 
-            {/* Prix Simple */}
             {variantes.length === 0 && (
-              <input type="number" placeholder="Prix Unique (DH)" value={prixBase} onChange={e => setPrixBase(e.target.value)} style={{marginTop: '10px', padding: '10px', width: '100%'}} />
+              <input type="number" placeholder="Prix Unique (DH)" value={prixBase} onChange={e => setPrixBase(e.target.value)} style={{marginTop: '10px', padding: '12px', width: '100%', border: '1px solid #ccc', borderRadius: '5px'}} />
             )}
 
-            <button onClick={sauvegarderProduit} disabled={loading} style={{ width: '100%', marginTop: '15px', padding: '12px', background: 'black', color: 'white', border: 'none', fontWeight: 'bold' }}>
+            <button onClick={sauvegarderProduit} disabled={loading} style={{ width: '100%', marginTop: '15px', padding: '15px', background: 'black', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '8px' }}>
               {loading ? "..." : "ENREGISTRER"}
             </button>
           </div>
           
           <h4 style={{marginTop: '20px'}}>Modifier le stock</h4>
           {menu.map(p => (
-            <div key={p.id} style={{display:'flex', justifyContent:'space-between', padding:'10px', borderBottom:'1px solid #eee', alignItems: 'center'}}>
-              <span>{p.nom}</span>
-              <button onClick={() => supprimerProduit(p.id)} style={{color:'red', border:'none', background:'transparent'}}>Supprimer</button>
+            <div key={p.id} style={{display:'flex', justifyContent:'space-between', padding:'15px', background: 'white', marginBottom: '10px', borderRadius: '8px', alignItems: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.05)'}}>
+              <span style={{fontWeight: '500'}}>{p.nom}</span>
+              <button onClick={() => supprimerProduit(p.id)} style={{color:'red', border:'none', background:'transparent', padding: '5px'}}>Supprimer</button>
             </div>
           ))}
         </div>
       )}
 
-      {/* --- VUE CLIENT (VITRINE) --- */}
+      {/* --- VUE CLIENT --- */}
       {view === 'client' && (
         <div style={{ padding: '15px', background: '#f5f5f5', minHeight: '100vh' }}>
-          {/* Menu Catégories (Fake scroll) */}
-          <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '15px' }}>
-             {['Tout', 'Burgers', 'Pizzas', 'Tacos'].map(c => <span key={c} style={{display:'inline-block', padding:'8px 15px', background:'white', borderRadius:'20px', marginRight:'10px', fontSize:'0.9rem'}}>{c}</span>)}
+          <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '15px', scrollbarWidth: 'none' }}>
+             {['Tout', 'Burgers', 'Pizzas', 'Tacos'].map(c => <span key={c} style={{display:'inline-block', padding:'10px 20px', background:'white', borderRadius:'25px', marginRight:'10px', fontSize:'0.9rem', boxShadow: '0 2px 5px rgba(0,0,0,0.05)'}}>{c}</span>)}
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
             {menu.map((plat) => (
               <div key={plat.id} style={{ background: 'white', borderRadius: '15px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-                <div style={{ height: '120px', background: '#eee', backgroundImage: `url(${plat.image || 'https://via.placeholder.com/150'})`, backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
-                <div style={{ padding: '10px' }}>
+                <div style={{ height: '130px', background: '#eee', backgroundImage: `url(${plat.image || 'https://via.placeholder.com/150'})`, backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
+                <div style={{ padding: '12px' }}>
                   <h4 style={{ margin: '0 0 5px 0', fontSize: '15px' }}>{plat.nom}</h4>
-                  <p style={{ fontSize: '11px', color: '#888', margin: 0, height:'30px', overflow:'hidden' }}>{plat.description}</p>
-                  <div style={{ marginTop: '8px', fontWeight: 'bold', fontSize: '14px' }}>
-                     {plat.variantes && plat.variantes.length > 0 ? `dès ${Math.min(...plat.variantes.map(v => v.prix))} DH` : `${plat.prix} DH`}
+                  <p style={{ fontSize: '12px', color: '#888', margin: 0, height:'34px', overflow:'hidden', lineHeight: '1.2' }}>{plat.description}</p>
+                  <div style={{ marginTop: '10px', fontWeight: 'bold', fontSize: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                     <span>{plat.variantes && plat.variantes.length > 0 ? `${Math.min(...plat.variantes.map(v => v.prix))} DH` : `${plat.prix} DH`}</span>
+                     <button style={{background: 'black', color: 'white', width: '24px', height: '24px', borderRadius: '50%', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>+</button>
                   </div>
                 </div>
               </div>
