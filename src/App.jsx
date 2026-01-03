@@ -4,14 +4,14 @@ import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebas
 import { collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, query } from 'firebase/firestore';
 import './App.css';
 
-// --- T EME FOODJI ---
+// --- THEME ---
 const COLORS = {
-  primary: '#A84438',    // Terracotta (Boutons, Accents)
-  secondary: '#1A1E29',  // Bleu Nuit (Textes, Headers)
-  bg: '#F9FAFB',         // Fond page
-  card: '#FFFFFF',       // Fond cartes
-  success: '#10B981',    // Vert validé
-  textLight: '#6B7280'   // Gris texte secondaire
+  primary: '#A84438',    
+  secondary: '#1A1E29',  
+  bg: '#F9FAFB',         
+  card: '#FFFFFF',       
+  success: '#10B981',    
+  textLight: '#6B7280'   
 };
 
 function App() {
@@ -21,6 +21,9 @@ function App() {
   const [menu, setMenu] = useState([]);
   const [commandes, setCommandes] = useState([]);
   
+  // NOUVEAU : Filtre Catégorie
+  const [categorieActive, setCategorieActive] = useState('Tout');
+
   // Panier & Client
   const [panier, setPanier] = useState([]);
   const [clientNom, setClientNom] = useState('');
@@ -28,7 +31,7 @@ function App() {
   const [typeCommande, setTypeCommande] = useState('sur_place');
   const [adresse, setAdresse] = useState('');
   
-  // Admin & Login
+  // Admin
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [nom, setNom] = useState('');
@@ -37,7 +40,6 @@ function App() {
   const [categorie, setCategorie] = useState('Burgers');
   const [prixBase, setPrixBase] = useState('');
   const [variantes, setVariantes] = useState([]);
-  const [options, setOptions] = useState([]);
   const [loading, setLoading] = useState(false);
 
   // Temps admin
@@ -64,13 +66,18 @@ function App() {
 
   // --- LOGIQUE PANIER ---
   const ajouterAuPanier = (plat, variante = null) => {
+    // Petit effet de vibration tactile si supporté par le téléphone
+    if (navigator.vibrate) navigator.vibrate(50);
+    
     setPanier([...panier, {
       ...plat,
       uniqueId: Date.now(),
       prixFinal: variante ? variante.prix : plat.prix,
       varianteNom: variante ? variante.nom : null
     }]);
+    // NOTE: Plus d'alert() ici, c'est silencieux.
   };
+
   const retirerDuPanier = (uid) => setPanier(panier.filter(i => i.uniqueId !== uid));
   const total = panier.reduce((acc, i) => acc + Number(i.prixFinal), 0);
 
@@ -90,6 +97,11 @@ function App() {
     setLoading(false);
   };
 
+  // --- FILTRAGE DU MENU ---
+  const menuFiltre = categorieActive === 'Tout' 
+    ? menu 
+    : menu.filter(p => p.categorie === categorieActive);
+
   // --- ADMIN UTILS ---
   const copierOdoo = (cmd) => {
     let t = `Nom: ${cmd.client}\nTél: ${cmd.tel}\n`;
@@ -99,7 +111,6 @@ function App() {
   const changerStatus = async (id, st) => await updateDoc(doc(db, "commandes", id), { status: st });
   const supprimerCmd = async (id) => { if(confirm("Supprimer ?")) await deleteDoc(doc(db, "commandes", id)); };
   
-  // Image
   const handleImage = (e) => {
     const file = e.target.files[0]; if(!file) return;
     const reader = new FileReader(); reader.readAsDataURL(file);
@@ -113,14 +124,14 @@ function App() {
     };
   };
 
-  // Produit
   const saveProduit = async () => {
     if(!nom) return; setLoading(true);
-    await addDoc(collection(db, "produits"), { nom, description, categorie, image, date: new Date(), prix: variantes.length>0?0:Number(prixBase), variantes, options });
+    await addDoc(collection(db, "produits"), { nom, description, categorie, image, date: new Date(), prix: variantes.length>0?0:Number(prixBase), variantes });
     setNom(''); setDescription(''); setImage(''); setPrixBase(''); setVariantes([]); setLoading(false); alert("Plat ajouté");
   };
+  const supprimerProduit = async (id) => { if(confirm("Supprimer ?")) await deleteDoc(doc(db, "produits", id)); };
 
-  // --- STYLES COMMUNS ---
+  // --- STYLES ---
   const btnStyle = { background: COLORS.primary, color: 'white', border: 'none', borderRadius: '12px', padding: '12px 20px', fontWeight: '600', cursor: 'pointer', width: '100%', fontSize: '1rem', boxShadow: '0 4px 6px rgba(168, 68, 56, 0.2)' };
   const inputStyle = { width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #E5E7EB', background: 'white', marginBottom: '10px', fontSize: '1rem', outline: 'none' };
   const cardStyle = { background: COLORS.card, borderRadius: '16px', padding: '15px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)', border: '1px solid #F3F4F6' };
@@ -128,14 +139,12 @@ function App() {
   return (
     <div style={{ background: COLORS.bg, minHeight: '100vh', paddingBottom: '100px', color: COLORS.secondary }}>
       
-      {/* HEADER FOODJI */}
+      {/* HEADER */}
       <div style={{ background: COLORS.card, padding: '15px 20px', position: 'sticky', top: 0, zIndex: 50, display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
         <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
-          {/* Logo simulé avec ton icône flamme */}
           <div style={{width:'30px', height:'30px', background: COLORS.primary, borderRadius: '8px 0 8px 0'}}></div>
           <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '800', letterSpacing: '-0.5px', color: COLORS.secondary }}>oodji</h1>
         </div>
-        
         {user ? (
           <button onClick={() => setView(view === 'admin' ? 'client' : 'admin')} style={{background: COLORS.secondary, color: 'white', border: 'none', padding: '8px 15px', borderRadius: '20px', fontSize:'0.8rem', fontWeight:'600'}}>
             {view === 'admin' ? 'Voir App' : 'Admin'}
@@ -159,36 +168,23 @@ function App() {
       {/* --- ADMIN DASHBOARD --- */}
       {view === 'admin' && user && (
         <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
-          
           <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px'}}>
              <h2 style={{fontSize:'1.5rem', fontWeight:'bold'}}>🔥 Cuisine</h2>
              <span style={{background: COLORS.primary, color:'white', padding:'5px 12px', borderRadius:'20px', fontWeight:'bold'}}>{commandes.filter(c => c.status !== 'Terminé').length} en cours</span>
           </div>
-
+          
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '20px' }}>
             {commandes.map(cmd => (
               <div key={cmd.id} style={{ ...cardStyle, borderLeft: cmd.status === 'Terminé' ? '5px solid #ccc' : `5px solid ${COLORS.success}` }}>
                 <div style={{display:'flex', justifyContent:'space-between', alignItems:'start', marginBottom:'15px', paddingBottom:'15px', borderBottom:'1px solid #f0f0f0'}}>
-                  <div>
-                    <strong style={{fontSize:'1.2rem', display:'block'}}>{cmd.client}</strong>
-                    <div style={{color: COLORS.textLight, marginTop:'4px'}}>📞 {cmd.tel}</div>
-                  </div>
+                  <div><strong style={{fontSize:'1.2rem', display:'block'}}>{cmd.client}</strong><div style={{color: COLORS.textLight, marginTop:'4px'}}>📞 {cmd.tel}</div></div>
                   <div style={{textAlign:'right'}}>
                     <div style={{fontSize:'1.3rem', fontWeight:'bold', color: COLORS.primary}}>{cmd.total} DH</div>
                     <button onClick={() => copierOdoo(cmd)} style={{marginTop:'5px', background: COLORS.secondary, color:'white', border:'none', padding:'6px 12px', borderRadius:'6px', fontSize:'0.75rem', cursor:'pointer'}}>📋 COPIER ODOO</button>
                   </div>
                 </div>
-
                 {cmd.type === 'livraison' && <div style={{background:'#FEF3C7', color:'#D97706', padding:'8px', borderRadius:'8px', fontSize:'0.9rem', marginBottom:'10px'}}>🛵 <strong>{cmd.adresse}</strong></div>}
-                
-                <ul style={{listStyle:'none', marginBottom:'15px'}}>
-                  {cmd.items.map((it, i) => (
-                    <li key={i} style={{padding:'4px 0', borderBottom:'1px dashed #eee'}}>
-                      <strong>{it.nom}</strong> {it.varianteNom && <span style={{color: COLORS.textLight}}>({it.varianteNom})</span>}
-                    </li>
-                  ))}
-                </ul>
-
+                <ul style={{listStyle:'none', marginBottom:'15px'}}>{cmd.items.map((it, i) => (<li key={i} style={{padding:'4px 0', borderBottom:'1px dashed #eee'}}><strong>{it.nom}</strong> {it.varianteNom && <span style={{color: COLORS.textLight}}>({it.varianteNom})</span>}</li>))}</ul>
                 <div style={{display:'flex', gap:'10px'}}>
                   {cmd.status !== 'Terminé' && <button onClick={()=>changerStatus(cmd.id, 'Terminé')} style={{...btnStyle, background: COLORS.success, padding:'10px'}}>✅ SERVI</button>}
                   <button onClick={()=>supprimerCmd(cmd.id)} style={{...btnStyle, background:'white', color:'red', border:'1px solid #eee', padding:'10px'}}>🗑️</button>
@@ -221,8 +217,9 @@ function App() {
                </div>
                <div style={{marginTop:'5px', fontSize:'0.9rem', color: COLORS.textLight}}>{variantes.map(v=>`${v.nom} (${v.prix}dh) • `)}</div>
             </div>
-
             <button onClick={saveProduit} style={{...btnStyle, marginTop:'20px'}}>Enregistrer au Menu</button>
+            <h4 style={{marginTop:'30px'}}>Gérer le stock actuel</h4>
+            {menu.map(p => <div key={p.id} style={{display:'flex', justifyContent:'space-between', padding:'8px', borderBottom:'1px solid #f0f0f0'}}><span>{p.nom}</span><button onClick={()=>supprimerProduit(p.id)} style={{color:'red', border:'none', background:'transparent'}}>Supprimer</button></div>)}
           </div>
         </div>
       )}
@@ -231,22 +228,41 @@ function App() {
       {view === 'client' && (
         <div style={{ padding: '20px' }}>
           
-          {/* Categories Pillules */}
+          {/* CATEGORIES FILTRES (FONCTIONNELS MAINTENANT) */}
           <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '20px', scrollbarWidth: 'none', display:'flex', gap:'10px' }}>
             {['Tout', 'Burgers', 'Pizzas', 'Tacos'].map(c => (
-              <span key={c} style={{
-                display:'inline-block', padding:'8px 20px', borderRadius:'25px', 
-                background: c === 'Tout' ? COLORS.secondary : 'white', 
-                color: c === 'Tout' ? 'white' : COLORS.secondary,
-                fontWeight:'600', fontSize:'0.9rem', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', border: '1px solid #eee'
-              }}>{c}</span>
+              <button 
+                key={c} 
+                onClick={() => setCategorieActive(c)}
+                style={{
+                  border: 'none',
+                  display:'inline-block', padding:'10px 20px', borderRadius:'25px', 
+                  background: categorieActive === c ? COLORS.secondary : 'white', 
+                  color: categorieActive === c ? 'white' : COLORS.secondary,
+                  fontWeight:'600', fontSize:'0.9rem', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', 
+                  cursor: 'pointer', transition: '0.2s'
+                }}>
+                {c}
+              </button>
             ))}
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-            {menu.map((plat) => (
-              <div key={plat.id} style={{ ...cardStyle, padding: 0, overflow: 'hidden', display:'flex', flexDirection:'column' }}>
+            {/* On affiche menuFiltre au lieu de menu complet */}
+            {menuFiltre.map((plat) => (
+              <div 
+                key={plat.id} 
+                // TOUTE LA CARTE EST CLIQUABLE MAINTENANT
+                onClick={() => {
+                  if(plat.variantes?.length > 0) { ajouterAuPanier(plat, plat.variantes[0]); } 
+                  else { ajouterAuPanier(plat); }
+                }}
+                style={{ ...cardStyle, padding: 0, overflow: 'hidden', display:'flex', flexDirection:'column', cursor: 'pointer', position: 'relative' }}
+              >
+                {/* Image */}
                 <div style={{ height: '140px', background: '#eee', backgroundImage: `url(${plat.image || 'https://via.placeholder.com/300'})`, backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
+                
+                {/* Contenu */}
                 <div style={{ padding: '12px', flex: 1, display:'flex', flexDirection:'column', justifyContent:'space-between' }}>
                   <div>
                     <h4 style={{ margin: '0 0 5px 0', fontSize: '1rem', fontWeight:'700', color: COLORS.secondary }}>{plat.nom}</h4>
@@ -256,19 +272,20 @@ function App() {
                      <span style={{ fontWeight: '700', fontSize: '1rem', color: COLORS.primary }}>
                        {plat.variantes?.length > 0 ? `${Math.min(...plat.variantes.map(v=>v.prix))} DH` : `${plat.prix} DH`}
                      </span>
-                     <button 
-                        onClick={() => {
-                          if(plat.variantes?.length > 0) { ajouterAuPanier(plat, plat.variantes[0]); alert("Ajouté !"); } 
-                          else { ajouterAuPanier(plat); }
-                        }}
-                        style={{background: COLORS.secondary, color: 'white', width: '32px', height: '32px', borderRadius: '50%', border: 'none', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.2rem', cursor:'pointer'}}>
-                        +
-                     </button>
+                     <div style={{background: COLORS.secondary, color: 'white', width: '32px', height: '32px', borderRadius: '50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.2rem'}}>+</div>
                   </div>
                 </div>
               </div>
             ))}
           </div>
+          
+          {/* Message vide si rien dans la catégorie */}
+          {menuFiltre.length === 0 && (
+            <div style={{textAlign:'center', marginTop:'50px', color: COLORS.textLight}}>
+              Aucun plat dans cette catégorie pour le moment.
+            </div>
+          )}
+
         </div>
       )}
 
@@ -282,19 +299,14 @@ function App() {
               <div style={{marginBottom:'30px'}}>
                 {panier.map(item => (
                   <div key={item.uniqueId} style={{display:'flex', justifyContent:'space-between', padding:'15px 0', borderBottom:'1px solid #f0f0f0'}}>
-                    <div>
-                      <div style={{fontWeight:'600'}}>{item.nom}</div>
-                      <div style={{color: COLORS.textLight, fontSize:'0.9rem'}}>{item.varianteNom}</div>
-                    </div>
+                    <div><div style={{fontWeight:'600'}}>{item.nom}</div><div style={{color: COLORS.textLight, fontSize:'0.9rem'}}>{item.varianteNom}</div></div>
                     <div style={{display:'flex', gap:'15px', alignItems:'center'}}>
                       <strong style={{color: COLORS.primary}}>{item.prixFinal} DH</strong>
                       <button onClick={() => retirerDuPanier(item.uniqueId)} style={{color:'#ccc', background:'transparent', border:'none', fontSize:'1.5rem'}}>×</button>
                     </div>
                   </div>
                 ))}
-                <div style={{textAlign:'right', fontSize:'1.5rem', fontWeight:'800', marginTop:'20px', color: COLORS.secondary}}>
-                  Total : {total} DH
-                </div>
+                <div style={{textAlign:'right', fontSize:'1.5rem', fontWeight:'800', marginTop:'20px', color: COLORS.secondary}}>Total : {total} DH</div>
               </div>
               
               <div style={{background: COLORS.bg, padding: '20px', borderRadius: '16px'}}>
@@ -304,18 +316,13 @@ function App() {
                     <button key={t} onClick={() => setTypeCommande(t)} style={{
                       flex:1, padding:'10px 5px', borderRadius:'10px', border: typeCommande===t ? `2px solid ${COLORS.secondary}` : '1px solid #ddd', 
                       background: typeCommande===t ? COLORS.secondary : 'white', color: typeCommande===t ? 'white' : COLORS.textLight, fontWeight:'600', fontSize:'0.85rem'
-                    }}>
-                      {t==='sur_place'?'Sur Place':(t==='emporter'?'Emporter':'Livraison')}
-                    </button>
+                    }}>{t==='sur_place'?'Sur Place':(t==='emporter'?'Emporter':'Livraison')}</button>
                   ))}
                 </div>
                 <input type="text" value={clientNom} onChange={e => setClientNom(e.target.value)} style={inputStyle} placeholder="Votre Nom" />
                 <input type="tel" value={clientTel} onChange={e => setClientTel(e.target.value)} style={inputStyle} placeholder="Votre Tél (06...)" />
                 {typeCommande === 'livraison' && <textarea value={adresse} onChange={e => setAdresse(e.target.value)} style={{...inputStyle, height:'80px'}} placeholder="Adresse exacte..." />}
-                
-                <button onClick={envoyerCommande} disabled={loading} style={{...btnStyle, marginTop:'10px', background: COLORS.success}}>
-                  {loading ? '...' : 'COMMANDER MAINTENANT'}
-                </button>
+                <button onClick={envoyerCommande} disabled={loading} style={{...btnStyle, marginTop:'10px', background: COLORS.success}}>{loading ? '...' : 'COMMANDER MAINTENANT'}</button>
               </div>
             </>
           )}
