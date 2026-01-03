@@ -5,7 +5,7 @@ import { collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, query, write
 import './App.css';
 
 // --- CONFIGURATION ---
-const SECURITY_CODE = "1234"; // LE CODE SECRET
+const SECURITY_CODE = "1901"; // LE CODE SECRET
 const LISTE_VIANDES = ["Poulet", "Viande Hachée", "Cordon Bleu", "Nuggets", "Poulet Crispy"];
 const LISTE_GARNITURES_PIZZA = ["Viande Hachée", "Poulet", "4 Fromages", "Cannibale", "Pepperoni", "Thon", "Charcuterie", "Végétarienne", "Fruits de Mer"];
 const LISTE_SAUCES = ["Algérienne Fait Maison", "Biggy Fait Maison", "Barbecue Fait Maison"];
