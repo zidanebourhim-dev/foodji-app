@@ -5,7 +5,6 @@ import { collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, query, write
 import './App.css';
 
 // --- CONFIGURATION ---
-const SECURITY_CODE = "1234"; 
 const LISTE_VIANDES = ["Poulet", "Viande Hachée", "Cordon Bleu", "Nuggets", "Poulet Crispy"];
 const LISTE_GARNITURES_PIZZA = ["Viande Hachée", "Poulet", "4 Fromages", "Cannibale", "Pepperoni", "Thon", "Charcuterie", "Végétarienne", "Fruits de Mer"];
 const LISTE_SAUCES = ["Algérienne Fait Maison", "Biggy Fait Maison", "Barbecue Fait Maison"];
@@ -160,15 +159,10 @@ function App() {
       menuAdmin = menu.filter(p => p.categorie === adminCategorie);
   }
 
-  // --- SECURITE ---
-  const checkSecurity = () => {
-      const code = prompt("🔒 Code de sécurité requis :");
-      return code === SECURITY_CODE;
-  };
-
+  // --- GESTION IMPORT / RESET ---
   const triggerImport = () => {
-      if(checkSecurity()) fileInputRef.current.click();
-      else alert("Code incorrect ❌");
+      // Plus de code requis, l'utilisateur est déjà authentifié par Firebase
+      fileInputRef.current.click();
   };
 
   const handleCSVImport = (e) => {
@@ -230,7 +224,7 @@ function App() {
   };
 
   const viderMenu = async () => {
-      if(!checkSecurity()) return alert("Code incorrect ❌");
+      // Plus de code requis ici, l'interface Admin est protégée
       if(confirm("⚠️ ATTENTION : SUPPRESSION TOTALE DU MENU.\nConfirmer ?")) {
           setLoading(true);
           const batch = writeBatch(db);
