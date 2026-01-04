@@ -6,15 +6,17 @@ import './App.css';
 
 // --- CONFIGURATION ---
 const CODE_MANAGER = "1234"; 
+const PHONE_NUMBER = "0537536689";
+
+// 📍 COORDONNEES EXACTES (Sala Al Jadida)
+const RESTO_COORDS = { lat: 33.997484, lng: -6.735644 }; 
 
 // Listes Produits
 const LISTE_VIANDES = ["Poulet", "Viande Hachée", "Cordon Bleu", "Nuggets", "Poulet Crispy"];
 const LISTE_GARNITURES_PIZZA = ["Viande Hachée", "Poulet", "4 Fromages", "Cannibale", "Pepperoni", "Thon", "Charcuterie", "Végétarienne", "Fruits de Mer"];
-// Ajout de "Pas de sauce" pour les Tacos
 const LISTE_SAUCES = ["Algérienne Fait Maison", "Biggy Fait Maison", "Barbecue Fait Maison", "Pas de sauce"]; 
 const TYPES_PATES = ["Penne", "Tagliatelle", "Spaghetti"];
 
-// NOUVEAU V56 : Extras Pizza Payants
 const EXTRAS_PIZZA = [
     { nom: "Extra Champignons", prix: 10 },
     { nom: "Extra Mozzarella", prix: 10 },
@@ -22,7 +24,6 @@ const EXTRAS_PIZZA = [
     { nom: "Extra Cheddar", prix: 15 }
 ];
 
-// NOUVEAU V56 : Retrait Ingrédients (Burgers)
 const RETRAIT_INGREDIENTS = ["Sans Tomate", "Sans Salade", "Sans Oignons", "Sans Cornichons", "Sans Sauce"];
 
 const PIZZAS_EXCLUES_PROMO = ["4 saisons", "fruits de mer", "cannibale", "2 saisons"];
@@ -46,7 +47,8 @@ const COLORS = {
   danger: '#EF4444',
   warning: '#F59E0B',
   promo: '#D97706',    
-  textLight: '#6B7280'   
+  textLight: '#6B7280',
+  pending: '#F97316' // Orange pour validation
 };
 
 function App() {
@@ -71,6 +73,11 @@ function App() {
   const [typeCommande, setTypeCommande] = useState('sur_place');
   const [adresse, setAdresse] = useState('');
   
+  // V58 : Gestion Distance
+  const [distanceClient, setDistanceClient] = useState(null);
+  const [clientCoords, setClientCoords] = useState(null); // Pour le lien Maps
+  const [showDistanceBlocker, setShowDistanceBlocker] = useState(false); // Modal Bloquante > 10km
+  
   const [derniereCommande, setDerniereCommande] = useState(null);
 
   const [email, setEmail] = useState('');
@@ -85,6 +92,18 @@ function App() {
   const [categorie, setCategorie] = useState('Burgers');
   const [prixBase, setPrixBase] = useState('');
   const [variantes, setVariantes] = useState([]); 
+
+  // --- UTILS GEO (V58) ---
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+      const R = 6371; // Rayon Terre km
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R * c; // Distance en km
+  };
 
   // --- CHARGEMENT MEMOIRE CLIENT ---
   useEffect(() => {
@@ -264,6 +283,7 @@ function App() {
       else setView('login'); 
   };
 
+  // --- LOGIQUE PANIER & GEO (V58) ---
   const ajouterAuPanier = (itemMerged) => {
     if (itemMerged.isPromoTrigger) {
         setShowPromoWizard(true);
@@ -272,7 +292,6 @@ function App() {
     if (itemMerged.isInfo) return alert("Info seulement.");
     if (navigator.vibrate) navigator.vibrate(50);
     
-    // Le prix final arrive déjà calculé depuis ProductModal (avec extras)
     const itemSafe = {
         ...itemMerged,
         uniqueId: Date.now()
@@ -293,7 +312,6 @@ function App() {
   const retirerDuPanier = (uid) => setPanier(panier.filter(i => i.uniqueId !== uid));
   
   const getPrixItemAjuste = (item) => {
-      // Le prixFinal dans l'item inclut déjà extras et variantes
       let prix = Number(item.prixFinal) || 0;
       if (item.nom.toLowerCase().includes("pep's") || item.nom.toLowerCase().includes("peps")) {
           if (typeCommande === 'livraison' || typeCommande === 'emporter') {
@@ -324,18 +342,58 @@ function App() {
           }
       }
 
-      const fraisLivraison = (typeCommande === 'livraison' && (sousTotal - remisePromo) < 45 && (sousTotal - remisePromo) > 0) ? 5 : 0;
-      const grandTotal = (sousTotal - remisePromo) + fraisLivraison;
+      // V58 : Frais livraison standard < 45 DH
+      const fraisLivraison = (grandTotal < 45) ? 5 : 0;
+      
+      // On calcule le grand total pour la vérification, mais l'affichage dépendra du mode
+      const grandTotal = (sousTotal - remisePromo) + (typeCommande === 'livraison' ? fraisLivraison : 0);
 
       return { sousTotal, remisePromo, fraisLivraison, grandTotal };
   };
 
   const { sousTotal, remisePromo, fraisLivraison, grandTotal } = calculerTotalEtPromo();
 
+  // --- ACCES AU PANIER (V58: Geo-Filtre Strict) ---
+  const handleOpenPanier = () => {
+      if (panier.length === 0) return alert("Panier vide !");
+
+      // On demande la localisation au moment d'ouvrir le panier
+      if ("geolocation" in navigator) {
+          navigator.geolocation.getCurrentPosition((position) => {
+              const userLat = position.coords.latitude;
+              const userLng = position.coords.longitude;
+              setClientCoords({ lat: userLat, lng: userLng });
+              
+              const dist = calculateDistance(RESTO_COORDS.lat, RESTO_COORDS.lng, userLat, userLng);
+              setDistanceClient(dist);
+
+              // REGLE ABSOLUE V58 : MUR DES 10 KM
+              if (dist > 10) {
+                  setShowDistanceBlocker(true); // Ouvre la modal bloquante
+                  return; 
+              }
+
+              // Si < 10km, on laisse entrer dans le panier
+              // Les règles de montant (300 DH) seront gérées dans le panier
+              setView('panier');
+
+          }, (error) => {
+              alert("⚠️ La géolocalisation est OBLIGATOIRE pour vérifier l'éligibilité.\n\nVeuillez autoriser l'accès GPS.");
+          });
+      } else {
+          alert("GPS non supporté. Commande impossible.");
+      }
+  };
+
   const envoyerCommande = async () => {
     if (panier.length === 0) return alert("Panier vide !");
     if (!clientNom.trim()) return alert("Nom obligatoire.");
     
+    // VERIFICATION FINALE ZONES (V58)
+    if (distanceClient > 4 && distanceClient <= 10 && grandTotal < 300) {
+        return alert(`⛔️ Zone ${distanceClient.toFixed(1)} km.\n\nMinimum de commande : 300 DH pour cette distance.\nMerci de compléter votre panier.`);
+    }
+
     const telClean = clientTel.replace(/\s/g, ''); 
     const marocRegex = /^(06|07)\d{8}$/;
     
@@ -357,16 +415,24 @@ function App() {
         prixFinal: getPrixItemAjuste(item)
     }));
 
-    // Objet Commande Complet
+    // V58 : Logique Statut "Gros Panier" en zone 4-10km ou > 300 Global
+    let initialStatus = 'En attente';
+    if (grandTotal >= 300) {
+        initialStatus = 'En cours de validation'; 
+    }
+
     const commandeData = {
         client: clientNom, tel: telClean, type: typeCommande, adresse, 
         commentaire: commentaire,
         items: panierFinal, 
         total: grandTotal, 
         remisePromo, 
-        fraisLivraison, 
+        fraisLivraison: typeCommande === 'livraison' ? fraisLivraison : 0, 
         date: new Date(), 
-        status: 'En attente'
+        status: initialStatus,
+        distance: distanceClient ? distanceClient.toFixed(2) : 'N/A',
+        lat: clientCoords?.lat || 0,
+        lng: clientCoords?.lng || 0
     };
 
     try {
@@ -481,6 +547,26 @@ function App() {
   return (
     <div style={{ background: COLORS.bg, minHeight: '100vh', paddingBottom: '100px', color: COLORS.secondary }}>
       
+      {/* --- BLOCAGE DISTANCE > 10KM (V58) --- */}
+      {showDistanceBlocker && (
+          <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.95)', zIndex:9999, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'30px', color:'white', textAlign:'center'}}>
+              <div style={{fontSize:'4rem', marginBottom:'20px'}}>⛔</div>
+              <h2 style={{fontSize:'1.8rem', color: COLORS.danger, marginBottom:'20px'}}>Trop loin pour commander</h2>
+              <p style={{fontSize:'1.1rem', marginBottom:'30px', lineHeight:'1.5'}}>
+                  Vous êtes situé à <strong>{distanceClient ? distanceClient.toFixed(1) : '?'} km</strong>.<br/>
+                  Nous limitons les commandes en ligne à 10 km pour garantir la qualité.
+              </p>
+              <p style={{marginBottom:'30px'}}>Veuillez nous appeler directement :</p>
+              <a href={`tel:${PHONE_NUMBER}`} style={{
+                  background: 'white', color: 'black', padding: '20px 40px', borderRadius: '50px',
+                  textDecoration: 'none', fontWeight: 'bold', fontSize: '1.2rem', display:'flex', alignItems:'center', gap:'10px'
+              }}>
+                  📞 APPELER LE RESTO
+              </a>
+              <button onClick={() => setShowDistanceBlocker(false)} style={{marginTop:'40px', background:'transparent', border:'1px solid #555', color:'#aaa', padding:'10px 20px', borderRadius:'20px'}}>Fermer</button>
+          </div>
+      )}
+
       {/* --- LANDING --- */}
       {view === 'landing' && (
         <div style={{
@@ -545,8 +631,25 @@ function App() {
       {view === 'ticket' && derniereCommande && (
           <div style={{padding: '20px', background: COLORS.bg, minHeight: '100vh', display:'flex', flexDirection:'column', alignItems:'center'}}>
               <div style={{background: 'white', padding: '30px 20px', borderRadius: '20px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', width: '100%', maxWidth: '400px', textAlign: 'center'}}>
-                  <div style={{width:'60px', height:'60px', background: COLORS.success, color:'white', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'2rem', margin:'0 auto 20px auto'}}>✓</div>
-                  <h2 style={{margin: '0 0 10px 0', color: COLORS.secondary}}>Commande Validée !</h2>
+                  <div style={{width:'60px', height:'60px', background: derniereCommande.status === 'En cours de validation' ? COLORS.pending : COLORS.success, color:'white', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'2rem', margin:'0 auto 20px auto'}}>
+                      {derniereCommande.status === 'En cours de validation' ? '!' : '✓'}
+                  </div>
+                  
+                  {derniereCommande.status === 'En cours de validation' ? (
+                      <>
+                        <h2 style={{margin: '0 0 10px 0', color: COLORS.pending}}>Validation Requise</h2>
+                        <p style={{color: COLORS.textLight, fontSize:'0.9rem', marginBottom:'30px'}}>
+                            Montant élevé ({derniereCommande.total} DH). Nous allons vous appeler pour valider.
+                        </p>
+                      </>
+                  ) : (
+                      <>
+                        <h2 style={{margin: '0 0 10px 0', color: COLORS.secondary}}>Commande Reçue !</h2>
+                        <p style={{color: COLORS.textLight, fontSize:'0.9rem', marginBottom:'30px'}}>
+                            Votre commande est en préparation.
+                        </p>
+                      </>
+                  )}
                   
                   <div style={{borderTop: '2px dashed #eee', borderBottom: '2px dashed #eee', padding: '20px 0', marginBottom: '20px', textAlign:'left'}}>
                       <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', fontWeight:'bold'}}>
@@ -560,13 +663,6 @@ function App() {
                                   <div style={{display:'flex', justifyContent:'space-between'}}>
                                       <span>{it.nom} {it.varianteNom && `(${it.varianteNom})`}</span>
                                       <span style={{fontWeight:'bold'}}>{it.prixFinal} DH</span>
-                                  </div>
-                                  {/* Affichage des Extras et Retraits sur le Ticket */}
-                                  <div style={{fontSize:'0.8rem', color: COLORS.textLight}}>
-                                      {it.isCheesyCrust && <div>+ Cheesy Crust</div>}
-                                      {it.extras && it.extras.length > 0 && <div>+ {it.extras.map(e => e.nom).join(', ')}</div>}
-                                      {it.sauces && it.sauces.length > 0 && <div>Sauce: {it.sauces.join(', ')}</div>}
-                                      {it.sans && it.sans.length > 0 && <div style={{color: COLORS.danger}}>Retrait: {it.sans.join(', ')}</div>}
                                   </div>
                               </li>
                           ))}
@@ -611,20 +707,39 @@ function App() {
           <h3 style={{marginTop:'30px'}}>Commandes ({commandes.filter(c => c.status !== 'Terminé').length})</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '20px', marginBottom:'40px' }}>
             {commandes.map(cmd => (
-              <div key={cmd.id} style={{ ...cardStyle, borderLeft: cmd.status === 'Terminé' ? '5px solid #ccc' : `5px solid ${COLORS.success}` }}>
+              <div key={cmd.id} style={{ 
+                  ...cardStyle, 
+                  borderLeft: cmd.status === 'Terminé' ? '5px solid #ccc' : (cmd.status === 'En cours de validation' ? `5px solid ${COLORS.pending}` : `5px solid ${COLORS.success}`) 
+              }}>
+                {/* En-tête Carte Commande */}
                 <div style={{display:'flex', justifyContent:'space-between', alignItems:'start', marginBottom:'15px', paddingBottom:'15px', borderBottom:'1px solid #f0f0f0'}}>
-                  <div><strong style={{fontSize:'1.2rem', display:'block'}}>{cmd.client}</strong><div style={{color: COLORS.textLight, marginTop:'4px'}}>📞 {cmd.tel}</div></div>
+                  <div>
+                      <strong style={{fontSize:'1.2rem', display:'block'}}>{cmd.client}</strong>
+                      <div style={{color: COLORS.textLight, marginTop:'4px'}}>📞 {cmd.tel}</div>
+                      {/* V58: Affichage Distance Admin */}
+                      <div style={{marginTop:'5px', fontSize:'0.8rem', fontWeight:'bold', color: COLORS.secondary, display:'flex', gap:'10px', alignItems:'center'}}>
+                          <span>📍 {cmd.distance} km</span>
+                          {cmd.lat && cmd.lng && (
+                             <a href={`https://www.google.com/maps/search/?api=1&query=${cmd.lat},${cmd.lng}`} target="_blank" rel="noreferrer" style={{color: COLORS.primary, textDecoration:'underline'}}>Voir Map</a>
+                          )}
+                      </div>
+                  </div>
                   <div style={{textAlign:'right'}}>
                     <div style={{fontSize:'1.3rem', fontWeight:'bold', color: COLORS.primary}}>{cmd.total} DH</div>
                     <button onClick={() => copierOdoo(cmd)} style={{marginTop:'5px', background: COLORS.secondary, color:'white', border:'none', padding:'6px 12px', borderRadius:'6px', fontSize:'0.75rem', cursor:'pointer'}}>📋 COPIER</button>
                   </div>
                 </div>
                 
+                {/* Alertes et Statut */}
                 <div style={{marginBottom:'10px'}}>
+                    {cmd.status === 'En cours de validation' && (
+                        <div style={{background: '#FFF7ED', color: '#C2410C', padding:'8px', borderRadius:'8px', fontSize:'0.9rem', fontWeight:'bold', marginBottom:'10px', border:'1px solid #FED7AA'}}>
+                            ⚠️ GROS PANIER / LOIN - À VALIDER
+                        </div>
+                    )}
                     {cmd.type === 'livraison' && <div style={{background:'#FEF3C7', color:'#D97706', padding:'8px', borderRadius:'8px', fontSize:'0.9rem', marginBottom:'5px'}}>🛵 <strong>{cmd.adresse}</strong></div>}
                     {cmd.commentaire && <div style={{background: COLORS.warning, color:'white', padding:'8px', borderRadius:'8px', fontSize:'0.9rem', fontWeight:'bold'}}>📝 Note: {cmd.commentaire}</div>}
                     {cmd.remisePromo > 0 && <div style={{color: COLORS.danger, fontSize:'0.9rem', fontWeight:'bold', border:'1px solid red', padding:'5px', borderRadius:'5px', display:'inline-block'}}>🎁 REMISE PROMO: -{cmd.remisePromo} DH</div>}
-                    {cmd.fraisLivraison > 0 && <div style={{color: COLORS.primary, fontSize:'0.85rem'}}>+ Livraison: 5 DH</div>}
                 </div>
                 
                 <ul style={{listStyle:'none', marginBottom:'15px'}}>
@@ -644,7 +759,6 @@ function App() {
                           <strong style={{color: COLORS.textLight}}>{it.prixFinal} DH</strong>
                       </div>
                       
-                      {/* Affichage Détails Cuisine V56 */}
                       <div style={{fontSize:'0.85rem', color:'#444', marginLeft:'10px', marginTop:'2px'}}>
                           {it.isCheesyCrust && <div style={{fontWeight:'bold', color: COLORS.promo}}>★ CHEESY CRUST</div>}
                           {it.extras && it.extras.length > 0 && <div>+ {it.extras.map(e => e.nom).join(', ')}</div>}
@@ -656,15 +770,25 @@ function App() {
                   ))}
                 </ul>
 
-                <div style={{display:'flex', gap:'10px'}}>
-                  {cmd.status !== 'Terminé' && <button onClick={()=>changerStatus(cmd.id, 'Terminé')} style={{...btnStyle, background: COLORS.success, padding:'10px'}}>✅ SERVI</button>}
-                  <button onClick={()=>supprimerCmd(cmd.id)} style={{...btnStyle, background:'white', color:'red', border:'1px solid #eee', padding:'10px'}}>🗑️</button>
+                <div style={{display:'flex', gap:'10px', flexWrap:'wrap'}}>
+                  {/* Gestion Spéciale "En cours de validation" */}
+                  {cmd.status === 'En cours de validation' ? (
+                      <>
+                        <button onClick={()=>changerStatus(cmd.id, 'En attente')} style={{...btnStyle, background: COLORS.success, padding:'10px', flex:1}}>☎️ CLIENT OK</button>
+                        <button onClick={()=>changerStatus(cmd.id, 'Refusé')} style={{...btnStyle, background: COLORS.danger, padding:'10px', flex:1}}>REFUSER</button>
+                      </>
+                  ) : (
+                      <>
+                         {cmd.status !== 'Terminé' && cmd.status !== 'Refusé' && <button onClick={()=>changerStatus(cmd.id, 'Terminé')} style={{...btnStyle, background: COLORS.success, padding:'10px'}}>✅ SERVI</button>}
+                         <button onClick={()=>supprimerCmd(cmd.id)} style={{...btnStyle, background:'white', color:'red', border:'1px solid #eee', padding:'10px'}}>🗑️</button>
+                      </>
+                  )}
                 </div>
               </div>
             ))}
           </div>
 
-          <div style={{marginTop:'40px', borderTop:'2px solid #eee', paddingTop:'20px'}}>
+           <div style={{marginTop:'40px', borderTop:'2px solid #eee', paddingTop:'20px'}}>
              <h3 style={{marginBottom:'15px'}}>📦 Menu</h3>
              <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '15px', display:'flex', gap:'10px' }}>
               {categoriesReelles.map(c => (
@@ -786,15 +910,20 @@ function App() {
           </div>
           {menuClient.length === 0 && <div style={{textAlign:'center', marginTop:'50px', color: COLORS.textLight}}>Aucun plat disponible.</div>}
           
-          {derniereCommande && (
-              <div onClick={() => setView('ticket')} style={{
-                  position: 'fixed', bottom: panier.length > 0 ? '90px' : '30px', right: '20px', 
-                  background: 'white', padding: '10px 20px', borderRadius: '30px', 
-                  boxShadow: '0 5px 15px rgba(0,0,0,0.1)', fontWeight: 'bold', color: COLORS.success,
-                  display: 'flex', alignItems: 'center', gap: '10px', cursor:'pointer', border:'1px solid #eee'
-              }}>
-                  <span>🧾</span> Ma dernière commande
+          {/* FLOTTANT PANIER MODIFIÉ V58 (GEO) */}
+          {panier.length > 0 && (
+            <div onClick={handleOpenPanier} style={{
+              position: 'fixed', bottom: '30px', left: '5%', width: '90%', 
+              background: COLORS.secondary, color: 'white', padding: '15px 25px', 
+              borderRadius: '50px', display: 'flex', justifyContent: 'space-between', 
+              alignItems: 'center', boxShadow: '0 10px 25px rgba(0,0,0,0.2)', cursor: 'pointer', zIndex: 99
+            }}>
+              <div style={{display:'flex', alignItems:'center', gap:'12px'}}>
+                <span style={{background: COLORS.primary, color:'white', width:'28px', height:'28px', borderRadius:'50%', display:'flex', justifyContent:'center', alignItems:'center', fontWeight:'bold', fontSize:'0.9rem'}}>{panier.length}</span>
+                <span style={{fontSize:'1rem', fontWeight:'500'}}>Voir le panier</span>
               </div>
+              <span style={{fontWeight:'800', fontSize:'1.1rem'}}>{grandTotal} DH</span>
+            </div>
           )}
         </div>
       )}
@@ -803,6 +932,15 @@ function App() {
       {view === 'panier' && (
         <div style={{ padding: '20px', background: 'white', minHeight: '100vh' }}>
           <h2 style={{color: COLORS.secondary}}>🛒 Panier</h2>
+          
+          {/* Avertissement UIR/Technopolis */}
+          {typeCommande === 'livraison' && (
+             <div style={{background: '#FEF2F2', border: '1px solid #FCA5A5', padding:'10px', borderRadius:'8px', marginBottom:'20px', fontSize:'0.9rem', color: '#B91C1C'}}>
+                 <strong>⚠️ Info Zones Spéciales :</strong><br/>
+                 Pour <strong>UIR, Technopolis, UM6P</strong> (ou autres zones éloignées), un supplément (env. 10-15 DH) sera demandé <strong>directement par le livreur</strong>.
+             </div>
+          )}
+
           {panier.length === 0 ? <p>Panier vide.</p> : (
             <>
               <div style={{marginBottom:'30px'}}>
@@ -817,7 +955,6 @@ function App() {
                             {item.choixPates && <span style={{color: COLORS.secondary, fontWeight:'bold'}}> ({item.choixPates})</span>}
                             {item.varianteNom && <span style={{color: COLORS.textLight}}> ({item.varianteNom})</span>}
                         </div>
-                        {/* Affichage des options dans le panier */}
                         <div style={{color: COLORS.textLight, fontSize:'0.9rem'}}>
                             {item.isCheesyCrust && <div style={{color: COLORS.promo, fontWeight:'bold'}}>+ Cheesy Crust</div>}
                             {item.extras && item.extras.length > 0 && <div>+ {item.extras.map(e => e.nom).join(', ')}</div>}
@@ -839,7 +976,11 @@ function App() {
                     </div>
                 )}
 
-                {fraisLivraison > 0 && <div style={{textAlign:'right', color: COLORS.textLight, marginTop:'10px'}}>+ Frais de livraison (petites commandes) : 5 DH</div>}
+                {fraisLivraison > 0 && typeCommande === 'livraison' && (
+                    <div style={{textAlign:'right', color: COLORS.textLight, marginTop:'10px'}}>
+                        + Frais livraison (Petite commande) : 5 DH
+                    </div>
+                )}
                 
                 <div style={{textAlign:'right', fontSize:'1.5rem', fontWeight:'800', marginTop:'10px', color: COLORS.secondary}}>Total : {grandTotal} DH</div>
               </div>
@@ -870,22 +1011,6 @@ function App() {
             </>
           )}
           <button onClick={() => setView('client')} style={{marginTop: '20px', width: '100%', padding: '15px', background: 'transparent', border: 'none', color: COLORS.textLight, fontWeight:'600'}}>Retour</button>
-        </div>
-      )}
-
-      {/* --- FLOTTANT --- */}
-      {view === 'client' && panier.length > 0 && (
-        <div onClick={() => setView('panier')} style={{
-          position: 'fixed', bottom: '30px', left: '5%', width: '90%', 
-          background: COLORS.secondary, color: 'white', padding: '15px 25px', 
-          borderRadius: '50px', display: 'flex', justifyContent: 'space-between', 
-          alignItems: 'center', boxShadow: '0 10px 25px rgba(0,0,0,0.2)', cursor: 'pointer', zIndex: 99
-        }}>
-          <div style={{display:'flex', alignItems:'center', gap:'12px'}}>
-            <span style={{background: COLORS.primary, color:'white', width:'28px', height:'28px', borderRadius:'50%', display:'flex', justifyContent:'center', alignItems:'center', fontWeight:'bold', fontSize:'0.9rem'}}>{panier.length}</span>
-            <span style={{fontSize:'1rem', fontWeight:'500'}}>Voir le panier</span>
-          </div>
-          <span style={{fontWeight:'800', fontSize:'1.1rem'}}>{grandTotal} DH</span>
         </div>
       )}
     </div>
@@ -996,8 +1121,8 @@ function ProductModal({ product, onClose, onAdd }) {
   
   // V56 States
   const [isCheesyCrust, setIsCheesyCrust] = useState(false);
-  const [extrasPizza, setExtrasPizza] = useState([]); // Array d'objets {nom, prix}
-  const [sansIngredients, setSansIngredients] = useState([]); // Array de strings
+  const [extrasPizza, setExtrasPizza] = useState([]); 
+  const [sansIngredients, setSansIngredients] = useState([]); 
 
   let maxChoix = 0;
   let minChoix = 0;
@@ -1044,7 +1169,6 @@ function ProductModal({ product, onClose, onAdd }) {
   };
 
   const toggleExtraPizza = (extraObj) => {
-      // Ajout/Retrait simple (pas de double dose pour l'instant)
       if (extrasPizza.some(e => e.nom === extraObj.nom)) {
           setExtrasPizza(extrasPizza.filter(e => e.nom !== extraObj.nom));
       } else {
@@ -1062,15 +1186,12 @@ function ProductModal({ product, onClose, onAdd }) {
 
   const getCount = (opt, list) => list.filter(x => x === opt).length;
 
-  // Calcul Prix Dynamique V56
+  // Calcul Prix Dynamique
   let basePrice = selectedVar ? Number(selectedVar.prix) : Number(product.prix);
   let totalExtras = extrasPizza.reduce((acc, curr) => acc + curr.prix, 0);
   
-  // Prix Cheesy Crust Dynamique
   let prixCheesy = 0;
   if (isCheesyCrust) {
-      // Si Taille M ou Standard -> 15 DH
-      // Sinon (L, XL, XXL) -> 25 DH
       if (selectedVar?.nom === 'M' || selectedVar?.nom === 'Standard' || !selectedVar) {
           prixCheesy = 15;
       } else {
@@ -1128,7 +1249,7 @@ function ProductModal({ product, onClose, onAdd }) {
             </div>
         )}
 
-        {/* --- SECTION PIZZA EXTRAS V56 --- */}
+        {/* --- SECTION PIZZA EXTRAS --- */}
         {isPizza && (
             <div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}>
                  <div style={{fontWeight:'bold', marginBottom:'10px'}}>Suppléments</div>
@@ -1162,7 +1283,7 @@ function ProductModal({ product, onClose, onAdd }) {
             </div>
         )}
 
-        {/* --- SECTION BURGER RETRAITS V56 --- */}
+        {/* --- SECTION BURGER RETRAITS --- */}
         {isBurger && (
             <div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}>
                 <div style={{fontWeight:'bold', marginBottom:'10px', color: COLORS.danger}}>Je ne veux pas de...</div>
@@ -1204,7 +1325,7 @@ function ProductModal({ product, onClose, onAdd }) {
             </div>
         )}
 
-        {/* Choix Options (Garnitures Pizza / Viandes Tacos) */}
+        {/* Choix Options */}
         {maxChoix > 0 && (
             <div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}>
                 <div style={{fontWeight:'bold', marginBottom:'10px'}}>
@@ -1231,7 +1352,6 @@ function ProductModal({ product, onClose, onAdd }) {
         )}
 
         <button onClick={() => {
-            // Validations Strictes
             if (isPates && !typePates) return alert("Veuillez choisir le type de pâtes !");
             if (minChoix > 0 && optionsChoisies.length < minChoix) return alert(`Veuillez choisir au moins ${minChoix} options !`); 
             if (isTacos && sauces.length === 0) return alert("⚠️ Veuillez choisir au moins une sauce (ou 'Pas de sauce') !");
@@ -1243,7 +1363,6 @@ function ProductModal({ product, onClose, onAdd }) {
                 sauces: sauces,
                 optionsChoisies: optionsChoisies,
                 choixPates: typePates,
-                // New V56 fields
                 isCheesyCrust: isCheesyCrust,
                 extras: extrasPizza,
                 sans: sansIngredients
