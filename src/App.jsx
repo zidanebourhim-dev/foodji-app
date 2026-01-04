@@ -57,10 +57,10 @@ function App() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   
-  // Admin Form & Edit Mode
+  // Admin Form
   const [editId, setEditId] = useState(null); 
   const [nom, setNom] = useState('');
-  const [description, setDescription] = useState(''); // State description
+  const [description, setDescription] = useState(''); 
   const [image, setImage] = useState('');
   const [categorie, setCategorie] = useState('Burgers');
   const [prixBase, setPrixBase] = useState('');
@@ -313,11 +313,36 @@ function App() {
     await updateDoc(doc(db, "produits", item.id), { available: (item.available === false ? true : false) });
   };
   
-  // --- MODIFICATION INTELLIGENTE ---
+  // --- INTELLIGENCE FORMULAIRE ---
+  const handleCategoryChange = (e) => {
+      const cat = e.target.value;
+      setCategorie(cat);
+
+      // Si on est pas en mode édition, on auto-génère les variantes
+      if (!editId) {
+          if (cat === 'Tacos') {
+              setVariantes([
+                  {nom: 'L', prix: ''},
+                  {nom: 'XL', prix: ''},
+                  {nom: 'XXL', prix: ''}
+              ]);
+              setPrixBase('');
+          } else if (cat === 'Pizzas') {
+              setVariantes([
+                  {nom: 'M', prix: ''},
+                  {nom: 'L', prix: ''}
+              ]);
+              setPrixBase('');
+          } else {
+              setVariantes([]); // Prix unique pour le reste
+          }
+      }
+  };
+
   const handleEdit = (p) => {
       setEditId(p.id);
       setNom(p.nom);
-      setDescription(p.description); // On remplit la description existante
+      setDescription(p.description || ''); 
       setCategorie(p.categorie);
       
       if (p.variantes && p.variantes.length > 0) {
@@ -341,7 +366,7 @@ function App() {
     setLoading(true);
     
     const data = { 
-        nom, description, categorie, // Description ajoutée à la sauvegarde
+        nom, description, categorie, 
         prix: variantes.length > 0 ? 0 : Number(prixBase), 
         variantes, 
         available: true,
@@ -560,7 +585,6 @@ function App() {
              <div style={{marginTop:'10px'}}>
                  <input placeholder="Nom" value={nom} onChange={e=>setNom(e.target.value)} style={inputStyle} />
                  
-                 {/* NOUVEAU CHAMP DESCRIPTION (V47) */}
                  <textarea 
                     placeholder="Description" 
                     value={description} 
@@ -569,11 +593,11 @@ function App() {
                  />
 
                  <div style={{display:'flex', gap:'10px', alignItems:'start'}}>
-                   <select value={categorie} onChange={e=>setCategorie(e.target.value)} style={{...inputStyle, width:'50%'}}>
+                   {/* SELECTEUR INTELLIGENT */}
+                   <select value={categorie} onChange={handleCategoryChange} style={{...inputStyle, width:'50%'}}>
                        {categoriesSelectAdmin.map(cat => <option key={cat}>{cat}</option>)}
                    </select>
                    
-                   {/* GESTION INTELLIGENTE DES PRIX VARIANTES */}
                    {variantes.length > 0 ? (
                        <div style={{width:'50%', display:'flex', gap:'5px', flexWrap:'wrap'}}>
                            {variantes.map((v, index) => (
