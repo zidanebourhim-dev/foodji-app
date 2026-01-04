@@ -11,7 +11,7 @@ const LISTE_GARNITURES_PIZZA = ["Viande Hachée", "Poulet", "4 Fromages", "Canni
 const LISTE_SAUCES = ["Algérienne Fait Maison", "Biggy Fait Maison", "Barbecue Fait Maison"];
 const TYPES_PATES = ["Penne", "Tagliatelle", "Spaghetti"];
 
-// EXCLUSIONS PROMO (Minuscule) + Ajout "2 Saisons"
+// EXCLUSIONS PROMO (Minuscule)
 const PIZZAS_EXCLUES_PROMO = ["4 saisons", "fruits de mer", "cannibale", "2 saisons"];
 
 const TOUTES_CATEGORIES = ["Tacos", "Pizzas", "Burgers", "Pâtes", "Sides", "Les Burritos", "Koniks", "Plats", "Salades", "Boissons", "Desserts"];
@@ -21,7 +21,7 @@ const NOTIF_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-previ
 // --- IMAGES ---
 const logoImg = "/logo.png";
 const iconImg = "/icon.png";
-const promoImg = "/promo.jpg"; // TON IMAGE A METTRE DANS PUBLIC
+const promoImg = "/promo.jpg"; 
 
 // --- THEME ---
 const COLORS = {
@@ -47,7 +47,7 @@ function App() {
   const fileInputRef = useRef(null); 
 
   const [selectedProduct, setSelectedProduct] = useState(null);
-  const [showPromoWizard, setShowPromoWizard] = useState(false); // NOUVEAU: Assistant Promo
+  const [showPromoWizard, setShowPromoWizard] = useState(false); 
   const [categorieActive, setCategorieActive] = useState(''); 
   const [adminCategorie, setAdminCategorie] = useState(''); 
 
@@ -62,6 +62,7 @@ function App() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   
+  // Admin Form
   const [editId, setEditId] = useState(null); 
   const [nom, setNom] = useState('');
   const [description, setDescription] = useState(''); 
@@ -130,7 +131,6 @@ function App() {
   // --- FILTRAGE CLIENT ---
   let menuClient = [];
   if (categorieActive === '🔥 PROMOTIONS') {
-      // ON AFFICHE UNIQUEMENT LA CARTE PROMO
       menuClient = [
           {
               id: 'promo-sunday-card',
@@ -138,16 +138,16 @@ function App() {
               description: '2 PIZZAS ACHETÉES = 1 OFFERTE (Moyennes uniquement)',
               categorie: '🔥 PROMOTIONS',
               prix: 0,
-              image: promoImg, // Ton image
+              image: promoImg, 
               available: true,
-              isPromoTrigger: true // Déclencheur spécial
+              isPromoTrigger: true 
           }
       ];
   } else {
       menuClient = menu.filter(p => p.categorie === categorieActive && p.available !== false);
   }
 
-  // --- FILTRAGE ADMIN ---
+  // --- FILTRAGE ADMIN (CORRIGÉ V51 - SECURITÉ CRASH) ---
   let menuAdmin = [];
   if (adminCategorie === 'RUPTURE') {
       menuAdmin = menu.filter(p => p.available === false);
@@ -180,7 +180,6 @@ function App() {
         for (let i = 1; i < rows.length; i++) { 
           const row = rows[i];
           const tokens = row.split(','); 
-          
           if (tokens.length >= 5) {
              const cat = tokens[0].trim();
              const name = tokens[1].trim();
@@ -188,8 +187,7 @@ function App() {
              const p3Raw = tokens[len - 1];
              const p2Raw = tokens[len - 2];
              const p1Raw = tokens[len - 3];
-             const descTokens = tokens.slice(2, len - 3);
-             const desc = descTokens.join(', ').replace(/"/g, '').trim();
+             const desc = tokens.slice(2, len - 3).join(', ').replace(/"/g, '').trim();
              const cleanPrice = (val) => val ? Number(val.toString().replace(/[^0-9.]/g, '')) : 0;
              const p1 = cleanPrice(p1Raw.replace(',','.'));
              const p2 = cleanPrice(p2Raw.replace(',','.'));
@@ -244,14 +242,12 @@ function App() {
   };
 
   const ajouterAuPanier = (itemMerged) => {
-    // Si c'est la carte promo, on ouvre l'assistant
     if (itemMerged.isPromoTrigger) {
         setShowPromoWizard(true);
         return;
     }
     
     if (itemMerged.isInfo) return alert("Info seulement.");
-    
     if (navigator.vibrate) navigator.vibrate(50);
     
     let safePrice = Number(itemMerged.prixFinal);
@@ -290,7 +286,7 @@ function App() {
       return prix;
   };
 
-  // --- CALCUL TOTAL & PROMO DIMANCHE (CORRIGÉ V50) ---
+  // --- CALCUL TOTAL & PROMO DIMANCHE (FIABILISÉ V51) ---
   const calculerTotalEtPromo = () => {
       let sousTotal = 0;
       let pizzasEligibles = [];
@@ -299,21 +295,19 @@ function App() {
           const prixAjuste = getPrixItemAjuste(item);
           sousTotal += prixAjuste;
 
-          // Détection : Pizza + Pas Exclue + Taille Moyenne (M)
-          const isPizza = item.categorie === 'Pizzas';
-          const isExclue = PIZZAS_EXCLUES_PROMO.some(ex => item.nom.toLowerCase().includes(ex));
-          // Vérification stricte de la taille (M ou vide si pas de variante, mais ici on force M)
-          const isMoyenne = item.varianteNom === 'M' || item.varianteNom === 'Standard';
-
-          if (isPizza && !isExclue && isMoyenne) {
+          // V51 : On utilise le flag explicite "isPromoEligible" ajouté par le Wizard
+          // C'est beaucoup plus robuste que de revérifier les noms
+          if (item.isPromoEligible === true) {
               pizzasEligibles.push({ ...item, prixCalcul: prixAjuste });
           }
       });
 
       let remisePromo = 0;
       if (isDimanche && pizzasEligibles.length >= 3) {
+          // Tri croissant : les moins chères en premier
           pizzasEligibles.sort((a, b) => a.prixCalcul - b.prixCalcul);
           const nbGratuites = Math.floor(pizzasEligibles.length / 3);
+          
           for (let i = 0; i < nbGratuites; i++) {
               remisePromo += pizzasEligibles[i].prixCalcul;
           }
@@ -356,7 +350,12 @@ function App() {
       await addDoc(collection(db, "commandes"), {
         client: clientNom, tel: telClean, type: typeCommande, adresse, 
         commentaire: commentaire,
-        items: panierFinal, total: grandTotal, remisePromo, fraisLivraison, date: new Date(), status: 'En attente'
+        items: panierFinal, 
+        total: grandTotal, 
+        remisePromo, // IMPORTANT: On sauvegarde la remise pour l'admin
+        fraisLivraison, 
+        date: new Date(), 
+        status: 'En attente'
       });
       setPanier([]); setCommentaire('');
       alert("✅ Commande envoyée !"); setView('client');
@@ -369,6 +368,22 @@ function App() {
     await updateDoc(doc(db, "produits", item.id), { available: (item.available === false ? true : false) });
   };
   
+  const handleCategoryChange = (e) => {
+      const cat = e.target.value;
+      setCategorie(cat);
+      if (!editId) {
+          if (cat === 'Tacos') {
+              setVariantes([{nom: 'L', prix: ''}, {nom: 'XL', prix: ''}, {nom: 'XXL', prix: ''}]);
+              setPrixBase('');
+          } else if (cat === 'Pizzas') {
+              setVariantes([{nom: 'M', prix: ''}, {nom: 'L', prix: ''}]);
+              setPrixBase('');
+          } else {
+              setVariantes([]);
+          }
+      }
+  };
+
   const handleEdit = (p) => {
       setEditId(p.id);
       setNom(p.nom);
@@ -481,7 +496,7 @@ function App() {
         </div>
       )}
 
-      {/* --- MODAL WIZARD PROMO (NOUVEAU) --- */}
+      {/* --- MODAL WIZARD PROMO --- */}
       {showPromoWizard && (
           <PromoWizard 
             menu={menu} 
@@ -499,7 +514,7 @@ function App() {
         />
       )}
 
-      {/* ... (LOGIN et ADMIN inchangés, je raccourcis pour la lisibilité mais garde tout le reste) ... */}
+      {/* --- LOGIN --- */}
       {view === 'login' && !user && (
         <div style={{ padding: '40px 20px', maxWidth: '400px', margin: '0 auto', textAlign: 'center' }}>
           <h2 style={{marginBottom: '20px'}}>Staff Access</h2>
@@ -510,9 +525,10 @@ function App() {
         </div>
       )}
 
+      {/* --- ADMIN DASHBOARD --- */}
       {view === 'admin' && user && (
         <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
-          {/* ... (Contenu Admin V49 identique) ... */}
+          
           <div style={{marginBottom:'20px', display:'flex', gap:'10px', alignItems:'center', justifyContent:'space-between'}}>
               <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
                 <h2 style={{margin:0}}>⚙️ Admin</h2>
@@ -525,7 +541,6 @@ function App() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '20px', marginBottom:'40px' }}>
             {commandes.map(cmd => (
               <div key={cmd.id} style={{ ...cardStyle, borderLeft: cmd.status === 'Terminé' ? '5px solid #ccc' : `5px solid ${COLORS.success}` }}>
-                {/* ... (Carte Commande identique) ... */}
                 <div style={{display:'flex', justifyContent:'space-between', alignItems:'start', marginBottom:'15px', paddingBottom:'15px', borderBottom:'1px solid #f0f0f0'}}>
                   <div><strong style={{fontSize:'1.2rem', display:'block'}}>{cmd.client}</strong><div style={{color: COLORS.textLight, marginTop:'4px'}}>📞 {cmd.tel}</div></div>
                   <div style={{textAlign:'right'}}>
@@ -537,16 +552,17 @@ function App() {
                 <div style={{marginBottom:'10px'}}>
                     {cmd.type === 'livraison' && <div style={{background:'#FEF3C7', color:'#D97706', padding:'8px', borderRadius:'8px', fontSize:'0.9rem', marginBottom:'5px'}}>🛵 <strong>{cmd.adresse}</strong></div>}
                     {cmd.commentaire && <div style={{background: COLORS.warning, color:'white', padding:'8px', borderRadius:'8px', fontSize:'0.9rem', fontWeight:'bold'}}>📝 Note: {cmd.commentaire}</div>}
-                    {cmd.remisePromo > 0 && <div style={{color: COLORS.success, fontSize:'0.9rem', fontWeight:'bold'}}>🎁 Promo Dimanche : -{cmd.remisePromo} DH</div>}
+                    {/* CORRECTION AFFICHAGE REMISE ADMIN */}
+                    {cmd.remisePromo > 0 && <div style={{color: COLORS.danger, fontSize:'0.9rem', fontWeight:'bold', border:'1px solid red', padding:'5px', borderRadius:'5px', display:'inline-block'}}>🎁 REMISE PROMO: -{cmd.remisePromo} DH</div>}
                     {cmd.fraisLivraison > 0 && <div style={{color: COLORS.primary, fontSize:'0.85rem'}}>+ Livraison: 5 DH</div>}
                 </div>
                 
                 <ul style={{listStyle:'none', marginBottom:'15px'}}>
-                  {cmd.items.map((it, i) => (
+                  {cmd.items && cmd.items.map((it, i) => (
                     <li key={i} style={{padding:'8px 0', borderBottom:'1px dashed #eee', lineHeight:'1.4'}}>
                       <div style={{display:'flex', alignItems:'center', gap:'10px', marginBottom:'2px'}}>
                           <span style={{fontSize:'0.75rem', fontWeight:'bold', color: COLORS.primary, background:'#FEE2E2', padding:'2px 6px', borderRadius:'4px'}}>
-                              [{it.categorie.toUpperCase()}]
+                              [{it.categorie ? it.categorie.toUpperCase() : 'PLAT'}]
                           </span>
                           <strong style={{fontSize:'1.1rem'}}>{it.nom}</strong>
                       </div>
@@ -699,7 +715,6 @@ function App() {
       {/* --- PANIER --- */}
       {view === 'panier' && (
         <div style={{ padding: '20px', background: 'white', minHeight: '100vh' }}>
-          {/* ... (Panier V49 identique) ... */}
           <h2 style={{color: COLORS.secondary}}>🛒 Panier</h2>
           {panier.length === 0 ? <p>Panier vide.</p> : (
             <>
@@ -794,7 +809,7 @@ function formatOptions(list) {
     return Object.entries(counts).map(([name, count]) => count > 1 ? `${name} x${count}` : name).join(', ');
 }
 
-// --- MODAL ASSISTANT PROMO (NOUVEAU) ---
+// --- MODAL ASSISTANT PROMO (CORRIGÉ V51 - FIABILITÉ 100%) ---
 function PromoWizard({ menu, onClose, onValidate }) {
     const [choix, setChoix] = useState([]);
     
@@ -809,10 +824,9 @@ function PromoWizard({ menu, onClose, onValidate }) {
         // Trouver la variante M (ou Standard)
         let varianteM = pizza.variantes?.find(v => v.nom === 'M' || v.nom === 'Standard');
         
-        // Si pas de variante M trouvée mais qu'il y a des variantes, on prend la première (supposée être la petite/moyenne)
+        // Si pas de variante M trouvée mais qu'il y a des variantes, on prend la première
         if (!varianteM && pizza.variantes?.length > 0) varianteM = pizza.variantes[0];
 
-        // Sécurité : Si pas de variante du tout, on prend le prix de base
         const prixFinal = varianteM ? varianteM.prix : pizza.prix;
         const varianteNom = varianteM ? varianteM.nom : null;
 
@@ -821,7 +835,7 @@ function PromoWizard({ menu, onClose, onValidate }) {
             prixFinal: Number(prixFinal),
             originalPrice: Number(prixFinal),
             varianteNom: varianteNom, // FORCE M
-            isPromoItem: true // Marqueur interne
+            isPromoEligible: true // <--- LE BADGE MAGIQUE POUR LE CALCUL
         };
 
         const newChoix = [...choix, newItem];
