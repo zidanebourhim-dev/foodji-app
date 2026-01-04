@@ -5,10 +5,25 @@ import { collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, query, write
 import './App.css';
 
 // --- CONFIGURATION ---
+const CODE_MANAGER = "1234"; 
+
+// Listes Produits
 const LISTE_VIANDES = ["Poulet", "Viande Hachée", "Cordon Bleu", "Nuggets", "Poulet Crispy"];
 const LISTE_GARNITURES_PIZZA = ["Viande Hachée", "Poulet", "4 Fromages", "Cannibale", "Pepperoni", "Thon", "Charcuterie", "Végétarienne", "Fruits de Mer"];
-const LISTE_SAUCES = ["Algérienne Fait Maison", "Biggy Fait Maison", "Barbecue Fait Maison"];
+// Ajout de "Pas de sauce" pour les Tacos
+const LISTE_SAUCES = ["Algérienne Fait Maison", "Biggy Fait Maison", "Barbecue Fait Maison", "Pas de sauce"]; 
 const TYPES_PATES = ["Penne", "Tagliatelle", "Spaghetti"];
+
+// NOUVEAU V56 : Extras Pizza Payants
+const EXTRAS_PIZZA = [
+    { nom: "Extra Champignons", prix: 10 },
+    { nom: "Extra Mozzarella", prix: 10 },
+    { nom: "Extra Parmesan", prix: 15 },
+    { nom: "Extra Cheddar", prix: 15 }
+];
+
+// NOUVEAU V56 : Retrait Ingrédients (Burgers)
+const RETRAIT_INGREDIENTS = ["Sans Tomate", "Sans Salade", "Sans Oignons", "Sans Cornichons", "Sans Sauce"];
 
 const PIZZAS_EXCLUES_PROMO = ["4 saisons", "fruits de mer", "cannibale", "2 saisons"];
 
@@ -56,7 +71,6 @@ function App() {
   const [typeCommande, setTypeCommande] = useState('sur_place');
   const [adresse, setAdresse] = useState('');
   
-  // NOUVEAU : Ticket Persistant
   const [derniereCommande, setDerniereCommande] = useState(null);
 
   const [email, setEmail] = useState('');
@@ -72,12 +86,12 @@ function App() {
   const [prixBase, setPrixBase] = useState('');
   const [variantes, setVariantes] = useState([]); 
 
-  // --- CHARGEMENT MEMOIRE CLIENT (INFOS + TICKET) ---
+  // --- CHARGEMENT MEMOIRE CLIENT ---
   useEffect(() => {
       const savedNom = localStorage.getItem('clientNom');
       const savedTel = localStorage.getItem('clientTel');
       const savedAdresse = localStorage.getItem('clientAdresse');
-      const savedTicket = localStorage.getItem('derniereCommande'); // Récupération du ticket
+      const savedTicket = localStorage.getItem('derniereCommande'); 
 
       if (savedNom) setClientNom(savedNom);
       if (savedTel) setClientTel(savedTel);
@@ -159,10 +173,19 @@ function App() {
       menuAdmin = menu.filter(p => p.categorie === adminCategorie);
   }
 
+  // --- SECURITE MANAGER ---
+  const checkManagerAuth = () => {
+      const code = prompt("🔒 Code Manager requis pour cette action :");
+      if (code === CODE_MANAGER) return true;
+      alert("❌ Code incorrect ! Action annulée.");
+      return false;
+  };
+
   // --- GESTION IMPORT / RESET ---
   const triggerImport = () => {
-      // Plus de code requis, l'utilisateur est déjà authentifié par Firebase
-      fileInputRef.current.click();
+      if (checkManagerAuth()) {
+          fileInputRef.current.click();
+      }
   };
 
   const handleCSVImport = (e) => {
@@ -224,7 +247,8 @@ function App() {
   };
 
   const viderMenu = async () => {
-      // Plus de code requis ici, l'interface Admin est protégée
+      if (!checkManagerAuth()) return;
+
       if(confirm("⚠️ ATTENTION : SUPPRESSION TOTALE DU MENU.\nConfirmer ?")) {
           setLoading(true);
           const batch = writeBatch(db);
@@ -248,15 +272,9 @@ function App() {
     if (itemMerged.isInfo) return alert("Info seulement.");
     if (navigator.vibrate) navigator.vibrate(50);
     
-    let safePrice = Number(itemMerged.prixFinal);
-    if (safePrice === 0 && itemMerged.variantes?.length > 0) {
-        safePrice = itemMerged.prix || 0; 
-    }
-
+    // Le prix final arrive déjà calculé depuis ProductModal (avec extras)
     const itemSafe = {
         ...itemMerged,
-        prixFinal: safePrice, 
-        originalPrice: safePrice,
         uniqueId: Date.now()
     };
     setPanier([...panier, itemSafe]);
@@ -275,7 +293,8 @@ function App() {
   const retirerDuPanier = (uid) => setPanier(panier.filter(i => i.uniqueId !== uid));
   
   const getPrixItemAjuste = (item) => {
-      let prix = Number(item.originalPrice) || 0;
+      // Le prixFinal dans l'item inclut déjà extras et variantes
+      let prix = Number(item.prixFinal) || 0;
       if (item.nom.toLowerCase().includes("pep's") || item.nom.toLowerCase().includes("peps")) {
           if (typeCommande === 'livraison' || typeCommande === 'emporter') {
               prix += 5;
@@ -351,18 +370,12 @@ function App() {
     };
 
     try {
-      // 1. Envoi Firebase
       const docRef = await addDoc(collection(db, "commandes"), commandeData);
-      
-      // 2. Création du Ticket Persistant (avec ID)
       const ticketClient = { ...commandeData, id: docRef.id, date: new Date().toLocaleString() };
       localStorage.setItem('derniereCommande', JSON.stringify(ticketClient));
       setDerniereCommande(ticketClient);
-
-      // 3. Reset et Redirection Ticket
       setPanier([]); setCommentaire('');
-      setView('ticket'); // On envoie vers la vue ticket
-      
+      setView('ticket'); 
     } catch (e) { alert("Erreur réseau"); }
     setLoading(false);
   };
@@ -482,7 +495,6 @@ function App() {
             borderRadius: '50px', fontSize: '1.3rem', fontWeight: 'bold', boxShadow: '0 5px 20px rgba(168, 68, 56, 0.4)', cursor:'pointer'
           }}>VOIR LE MENU</button>
           
-          {/* BOUTON RETROUVER TICKET (Si existe) */}
           {derniereCommande && (
               <button onClick={() => setView('ticket')} style={{
                   marginTop: '20px', background: 'transparent', border: '1px solid #374151', 
@@ -529,33 +541,33 @@ function App() {
         />
       )}
 
-      {/* --- VUE TICKET CLIENT (V53) --- */}
+      {/* --- VUE TICKET CLIENT --- */}
       {view === 'ticket' && derniereCommande && (
           <div style={{padding: '20px', background: COLORS.bg, minHeight: '100vh', display:'flex', flexDirection:'column', alignItems:'center'}}>
               <div style={{background: 'white', padding: '30px 20px', borderRadius: '20px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', width: '100%', maxWidth: '400px', textAlign: 'center'}}>
                   <div style={{width:'60px', height:'60px', background: COLORS.success, color:'white', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'2rem', margin:'0 auto 20px auto'}}>✓</div>
                   <h2 style={{margin: '0 0 10px 0', color: COLORS.secondary}}>Commande Validée !</h2>
-                  <p style={{color: COLORS.textLight, fontSize:'0.9rem', marginBottom:'30px'}}>Votre commande a bien été transmise en cuisine.</p>
                   
                   <div style={{borderTop: '2px dashed #eee', borderBottom: '2px dashed #eee', padding: '20px 0', marginBottom: '20px', textAlign:'left'}}>
                       <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', fontWeight:'bold'}}>
                           <span>Commande N°</span>
                           <span>#{derniereCommande.id ? derniereCommande.id.slice(-4).toUpperCase() : '----'}</span>
                       </div>
-                      <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', color: COLORS.textLight}}>
-                          <span>Client</span>
-                          <span>{derniereCommande.client}</span>
-                      </div>
-                      <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', color: COLORS.textLight}}>
-                          <span>Date</span>
-                          <span>{new Date().toLocaleDateString()}</span>
-                      </div>
                       
                       <ul style={{listStyle:'none', padding:0, marginTop:'20px'}}>
                           {derniereCommande.items.map((it, i) => (
-                              <li key={i} style={{display:'flex', justifyContent:'space-between', marginBottom:'8px', fontSize:'0.95rem'}}>
-                                  <span>{it.nom} {it.varianteNom && `(${it.varianteNom})`}</span>
-                                  <span style={{fontWeight:'bold'}}>{it.prixFinal} DH</span>
+                              <li key={i} style={{marginBottom:'10px', fontSize:'0.95rem', borderBottom:'1px solid #f9f9f9', paddingBottom:'5px'}}>
+                                  <div style={{display:'flex', justifyContent:'space-between'}}>
+                                      <span>{it.nom} {it.varianteNom && `(${it.varianteNom})`}</span>
+                                      <span style={{fontWeight:'bold'}}>{it.prixFinal} DH</span>
+                                  </div>
+                                  {/* Affichage des Extras et Retraits sur le Ticket */}
+                                  <div style={{fontSize:'0.8rem', color: COLORS.textLight}}>
+                                      {it.isCheesyCrust && <div>+ Cheesy Crust</div>}
+                                      {it.extras && it.extras.length > 0 && <div>+ {it.extras.map(e => e.nom).join(', ')}</div>}
+                                      {it.sauces && it.sauces.length > 0 && <div>Sauce: {it.sauces.join(', ')}</div>}
+                                      {it.sans && it.sans.length > 0 && <div style={{color: COLORS.danger}}>Retrait: {it.sans.join(', ')}</div>}
+                                  </div>
                               </li>
                           ))}
                       </ul>
@@ -567,7 +579,7 @@ function App() {
                   </div>
               </div>
 
-              <button onClick={() => { setView('client'); }} style={{marginTop:'30px', background: COLORS.secondary, color:'white', border:'none', padding:'15px 30px', borderRadius:'30px', fontWeight:'bold', cursor:'pointer', boxShadow:'0 5px 15px rgba(0,0,0,0.2)'}}>
+              <button onClick={() => { setView('client'); }} style={{marginTop:'30px', background: COLORS.secondary, color:'white', border:'none', padding:'15px 30px', borderRadius:'30px', fontWeight:'bold', cursor:'pointer'}}>
                   Commander à nouveau
               </button>
           </div>
@@ -631,8 +643,15 @@ function App() {
                           </span>
                           <strong style={{color: COLORS.textLight}}>{it.prixFinal} DH</strong>
                       </div>
-                      {it.sauces && it.sauces.length > 0 && <div style={{fontSize:'0.85rem', color:'#555', marginLeft:'10px', marginTop:'2px'}}>Sauces: {formatOptions(it.sauces)}</div>}
-                      {it.optionsChoisies && it.optionsChoisies.length > 0 && <div style={{fontSize:'0.85rem', color:'#555', marginLeft:'10px', marginTop:'2px'}}>+ {formatOptions(it.optionsChoisies)}</div>}
+                      
+                      {/* Affichage Détails Cuisine V56 */}
+                      <div style={{fontSize:'0.85rem', color:'#444', marginLeft:'10px', marginTop:'2px'}}>
+                          {it.isCheesyCrust && <div style={{fontWeight:'bold', color: COLORS.promo}}>★ CHEESY CRUST</div>}
+                          {it.extras && it.extras.length > 0 && <div>+ {it.extras.map(e => e.nom).join(', ')}</div>}
+                          {it.sauces && it.sauces.length > 0 && <div>Sauces: {formatOptions(it.sauces)}</div>}
+                          {it.optionsChoisies && it.optionsChoisies.length > 0 && <div>+ {formatOptions(it.optionsChoisies)}</div>}
+                          {it.sans && it.sans.length > 0 && <div style={{color: COLORS.danger, fontWeight:'bold'}}>🚫 {it.sans.join(', ')}</div>}
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -746,7 +765,6 @@ function App() {
               return (
               <div key={plat.id} onClick={() => setSelectedProduct(plat)} style={{ ...cardStyle, padding: 0, overflow: 'hidden', display:'flex', flexDirection:'column', cursor: 'pointer', position: 'relative' }}>
                 <div style={{ height: '140px', background: '#eee', backgroundImage: `url(${plat.image || 'https://via.placeholder.com/300?text=Foodji'})`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
-                    {/* AFFICHAGE EXCLUSIF POUR LA PROMO */}
                     {plat.isPromoTrigger && <div style={{position:'absolute', bottom:0, left:0, width:'100%', background:'rgba(0,0,0,0.7)', color:'white', padding:'10px', textAlign:'center', fontWeight:'bold'}}>CLIQUEZ POUR CHOISIR</div>}
                 </div>
                 <div style={{ padding: '12px', flex: 1, display:'flex', flexDirection:'column', justifyContent:'space-between' }}>
@@ -768,7 +786,6 @@ function App() {
           </div>
           {menuClient.length === 0 && <div style={{textAlign:'center', marginTop:'50px', color: COLORS.textLight}}>Aucun plat disponible.</div>}
           
-          {/* BOUTON FLOTTANT TICKET SI EXISTE */}
           {derniereCommande && (
               <div onClick={() => setView('ticket')} style={{
                   position: 'fixed', bottom: panier.length > 0 ? '90px' : '30px', right: '20px', 
@@ -800,9 +817,13 @@ function App() {
                             {item.choixPates && <span style={{color: COLORS.secondary, fontWeight:'bold'}}> ({item.choixPates})</span>}
                             {item.varianteNom && <span style={{color: COLORS.textLight}}> ({item.varianteNom})</span>}
                         </div>
+                        {/* Affichage des options dans le panier */}
                         <div style={{color: COLORS.textLight, fontSize:'0.9rem'}}>
+                            {item.isCheesyCrust && <div style={{color: COLORS.promo, fontWeight:'bold'}}>+ Cheesy Crust</div>}
+                            {item.extras && item.extras.length > 0 && <div>+ {item.extras.map(e => e.nom).join(', ')}</div>}
                             {item.sauces && item.sauces.length > 0 && <div>Sauces: {formatOptions(item.sauces)}</div>}
                             {item.optionsChoisies && item.optionsChoisies.length > 0 && <div>+ {formatOptions(item.optionsChoisies)}</div>}
+                            {item.sans && item.sans.length > 0 && <div style={{color: COLORS.danger}}>Sans: {item.sans.join(', ')}</div>}
                         </div>
                     </div>
                     <div style={{display:'flex', gap:'15px', alignItems:'center'}}>
@@ -879,7 +900,7 @@ function formatOptions(list) {
     return Object.entries(counts).map(([name, count]) => count > 1 ? `${name} x${count}` : name).join(', ');
 }
 
-// --- MODAL ASSISTANT PROMO (V52) ---
+// --- MODAL ASSISTANT PROMO ---
 function PromoWizard({ menu, onClose, onValidate }) {
     const [choix, setChoix] = useState([]);
     
@@ -972,6 +993,11 @@ function ProductModal({ product, onClose, onAdd }) {
   const [optionsChoisies, setOptionsChoisies] = useState([]); 
   const [sauces, setSauces] = useState([]); 
   const [typePates, setTypePates] = useState(null); 
+  
+  // V56 States
+  const [isCheesyCrust, setIsCheesyCrust] = useState(false);
+  const [extrasPizza, setExtrasPizza] = useState([]); // Array d'objets {nom, prix}
+  const [sansIngredients, setSansIngredients] = useState([]); // Array de strings
 
   let maxChoix = 0;
   let minChoix = 0;
@@ -982,6 +1008,8 @@ function ProductModal({ product, onClose, onAdd }) {
   const catLower = product.categorie.toLowerCase();
   const isPates = catLower.includes('pâtes') || catLower.includes('pates');
   const isTacos = catLower.includes('tacos');
+  const isPizza = catLower.includes('pizza');
+  const isBurger = catLower.includes('burger');
   const isMixte = isTacos && nomLower.includes('mixte');
 
   if (isMixte) {
@@ -994,11 +1022,12 @@ function ProductModal({ product, onClose, onAdd }) {
       else if (selectedVar?.nom === 'XXL') maxChoix = 4;
       else maxChoix = 2;
   }
-  else if (catLower.includes('pizza')) {
+  else if (isPizza) {
       if (nomLower.includes('2 saisons')) { maxChoix = 2; minChoix = 2; listeOptions = LISTE_GARNITURES_PIZZA; titreOptions = "2 Garnitures"; }
       if (nomLower.includes('4 saisons')) { maxChoix = 4; minChoix = 4; listeOptions = LISTE_GARNITURES_PIZZA; titreOptions = "4 Garnitures"; }
   }
 
+  // --- LOGIC FUNCTIONS ---
   const incrementOption = (opt, currentList, setList, max) => {
       if (currentList.length < max) {
           setList([...currentList, opt]);
@@ -1014,9 +1043,42 @@ function ProductModal({ product, onClose, onAdd }) {
       }
   };
 
+  const toggleExtraPizza = (extraObj) => {
+      // Ajout/Retrait simple (pas de double dose pour l'instant)
+      if (extrasPizza.some(e => e.nom === extraObj.nom)) {
+          setExtrasPizza(extrasPizza.filter(e => e.nom !== extraObj.nom));
+      } else {
+          setExtrasPizza([...extrasPizza, extraObj]);
+      }
+  };
+
+  const toggleSans = (item) => {
+      if (sansIngredients.includes(item)) {
+          setSansIngredients(sansIngredients.filter(x => x !== item));
+      } else {
+          setSansIngredients([...sansIngredients, item]);
+      }
+  };
+
   const getCount = (opt, list) => list.filter(x => x === opt).length;
 
-  const currentPrice = selectedVar ? Number(selectedVar.prix) : Number(product.prix);
+  // Calcul Prix Dynamique V56
+  let basePrice = selectedVar ? Number(selectedVar.prix) : Number(product.prix);
+  let totalExtras = extrasPizza.reduce((acc, curr) => acc + curr.prix, 0);
+  
+  // Prix Cheesy Crust Dynamique
+  let prixCheesy = 0;
+  if (isCheesyCrust) {
+      // Si Taille M ou Standard -> 15 DH
+      // Sinon (L, XL, XXL) -> 25 DH
+      if (selectedVar?.nom === 'M' || selectedVar?.nom === 'Standard' || !selectedVar) {
+          prixCheesy = 15;
+      } else {
+          prixCheesy = 25;
+      }
+  }
+
+  const finalPriceCalculated = basePrice + totalExtras + prixCheesy;
 
   return (
     <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.5)', zIndex:1000, display:'flex', alignItems:'flex-end', justifyContent:'center'}}>
@@ -1066,10 +1128,64 @@ function ProductModal({ product, onClose, onAdd }) {
             </div>
         )}
 
-        {/* Choix Sauces */}
+        {/* --- SECTION PIZZA EXTRAS V56 --- */}
+        {isPizza && (
+            <div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}>
+                 <div style={{fontWeight:'bold', marginBottom:'10px'}}>Suppléments</div>
+                 
+                 {/* CHEESY CRUST */}
+                 <div onClick={() => setIsCheesyCrust(!isCheesyCrust)} style={{
+                     display:'flex', justifyContent:'space-between', alignItems:'center', padding:'15px', borderRadius:'10px',
+                     border: isCheesyCrust ? `2px solid ${COLORS.promo}` : '1px solid #ddd',
+                     background: isCheesyCrust ? '#FFFBF0' : 'white', cursor:'pointer', marginBottom:'15px'
+                 }}>
+                     <span style={{fontWeight:'bold'}}>🧀 Cheesy Crust (Bords Fourrés)</span>
+                     <span style={{color: COLORS.primary, fontWeight:'bold'}}>
+                         +{selectedVar?.nom === 'M' || selectedVar?.nom === 'Standard' || !selectedVar ? '15' : '25'} DH
+                     </span>
+                 </div>
+
+                 {/* EXTRAS */}
+                 <div style={{display:'flex', flexWrap:'wrap', gap:'10px'}}>
+                     {EXTRAS_PIZZA.map(ex => {
+                         const isSelected = extrasPizza.some(e => e.nom === ex.nom);
+                         return (
+                            <button key={ex.nom} onClick={() => toggleExtraPizza(ex)} style={{
+                                padding:'8px 12px', borderRadius:'20px', border: isSelected ? `1px solid ${COLORS.primary}` : '1px solid #ddd',
+                                background: isSelected ? '#FFF5F5' : 'white', color: isSelected ? COLORS.primary : 'black', fontWeight:'bold', fontSize:'0.9rem'
+                            }}>
+                                {isSelected ? '✓ ' : '+ '}{ex.nom} ({ex.prix} DH)
+                            </button>
+                         )
+                     })}
+                 </div>
+            </div>
+        )}
+
+        {/* --- SECTION BURGER RETRAITS V56 --- */}
+        {isBurger && (
+            <div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}>
+                <div style={{fontWeight:'bold', marginBottom:'10px', color: COLORS.danger}}>Je ne veux pas de...</div>
+                <div style={{display:'flex', flexWrap:'wrap', gap:'10px'}}>
+                    {RETRAIT_INGREDIENTS.map(ing => (
+                         <button key={ing} onClick={() => toggleSans(ing)} style={{
+                            padding:'8px 12px', borderRadius:'20px', border: '1px solid #FCA5A5',
+                            background: sansIngredients.includes(ing) ? '#FEF2F2' : 'white', 
+                            color: COLORS.danger, fontWeight:'bold', fontSize:'0.9rem', opacity: sansIngredients.includes(ing) ? 1 : 0.6
+                        }}>
+                            {sansIngredients.includes(ing) ? '🚫 ' : ''}{ing}
+                        </button>
+                    ))}
+                </div>
+            </div>
+        )}
+
+        {/* Choix Sauces (Tacos) */}
         {isTacos && (
             <div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}>
-                <div style={{fontWeight:'bold', marginBottom:'10px'}}>Sauces Maison <small style={{color:COLORS.textLight}}>(Max 2)</small></div>
+                <div style={{fontWeight:'bold', marginBottom:'10px'}}>
+                    Sauces <small style={{color: COLORS.danger}}>(Minimum 1, Max 2)</small>
+                </div>
                 <div style={{display:'flex', flexDirection:'column', gap:'10px'}}>
                     {LISTE_SAUCES.map(s => {
                         const count = getCount(s, sauces);
@@ -1088,7 +1204,7 @@ function ProductModal({ product, onClose, onAdd }) {
             </div>
         )}
 
-        {/* Choix Options */}
+        {/* Choix Options (Garnitures Pizza / Viandes Tacos) */}
         {maxChoix > 0 && (
             <div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}>
                 <div style={{fontWeight:'bold', marginBottom:'10px'}}>
@@ -1115,16 +1231,22 @@ function ProductModal({ product, onClose, onAdd }) {
         )}
 
         <button onClick={() => {
+            // Validations Strictes
             if (isPates && !typePates) return alert("Veuillez choisir le type de pâtes !");
             if (minChoix > 0 && optionsChoisies.length < minChoix) return alert(`Veuillez choisir au moins ${minChoix} options !`); 
-            
+            if (isTacos && sauces.length === 0) return alert("⚠️ Veuillez choisir au moins une sauce (ou 'Pas de sauce') !");
+
             const itemMerged = {
                 ...product,
-                prixFinal: currentPrice,
+                prixFinal: finalPriceCalculated,
                 varianteNom: selectedVar ? selectedVar.nom : null, 
                 sauces: sauces,
                 optionsChoisies: optionsChoisies,
-                choixPates: typePates
+                choixPates: typePates,
+                // New V56 fields
+                isCheesyCrust: isCheesyCrust,
+                extras: extrasPizza,
+                sans: sansIngredients
             };
 
             onAdd(itemMerged);
@@ -1133,7 +1255,7 @@ function ProductModal({ product, onClose, onAdd }) {
             padding: '15px', fontWeight: 'bold', width: '100%', marginTop: '30px', fontSize: '1.1rem',
             opacity: (minChoix > 0 && optionsChoisies.length < minChoix) ? 0.5 : 1
         }}>
-            {minChoix > 0 && optionsChoisies.length < minChoix ? `Choisir encore ${minChoix - optionsChoisies.length}` : `Ajouter au panier - ${currentPrice} DH`}
+            {minChoix > 0 && optionsChoisies.length < minChoix ? `Choisir encore ${minChoix - optionsChoisies.length}` : `Ajouter au panier - ${finalPriceCalculated} DH`}
         </button>
       </div>
     </div>
