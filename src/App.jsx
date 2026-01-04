@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+// On utilise le firebase.js corrigé
 import { db, auth } from './firebase';
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
 import { collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, query, writeBatch } from 'firebase/firestore';
@@ -6,9 +7,7 @@ import './App.css';
 
 // --- CONFIGURATION ---
 const CODE_MANAGER = "1234"; 
-const PHONE_NUMBER = "0537536689";
-
-// 📍 COORDONNEES EXACTES (Sala Al Jadida)
+// 📍 COORDONNEES DU RESTO (Sala Al Jadida)
 const RESTO_COORDS = { lat: 33.997484, lng: -6.735644 }; 
 
 // Listes Produits
@@ -73,10 +72,9 @@ function App() {
   const [typeCommande, setTypeCommande] = useState('sur_place');
   const [adresse, setAdresse] = useState('');
   
-  // V58 : Gestion Distance
+  // V57 : Distance Client (Calcul simple sans blocage strict V58)
   const [distanceClient, setDistanceClient] = useState(null);
-  const [clientCoords, setClientCoords] = useState(null); // Pour le lien Maps
-  const [showDistanceBlocker, setShowDistanceBlocker] = useState(false); // Modal Bloquante > 10km
+  const [clientCoords, setClientCoords] = useState(null);
   
   const [derniereCommande, setDerniereCommande] = useState(null);
 
@@ -93,7 +91,7 @@ function App() {
   const [prixBase, setPrixBase] = useState('');
   const [variantes, setVariantes] = useState([]); 
 
-  // --- UTILS GEO (V58) ---
+  // --- UTILS GEO (V57) ---
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
       const R = 6371; // Rayon Terre km
       const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -283,7 +281,7 @@ function App() {
       else setView('login'); 
   };
 
-  // --- LOGIQUE PANIER & GEO (V58) ---
+  // --- LOGIQUE PANIER & GEO (V57) ---
   const ajouterAuPanier = (itemMerged) => {
     if (itemMerged.isPromoTrigger) {
         setShowPromoWizard(true);
@@ -342,18 +340,15 @@ function App() {
           }
       }
 
-      // V58 : Frais livraison standard < 45 DH
-      const fraisLivraison = (grandTotal < 45) ? 5 : 0;
-      
-      // On calcule le grand total pour la vérification, mais l'affichage dépendra du mode
-      const grandTotal = (sousTotal - remisePromo) + (typeCommande === 'livraison' ? fraisLivraison : 0);
+      const fraisLivraison = (typeCommande === 'livraison' && (sousTotal - remisePromo) < 45 && (sousTotal - remisePromo) > 0) ? 5 : 0;
+      const grandTotal = (sousTotal - remisePromo) + fraisLivraison;
 
       return { sousTotal, remisePromo, fraisLivraison, grandTotal };
   };
 
   const { sousTotal, remisePromo, fraisLivraison, grandTotal } = calculerTotalEtPromo();
 
-  // --- ACCES AU PANIER (V58: Geo-Filtre Strict) ---
+  // --- ACCES AU PANIER (V57: Geo-Filtre SOUPLE) ---
   const handleOpenPanier = () => {
       if (panier.length === 0) return alert("Panier vide !");
 
@@ -367,21 +362,40 @@ function App() {
               const dist = calculateDistance(RESTO_COORDS.lat, RESTO_COORDS.lng, userLat, userLng);
               setDistanceClient(dist);
 
-              // REGLE ABSOLUE V58 : MUR DES 10 KM
-              if (dist > 10) {
-                  setShowDistanceBlocker(true); // Ouvre la modal bloquante
-                  return; 
+              // REGLES V57 (Pas de blocage murale 10km, juste des alertes)
+              
+              // 1. Si Panier > 300 DH -> PASS (Validation manuelle)
+              if (grandTotal >= 300) {
+                  setView('panier');
+                  return;
               }
 
-              // Si < 10km, on laisse entrer dans le panier
-              // Les règles de montant (300 DH) seront gérées dans le panier
+              // 2. Si < 300 DH -> Vérif Distance
+              if (dist > 10) {
+                  alert(`⛔️ Vous êtes à ${dist.toFixed(1)} km.\n\nNous ne livrons pas à plus de 10km les commandes < 300 DH.`);
+                  return; // Bloque l'accès
+              }
+              
+              if (dist > 4 && grandTotal < 300) {
+                  alert(`⛔️ Vous êtes à ${dist.toFixed(1)} km.\n\nDans la zone 4km-10km, le minimum de commande est de 300 DH.\n\nVeuillez compléter votre panier.`);
+                  return; // Bloque l'accès
+              }
+
+              // Si < 4km ou conditions remplies
               setView('panier');
 
           }, (error) => {
-              alert("⚠️ La géolocalisation est OBLIGATOIRE pour vérifier l'éligibilité.\n\nVeuillez autoriser l'accès GPS.");
+              // En cas de refus ou erreur GPS
+              if (grandTotal >= 300) {
+                  // On laisse passer les gros paniers même sans GPS (bénéfice du doute + validation tel)
+                  setView('panier');
+              } else {
+                  alert("⚠️ La géolocalisation est requise pour vérifier votre zone de livraison.");
+              }
           });
       } else {
-          alert("GPS non supporté. Commande impossible.");
+          alert("GPS non supporté.");
+          setView('panier'); // Fallback
       }
   };
 
@@ -389,11 +403,6 @@ function App() {
     if (panier.length === 0) return alert("Panier vide !");
     if (!clientNom.trim()) return alert("Nom obligatoire.");
     
-    // VERIFICATION FINALE ZONES (V58)
-    if (distanceClient > 4 && distanceClient <= 10 && grandTotal < 300) {
-        return alert(`⛔️ Zone ${distanceClient.toFixed(1)} km.\n\nMinimum de commande : 300 DH pour cette distance.\nMerci de compléter votre panier.`);
-    }
-
     const telClean = clientTel.replace(/\s/g, ''); 
     const marocRegex = /^(06|07)\d{8}$/;
     
@@ -415,10 +424,10 @@ function App() {
         prixFinal: getPrixItemAjuste(item)
     }));
 
-    // V58 : Logique Statut "Gros Panier" en zone 4-10km ou > 300 Global
+    // V57 : Logique Statut
     let initialStatus = 'En attente';
     if (grandTotal >= 300) {
-        initialStatus = 'En cours de validation'; 
+        initialStatus = 'En cours de validation'; // Statut spécial gros panier
     }
 
     const commandeData = {
@@ -427,10 +436,10 @@ function App() {
         items: panierFinal, 
         total: grandTotal, 
         remisePromo, 
-        fraisLivraison: typeCommande === 'livraison' ? fraisLivraison : 0, 
+        fraisLivraison, 
         date: new Date(), 
         status: initialStatus,
-        distance: distanceClient ? distanceClient.toFixed(2) : 'N/A',
+        distance: distanceClient ? distanceClient.toFixed(2) : 'N/A', // Stockage distance
         lat: clientCoords?.lat || 0,
         lng: clientCoords?.lng || 0
     };
@@ -547,26 +556,6 @@ function App() {
   return (
     <div style={{ background: COLORS.bg, minHeight: '100vh', paddingBottom: '100px', color: COLORS.secondary }}>
       
-      {/* --- BLOCAGE DISTANCE > 10KM (V58) --- */}
-      {showDistanceBlocker && (
-          <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.95)', zIndex:9999, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'30px', color:'white', textAlign:'center'}}>
-              <div style={{fontSize:'4rem', marginBottom:'20px'}}>⛔</div>
-              <h2 style={{fontSize:'1.8rem', color: COLORS.danger, marginBottom:'20px'}}>Trop loin pour commander</h2>
-              <p style={{fontSize:'1.1rem', marginBottom:'30px', lineHeight:'1.5'}}>
-                  Vous êtes situé à <strong>{distanceClient ? distanceClient.toFixed(1) : '?'} km</strong>.<br/>
-                  Nous limitons les commandes en ligne à 10 km pour garantir la qualité.
-              </p>
-              <p style={{marginBottom:'30px'}}>Veuillez nous appeler directement :</p>
-              <a href={`tel:${PHONE_NUMBER}`} style={{
-                  background: 'white', color: 'black', padding: '20px 40px', borderRadius: '50px',
-                  textDecoration: 'none', fontWeight: 'bold', fontSize: '1.2rem', display:'flex', alignItems:'center', gap:'10px'
-              }}>
-                  📞 APPELER LE RESTO
-              </a>
-              <button onClick={() => setShowDistanceBlocker(false)} style={{marginTop:'40px', background:'transparent', border:'1px solid #555', color:'#aaa', padding:'10px 20px', borderRadius:'20px'}}>Fermer</button>
-          </div>
-      )}
-
       {/* --- LANDING --- */}
       {view === 'landing' && (
         <div style={{
@@ -637,16 +626,16 @@ function App() {
                   
                   {derniereCommande.status === 'En cours de validation' ? (
                       <>
-                        <h2 style={{margin: '0 0 10px 0', color: COLORS.pending}}>Validation Requise</h2>
+                        <h2 style={{margin: '0 0 10px 0', color: COLORS.pending}}>En attente de validation</h2>
                         <p style={{color: COLORS.textLight, fontSize:'0.9rem', marginBottom:'30px'}}>
-                            Montant élevé ({derniereCommande.total} DH). Nous allons vous appeler pour valider.
+                            Votre commande dépasse 300 DH. Nous allons vous appeler pour la valider.
                         </p>
                       </>
                   ) : (
                       <>
-                        <h2 style={{margin: '0 0 10px 0', color: COLORS.secondary}}>Commande Reçue !</h2>
+                        <h2 style={{margin: '0 0 10px 0', color: COLORS.secondary}}>Commande Transmise !</h2>
                         <p style={{color: COLORS.textLight, fontSize:'0.9rem', marginBottom:'30px'}}>
-                            Votre commande est en préparation.
+                            Votre commande a bien été reçue.
                         </p>
                       </>
                   )}
@@ -716,12 +705,9 @@ function App() {
                   <div>
                       <strong style={{fontSize:'1.2rem', display:'block'}}>{cmd.client}</strong>
                       <div style={{color: COLORS.textLight, marginTop:'4px'}}>📞 {cmd.tel}</div>
-                      {/* V58: Affichage Distance Admin */}
-                      <div style={{marginTop:'5px', fontSize:'0.8rem', fontWeight:'bold', color: COLORS.secondary, display:'flex', gap:'10px', alignItems:'center'}}>
-                          <span>📍 {cmd.distance} km</span>
-                          {cmd.lat && cmd.lng && (
-                             <a href={`https://www.google.com/maps/search/?api=1&query=${cmd.lat},${cmd.lng}`} target="_blank" rel="noreferrer" style={{color: COLORS.primary, textDecoration:'underline'}}>Voir Map</a>
-                          )}
+                      {/* V57: Affichage Distance Admin */}
+                      <div style={{marginTop:'5px', fontSize:'0.8rem', fontWeight:'bold', color: COLORS.secondary}}>
+                          📍 Distance: {cmd.distance} km
                       </div>
                   </div>
                   <div style={{textAlign:'right'}}>
@@ -734,7 +720,7 @@ function App() {
                 <div style={{marginBottom:'10px'}}>
                     {cmd.status === 'En cours de validation' && (
                         <div style={{background: '#FFF7ED', color: '#C2410C', padding:'8px', borderRadius:'8px', fontSize:'0.9rem', fontWeight:'bold', marginBottom:'10px', border:'1px solid #FED7AA'}}>
-                            ⚠️ GROS PANIER / LOIN - À VALIDER
+                            ⚠️ GROS PANIER - À VALIDER TEL
                         </div>
                     )}
                     {cmd.type === 'livraison' && <div style={{background:'#FEF3C7', color:'#D97706', padding:'8px', borderRadius:'8px', fontSize:'0.9rem', marginBottom:'5px'}}>🛵 <strong>{cmd.adresse}</strong></div>}
@@ -788,6 +774,7 @@ function App() {
             ))}
           </div>
 
+          {/* ... (Menu Admin & Import Section Identique V56) ... */}
            <div style={{marginTop:'40px', borderTop:'2px solid #eee', paddingTop:'20px'}}>
              <h3 style={{marginBottom:'15px'}}>📦 Menu</h3>
              <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '15px', display:'flex', gap:'10px' }}>
@@ -910,7 +897,7 @@ function App() {
           </div>
           {menuClient.length === 0 && <div style={{textAlign:'center', marginTop:'50px', color: COLORS.textLight}}>Aucun plat disponible.</div>}
           
-          {/* FLOTTANT PANIER MODIFIÉ V58 (GEO) */}
+          {/* FLOTTANT PANIER MODIFIÉ V57 */}
           {panier.length > 0 && (
             <div onClick={handleOpenPanier} style={{
               position: 'fixed', bottom: '30px', left: '5%', width: '90%', 
@@ -932,15 +919,6 @@ function App() {
       {view === 'panier' && (
         <div style={{ padding: '20px', background: 'white', minHeight: '100vh' }}>
           <h2 style={{color: COLORS.secondary}}>🛒 Panier</h2>
-          
-          {/* Avertissement UIR/Technopolis */}
-          {typeCommande === 'livraison' && (
-             <div style={{background: '#FEF2F2', border: '1px solid #FCA5A5', padding:'10px', borderRadius:'8px', marginBottom:'20px', fontSize:'0.9rem', color: '#B91C1C'}}>
-                 <strong>⚠️ Info Zones Spéciales :</strong><br/>
-                 Pour <strong>UIR, Technopolis, UM6P</strong> (ou autres zones éloignées), un supplément (env. 10-15 DH) sera demandé <strong>directement par le livreur</strong>.
-             </div>
-          )}
-
           {panier.length === 0 ? <p>Panier vide.</p> : (
             <>
               <div style={{marginBottom:'30px'}}>
@@ -976,11 +954,7 @@ function App() {
                     </div>
                 )}
 
-                {fraisLivraison > 0 && typeCommande === 'livraison' && (
-                    <div style={{textAlign:'right', color: COLORS.textLight, marginTop:'10px'}}>
-                        + Frais livraison (Petite commande) : 5 DH
-                    </div>
-                )}
+                {fraisLivraison > 0 && <div style={{textAlign:'right', color: COLORS.textLight, marginTop:'10px'}}>+ Frais de livraison (petites commandes) : 5 DH</div>}
                 
                 <div style={{textAlign:'right', fontSize:'1.5rem', fontWeight:'800', marginTop:'10px', color: COLORS.secondary}}>Total : {grandTotal} DH</div>
               </div>
