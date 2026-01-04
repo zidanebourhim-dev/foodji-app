@@ -60,11 +60,11 @@ function App() {
   // Admin Form & Edit Mode
   const [editId, setEditId] = useState(null); 
   const [nom, setNom] = useState('');
-  const [description, setDescription] = useState('');
+  const [description, setDescription] = useState(''); // State description
   const [image, setImage] = useState('');
   const [categorie, setCategorie] = useState('Burgers');
   const [prixBase, setPrixBase] = useState('');
-  const [variantes, setVariantes] = useState([]); // C'est ici que les tailles sont stockées
+  const [variantes, setVariantes] = useState([]); 
 
   // --- CHARGEMENT MEMOIRE CLIENT ---
   useEffect(() => {
@@ -313,14 +313,13 @@ function App() {
     await updateDoc(doc(db, "produits", item.id), { available: (item.available === false ? true : false) });
   };
   
-  // --- MODIFICATION INTELLIGENTE (V46) ---
+  // --- MODIFICATION INTELLIGENTE ---
   const handleEdit = (p) => {
       setEditId(p.id);
       setNom(p.nom);
-      setDescription(p.description);
+      setDescription(p.description); // On remplit la description existante
       setCategorie(p.categorie);
       
-      // Si le produit a des variantes (L, XL...), on les charge et on vide le prix unique
       if (p.variantes && p.variantes.length > 0) {
           setVariantes(p.variantes);
           setPrixBase(''); 
@@ -342,8 +341,7 @@ function App() {
     setLoading(true);
     
     const data = { 
-        nom, description, categorie, 
-        // Si variantes existent, le prix de base est 0 (ou calculé min), sinon prix unique
+        nom, description, categorie, // Description ajoutée à la sauvegarde
         prix: variantes.length > 0 ? 0 : Number(prixBase), 
         variantes, 
         available: true,
@@ -561,6 +559,15 @@ function App() {
              <summary>{editId ? '✏️ Modifier Produit' : 'Ajout Manuel'}</summary>
              <div style={{marginTop:'10px'}}>
                  <input placeholder="Nom" value={nom} onChange={e=>setNom(e.target.value)} style={inputStyle} />
+                 
+                 {/* NOUVEAU CHAMP DESCRIPTION (V47) */}
+                 <textarea 
+                    placeholder="Description" 
+                    value={description} 
+                    onChange={e=>setDescription(e.target.value)} 
+                    style={{...inputStyle, height:'60px', fontFamily:'inherit', resize:'vertical'}} 
+                 />
+
                  <div style={{display:'flex', gap:'10px', alignItems:'start'}}>
                    <select value={categorie} onChange={e=>setCategorie(e.target.value)} style={{...inputStyle, width:'50%'}}>
                        {categoriesSelectAdmin.map(cat => <option key={cat}>{cat}</option>)}
@@ -586,7 +593,7 @@ function App() {
                    )}
                  </div>
                  <button onClick={saveProduit} style={{...btnStyle, width:'auto', marginTop:'15px'}}>{editId ? 'Mettre à jour' : 'Ajouter'}</button>
-                 {editId && <button onClick={() => {setEditId(null); setNom(''); setPrixBase(''); setVariantes([]);}} style={{...btnStyle, background:'gray', width:'auto', marginLeft:'10px'}}>Annuler</button>}
+                 {editId && <button onClick={() => {setEditId(null); setNom(''); setPrixBase(''); setVariantes([]); setDescription('');}} style={{...btnStyle, background:'gray', width:'auto', marginLeft:'10px'}}>Annuler</button>}
              </div>
            </details>
 
