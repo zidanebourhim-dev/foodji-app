@@ -11,8 +11,8 @@ const LISTE_GARNITURES_PIZZA = ["Viande Hachée", "Poulet", "4 Fromages", "Canni
 const LISTE_SAUCES = ["Algérienne Fait Maison", "Biggy Fait Maison", "Barbecue Fait Maison"];
 const TYPES_PATES = ["Penne", "Tagliatelle", "Spaghetti"];
 
-// EXCLUSIONS PROMO DIMANCHE (Minuscule pour comparaison)
-const PIZZAS_EXCLUES_PROMO = ["4 saisons", "fruits de mer", "cannibale"];
+// EXCLUSIONS PROMO (Minuscule) + Ajout "2 Saisons"
+const PIZZAS_EXCLUES_PROMO = ["4 saisons", "fruits de mer", "cannibale", "2 saisons"];
 
 const TOUTES_CATEGORIES = ["Tacos", "Pizzas", "Burgers", "Pâtes", "Sides", "Les Burritos", "Koniks", "Plats", "Salades", "Boissons", "Desserts"];
 
@@ -21,6 +21,7 @@ const NOTIF_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-previ
 // --- IMAGES ---
 const logoImg = "/logo.png";
 const iconImg = "/icon.png";
+const promoImg = "/promo.jpg"; // TON IMAGE A METTRE DANS PUBLIC
 
 // --- THEME ---
 const COLORS = {
@@ -46,6 +47,7 @@ function App() {
   const fileInputRef = useRef(null); 
 
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [showPromoWizard, setShowPromoWizard] = useState(false); // NOUVEAU: Assistant Promo
   const [categorieActive, setCategorieActive] = useState(''); 
   const [adminCategorie, setAdminCategorie] = useState(''); 
 
@@ -60,7 +62,6 @@ function App() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   
-  // Admin Form
   const [editId, setEditId] = useState(null); 
   const [nom, setNom] = useState('');
   const [description, setDescription] = useState(''); 
@@ -129,25 +130,18 @@ function App() {
   // --- FILTRAGE CLIENT ---
   let menuClient = [];
   if (categorieActive === '🔥 PROMOTIONS') {
-      // On affiche les pizzas ELIGIBLES dans l'onglet promo pour faciliter le choix
-      const pizzasEligibles = menu.filter(p => 
-          p.categorie === 'Pizzas' && 
-          p.available !== false &&
-          !PIZZAS_EXCLUES_PROMO.some(exclu => p.nom.toLowerCase().includes(exclu))
-      );
-
+      // ON AFFICHE UNIQUEMENT LA CARTE PROMO
       menuClient = [
           {
-              id: 'promo-sunday-info',
-              nom: 'OFFRE DIMANCHE : 2 ACHETÉES = 1 OFFERTE',
-              description: 'Ajoutez 3 pizzas éligibles au panier, la moins chère sera automatiquement offerte ! (Hors: 4 Saisons, Fruits de Mer, Cannibale)',
+              id: 'promo-sunday-card',
+              nom: 'OFFRE DIMANCHE',
+              description: '2 PIZZAS ACHETÉES = 1 OFFERTE (Moyennes uniquement)',
               categorie: '🔥 PROMOTIONS',
               prix: 0,
-              image: 'https://img.freepik.com/free-vector/pizza-time-promo-banner_23-2148967986.jpg',
+              image: promoImg, // Ton image
               available: true,
-              isInfo: true 
-          },
-          ...pizzasEligibles // On affiche directement les pizzas qu'on peut prendre
+              isPromoTrigger: true // Déclencheur spécial
+          }
       ];
   } else {
       menuClient = menu.filter(p => p.categorie === categorieActive && p.available !== false);
@@ -250,7 +244,14 @@ function App() {
   };
 
   const ajouterAuPanier = (itemMerged) => {
-    if (itemMerged.isInfo) return alert("Ceci est une offre informative. Ajoutez les pizzas ci-dessous !");
+    // Si c'est la carte promo, on ouvre l'assistant
+    if (itemMerged.isPromoTrigger) {
+        setShowPromoWizard(true);
+        return;
+    }
+    
+    if (itemMerged.isInfo) return alert("Info seulement.");
+    
     if (navigator.vibrate) navigator.vibrate(50);
     
     let safePrice = Number(itemMerged.prixFinal);
@@ -268,9 +269,17 @@ function App() {
     setSelectedProduct(null); 
   };
 
+  const ajouterLotAuPanier = (lotPizzas) => {
+      const nouveauxItems = lotPizzas.map((p, index) => ({
+          ...p,
+          uniqueId: Date.now() + index
+      }));
+      setPanier([...panier, ...nouveauxItems]);
+      setShowPromoWizard(false);
+  };
+
   const retirerDuPanier = (uid) => setPanier(panier.filter(i => i.uniqueId !== uid));
   
-  // --- CALCUL PRIX ITEM (REGLE PIZZA PEP'S) ---
   const getPrixItemAjuste = (item) => {
       let prix = Number(item.originalPrice) || 0;
       if (item.nom.toLowerCase().includes("pep's") || item.nom.toLowerCase().includes("peps")) {
@@ -281,42 +290,36 @@ function App() {
       return prix;
   };
 
-  // --- CALCUL TOTAL & PROMO DIMANCHE (NOUVEAU) ---
+  // --- CALCUL TOTAL & PROMO DIMANCHE (CORRIGÉ V50) ---
   const calculerTotalEtPromo = () => {
       let sousTotal = 0;
       let pizzasEligibles = [];
 
-      // 1. Calculer Sous-Total et lister les pizzas éligibles
       panier.forEach(item => {
           const prixAjuste = getPrixItemAjuste(item);
           sousTotal += prixAjuste;
 
-          // Détection Pizza Eligible pour Promo
+          // Détection : Pizza + Pas Exclue + Taille Moyenne (M)
           const isPizza = item.categorie === 'Pizzas';
           const isExclue = PIZZAS_EXCLUES_PROMO.some(ex => item.nom.toLowerCase().includes(ex));
-          
-          if (isPizza && !isExclue) {
+          // Vérification stricte de la taille (M ou vide si pas de variante, mais ici on force M)
+          const isMoyenne = item.varianteNom === 'M' || item.varianteNom === 'Standard';
+
+          if (isPizza && !isExclue && isMoyenne) {
               pizzasEligibles.push({ ...item, prixCalcul: prixAjuste });
           }
       });
 
-      // 2. Calculer Remise Promo Dimanche (2 achetées = 1 offerte, la moins chère)
       let remisePromo = 0;
       if (isDimanche && pizzasEligibles.length >= 3) {
-          // On trie par prix croissant (la moins chère en premier)
           pizzasEligibles.sort((a, b) => a.prixCalcul - b.prixCalcul);
-          
-          // Combien de pizzas gratuites ? (1 pour 3, 2 pour 6...)
           const nbGratuites = Math.floor(pizzasEligibles.length / 3);
-          
           for (let i = 0; i < nbGratuites; i++) {
               remisePromo += pizzasEligibles[i].prixCalcul;
           }
       }
 
-      // 3. Frais de Livraison
       const fraisLivraison = (typeCommande === 'livraison' && (sousTotal - remisePromo) < 45 && (sousTotal - remisePromo) > 0) ? 5 : 0;
-      
       const grandTotal = (sousTotal - remisePromo) + fraisLivraison;
 
       return { sousTotal, remisePromo, fraisLivraison, grandTotal };
@@ -371,7 +374,6 @@ function App() {
       setNom(p.nom);
       setDescription(p.description || ''); 
       setCategorie(p.categorie);
-      
       if (p.variantes && p.variantes.length > 0) {
           setVariantes(p.variantes);
           setPrixBase(''); 
@@ -391,7 +393,6 @@ function App() {
   const saveProduit = async () => {
     if(!nom) return; 
     setLoading(true);
-    
     const data = { 
         nom, description, categorie, 
         prix: variantes.length > 0 ? 0 : Number(prixBase), 
@@ -399,9 +400,7 @@ function App() {
         available: true,
         date: new Date()
     };
-
     if(image) data.image = image;
-
     if (editId) {
         await updateDoc(doc(db, "produits", editId), data);
         alert("Produit modifié !");
@@ -482,7 +481,16 @@ function App() {
         </div>
       )}
 
-      {/* --- MODAL --- */}
+      {/* --- MODAL WIZARD PROMO (NOUVEAU) --- */}
+      {showPromoWizard && (
+          <PromoWizard 
+            menu={menu} 
+            onClose={() => setShowPromoWizard(false)} 
+            onValidate={ajouterLotAuPanier} 
+          />
+      )}
+
+      {/* --- MODAL PRODUIT CLASSIQUE --- */}
       {selectedProduct && (
         <ProductModal 
           product={selectedProduct} 
@@ -491,7 +499,7 @@ function App() {
         />
       )}
 
-      {/* --- LOGIN --- */}
+      {/* ... (LOGIN et ADMIN inchangés, je raccourcis pour la lisibilité mais garde tout le reste) ... */}
       {view === 'login' && !user && (
         <div style={{ padding: '40px 20px', maxWidth: '400px', margin: '0 auto', textAlign: 'center' }}>
           <h2 style={{marginBottom: '20px'}}>Staff Access</h2>
@@ -502,10 +510,9 @@ function App() {
         </div>
       )}
 
-      {/* --- ADMIN DASHBOARD --- */}
       {view === 'admin' && user && (
         <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
-          
+          {/* ... (Contenu Admin V49 identique) ... */}
           <div style={{marginBottom:'20px', display:'flex', gap:'10px', alignItems:'center', justifyContent:'space-between'}}>
               <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
                 <h2 style={{margin:0}}>⚙️ Admin</h2>
@@ -518,6 +525,7 @@ function App() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '20px', marginBottom:'40px' }}>
             {commandes.map(cmd => (
               <div key={cmd.id} style={{ ...cardStyle, borderLeft: cmd.status === 'Terminé' ? '5px solid #ccc' : `5px solid ${COLORS.success}` }}>
+                {/* ... (Carte Commande identique) ... */}
                 <div style={{display:'flex', justifyContent:'space-between', alignItems:'start', marginBottom:'15px', paddingBottom:'15px', borderBottom:'1px solid #f0f0f0'}}>
                   <div><strong style={{fontSize:'1.2rem', display:'block'}}>{cmd.client}</strong><div style={{color: COLORS.textLight, marginTop:'4px'}}>📞 {cmd.tel}</div></div>
                   <div style={{textAlign:'right'}}>
@@ -529,8 +537,6 @@ function App() {
                 <div style={{marginBottom:'10px'}}>
                     {cmd.type === 'livraison' && <div style={{background:'#FEF3C7', color:'#D97706', padding:'8px', borderRadius:'8px', fontSize:'0.9rem', marginBottom:'5px'}}>🛵 <strong>{cmd.adresse}</strong></div>}
                     {cmd.commentaire && <div style={{background: COLORS.warning, color:'white', padding:'8px', borderRadius:'8px', fontSize:'0.9rem', fontWeight:'bold'}}>📝 Note: {cmd.commentaire}</div>}
-                    
-                    {/* AFFICHAGE PROMO ADMIN */}
                     {cmd.remisePromo > 0 && <div style={{color: COLORS.success, fontSize:'0.9rem', fontWeight:'bold'}}>🎁 Promo Dimanche : -{cmd.remisePromo} DH</div>}
                     {cmd.fraisLivraison > 0 && <div style={{color: COLORS.primary, fontSize:'0.85rem'}}>+ Livraison: 5 DH</div>}
                 </div>
@@ -565,7 +571,6 @@ function App() {
             ))}
           </div>
 
-          {/* ... (Reste de l'admin identique) ... */}
           <div style={{marginTop:'40px', borderTop:'2px solid #eee', paddingTop:'20px'}}>
              <h3 style={{marginBottom:'15px'}}>📦 Menu</h3>
              <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '15px', display:'flex', gap:'10px' }}>
@@ -608,7 +613,7 @@ function App() {
                  <input placeholder="Nom" value={nom} onChange={e=>setNom(e.target.value)} style={inputStyle} />
                  <textarea placeholder="Description" value={description} onChange={e=>setDescription(e.target.value)} style={{...inputStyle, height:'60px', fontFamily:'inherit', resize:'vertical'}} />
                  <div style={{display:'flex', gap:'10px', alignItems:'start'}}>
-                   <select value={categorie} onChange={e=>setCategorie(e.target.value)} style={{...inputStyle, width:'50%'}}>
+                   <select value={categorie} onChange={handleCategoryChange} style={{...inputStyle, width:'50%'}}>
                        {categoriesSelectAdmin.map(cat => <option key={cat}>{cat}</option>)}
                    </select>
                    {variantes.length > 0 ? (
@@ -637,7 +642,6 @@ function App() {
                 <button onClick={viderMenu} style={{...btnStyle, background: COLORS.danger, color:'white'}}>🗑️ TOUT SUPPRIMER (RESET)</button>
              </div>
            </details>
-
         </div>
       )}
 
@@ -668,19 +672,22 @@ function App() {
               return (
               <div key={plat.id} onClick={() => setSelectedProduct(plat)} style={{ ...cardStyle, padding: 0, overflow: 'hidden', display:'flex', flexDirection:'column', cursor: 'pointer', position: 'relative' }}>
                 <div style={{ height: '140px', background: '#eee', backgroundImage: `url(${plat.image || 'https://via.placeholder.com/300?text=Foodji'})`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
-                    {plat.isInfo && <div style={{position:'absolute', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.4)', display:'flex', alignItems:'center', justifyContent:'center', color:'white', fontWeight:'bold', fontSize:'1.2rem', textAlign:'center', padding:'10px'}}>2 + 1 OFFERTE</div>}
+                    {/* AFFICHAGE EXCLUSIF POUR LA PROMO */}
+                    {plat.isPromoTrigger && <div style={{position:'absolute', bottom:0, left:0, width:'100%', background:'rgba(0,0,0,0.7)', color:'white', padding:'10px', textAlign:'center', fontWeight:'bold'}}>CLIQUEZ POUR CHOISIR</div>}
                 </div>
                 <div style={{ padding: '12px', flex: 1, display:'flex', flexDirection:'column', justifyContent:'space-between' }}>
                   <div>
                     <h4 style={{ margin: '0 0 5px 0', fontSize: '1rem', fontWeight:'700', color: COLORS.secondary }}>{plat.nom}</h4>
                     <p style={{ fontSize: '0.8rem', color: COLORS.textLight, margin: 0, lineHeight:'1.2', display:'-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>{plat.description}</p>
                   </div>
-                  <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                     <span style={{ fontWeight: '700', fontSize: '1rem', color: COLORS.primary }}>
-                       {displayPrice > 0 ? (plat.variantes?.length > 0 ? `dès ${displayPrice} DH` : `${displayPrice} DH`) : 'GRATUIT'}
-                     </span>
-                     <div style={{background: COLORS.secondary, color: 'white', width: '32px', height: '32px', borderRadius: '50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.2rem'}}>+</div>
-                  </div>
+                  {!plat.isPromoTrigger && (
+                      <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                         <span style={{ fontWeight: '700', fontSize: '1rem', color: COLORS.primary }}>
+                           {displayPrice > 0 ? (plat.variantes?.length > 0 ? `dès ${displayPrice} DH` : `${displayPrice} DH`) : 'GRATUIT'}
+                         </span>
+                         <div style={{background: COLORS.secondary, color: 'white', width: '32px', height: '32px', borderRadius: '50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.2rem'}}>+</div>
+                      </div>
+                  )}
                 </div>
               </div>
             )})}
@@ -692,6 +699,7 @@ function App() {
       {/* --- PANIER --- */}
       {view === 'panier' && (
         <div style={{ padding: '20px', background: 'white', minHeight: '100vh' }}>
+          {/* ... (Panier V49 identique) ... */}
           <h2 style={{color: COLORS.secondary}}>🛒 Panier</h2>
           {panier.length === 0 ? <p>Panier vide.</p> : (
             <>
@@ -719,7 +727,6 @@ function App() {
                   </div>
                 ))}
                 
-                {/* LIGNE PROMO */}
                 {remisePromo > 0 && (
                     <div style={{background: '#ECFDF5', color: COLORS.success, padding:'10px', borderRadius:'8px', marginTop:'15px', fontWeight:'bold', textAlign:'center'}}>
                         🎁 Promo Dimanche : -{remisePromo} DH
@@ -787,7 +794,70 @@ function formatOptions(list) {
     return Object.entries(counts).map(([name, count]) => count > 1 ? `${name} x${count}` : name).join(', ');
 }
 
-// --- MODAL PRODUIT ---
+// --- MODAL ASSISTANT PROMO (NOUVEAU) ---
+function PromoWizard({ menu, onClose, onValidate }) {
+    const [choix, setChoix] = useState([]);
+    
+    // Filtrer les pizzas éligibles (Hors exclusions + Disponibles)
+    const pizzasEligibles = menu.filter(p => 
+        p.categorie === 'Pizzas' && 
+        p.available !== false &&
+        !PIZZAS_EXCLUES_PROMO.some(ex => p.nom.toLowerCase().includes(ex))
+    );
+
+    const handleSelect = (pizza) => {
+        // Trouver la variante M (ou Standard)
+        let varianteM = pizza.variantes?.find(v => v.nom === 'M' || v.nom === 'Standard');
+        
+        // Si pas de variante M trouvée mais qu'il y a des variantes, on prend la première (supposée être la petite/moyenne)
+        if (!varianteM && pizza.variantes?.length > 0) varianteM = pizza.variantes[0];
+
+        // Sécurité : Si pas de variante du tout, on prend le prix de base
+        const prixFinal = varianteM ? varianteM.prix : pizza.prix;
+        const varianteNom = varianteM ? varianteM.nom : null;
+
+        const newItem = {
+            ...pizza,
+            prixFinal: Number(prixFinal),
+            originalPrice: Number(prixFinal),
+            varianteNom: varianteNom, // FORCE M
+            isPromoItem: true // Marqueur interne
+        };
+
+        const newChoix = [...choix, newItem];
+        setChoix(newChoix);
+
+        if (newChoix.length === 3) {
+            onValidate(newChoix);
+        }
+    };
+
+    return (
+        <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.9)', zIndex:2000, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'20px'}}>
+            <div style={{background:'white', width:'100%', maxWidth:'500px', borderRadius:'20px', padding:'20px', maxHeight:'90vh', overflowY:'auto'}}>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px'}}>
+                    <h3 style={{margin:0}}>Choix {choix.length + 1} / 3 (Moyenne)</h3>
+                    <button onClick={onClose} style={{border:'none', background:'transparent', fontSize:'1.5rem'}}>×</button>
+                </div>
+                
+                <div style={{display:'grid', gridTemplateColumns:'1fr', gap:'10px'}}>
+                    {pizzasEligibles.map(p => (
+                        <button key={p.id} onClick={() => handleSelect(p)} style={{
+                            padding:'15px', borderRadius:'12px', border:'1px solid #eee', 
+                            background:'white', textAlign:'left', display:'flex', justifyContent:'space-between', alignItems:'center',
+                            boxShadow:'0 2px 5px rgba(0,0,0,0.05)'
+                        }}>
+                            <span style={{fontWeight:'bold'}}>{p.nom}</span>
+                            <span style={{color: COLORS.primary}}>Ajouter +</span>
+                        </button>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// --- MODAL PRODUIT CLASSIQUE ---
 function ProductModal({ product, onClose, onAdd }) {
   const [selectedVar, setSelectedVar] = useState(product.variantes && product.variantes.length > 0 ? product.variantes[0] : null);
   const [optionsChoisies, setOptionsChoisies] = useState([]); 
