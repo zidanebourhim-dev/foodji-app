@@ -11,7 +11,6 @@ const LISTE_GARNITURES_PIZZA = ["Viande Hachée", "Poulet", "4 Fromages", "Canni
 const LISTE_SAUCES = ["Algérienne Fait Maison", "Biggy Fait Maison", "Barbecue Fait Maison"];
 const TYPES_PATES = ["Penne", "Tagliatelle", "Spaghetti"];
 
-// LISTE COMPLETE DES CATEGORIES POSSIBLES (Pour le menu déroulant Admin)
 const TOUTES_CATEGORIES = ["Tacos", "Pizzas", "Burgers", "Pâtes", "Sides", "Les Burritos", "Koniks", "Plats", "Salades", "Boissons", "Desserts"];
 
 const NOTIF_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
@@ -58,7 +57,6 @@ function App() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   
-  // Admin Form & Edit Mode
   const [editId, setEditId] = useState(null); 
   const [nom, setNom] = useState('');
   const [description, setDescription] = useState('');
@@ -67,7 +65,19 @@ function App() {
   const [prixBase, setPrixBase] = useState('');
   const [variantes, setVariantes] = useState([]);
 
-  // --- DATA ---
+  // --- CHARGEMENT DES INFOS CLIENT (MEMOIRE) ---
+  useEffect(() => {
+      // On récupère les infos sauvegardées si elles existent
+      const savedNom = localStorage.getItem('clientNom');
+      const savedTel = localStorage.getItem('clientTel');
+      const savedAdresse = localStorage.getItem('clientAdresse');
+
+      if (savedNom) setClientNom(savedNom);
+      if (savedTel) setClientTel(savedTel);
+      if (savedAdresse) setAdresse(savedAdresse);
+  }, []);
+
+  // --- DATA FIREBASE ---
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (u) => {
       setUser(u);
@@ -94,8 +104,6 @@ function App() {
 
   // --- LOGIQUE CATEGORIES ---
   const categoriesReelles = [...new Set(menu.map(p => p.categorie))];
-  
-  // Construction de la liste complète pour le SELECT Admin (Fusion Réelles + Liste par défaut)
   const categoriesSelectAdmin = [...new Set([...TOUTES_CATEGORIES, ...categoriesReelles])];
 
   useEffect(() => {
@@ -229,9 +237,7 @@ function App() {
       else setView('login'); 
   };
 
-  // --- AJOUT AU PANIER (VERSION CORRIGÉE V43) ---
   const ajouterAuPanier = (itemMerged) => {
-    // itemMerged contient DÉJÀ tout : varianteNom, sauces, choixPates, etc.
     if (itemMerged.isInfo) return alert("Ceci est une offre informative.");
     
     if (navigator.vibrate) navigator.vibrate(50);
@@ -242,7 +248,7 @@ function App() {
     }
 
     const itemSafe = {
-        ...itemMerged, // On garde TOUTES les infos fusionnées
+        ...itemMerged,
         prixFinal: safePrice, 
         originalPrice: safePrice,
         uniqueId: Date.now()
@@ -253,7 +259,6 @@ function App() {
 
   const retirerDuPanier = (uid) => setPanier(panier.filter(i => i.uniqueId !== uid));
   
-  // --- CALCUL PRIX DYNAMIQUE (REGLE PIZZA PEP'S) ---
   const getPrixItemAjuste = (item) => {
       let prix = Number(item.originalPrice) || 0;
       if (item.nom.toLowerCase().includes("pep's") || item.nom.toLowerCase().includes("peps")) {
@@ -284,6 +289,11 @@ function App() {
 
     setLoading(true);
     
+    // --- SAUVEGARDE AUTOMATIQUE DES INFOS CLIENT ---
+    localStorage.setItem('clientNom', clientNom);
+    localStorage.setItem('clientTel', telClean);
+    if(adresse) localStorage.setItem('clientAdresse', adresse);
+
     const panierFinal = panier.map(item => ({
         ...item,
         prixFinal: getPrixItemAjuste(item)
@@ -295,7 +305,8 @@ function App() {
         commentaire: commentaire,
         items: panierFinal, total: grandTotal, fraisLivraison, date: new Date(), status: 'En attente'
       });
-      setPanier([]); setClientNom(''); setClientTel(''); setAdresse(''); setCommentaire('');
+      // On vide le panier mais on garde les infos client dans le state (et localStorage)
+      setPanier([]); setCommentaire('');
       alert("✅ Commande envoyée !"); setView('client');
     } catch (e) { alert("Erreur réseau"); }
     setLoading(false);
@@ -344,21 +355,17 @@ function App() {
   const supprimerProduit = async (id) => { if(confirm("Supprimer ?")) await deleteDoc(doc(db, "produits", id)); };
   
   const copierOdoo = (cmd) => {
-    let t = `Nom: ${cmd.client}\nTél: ${cmd.tel}\n`;
-    t += cmd.type === 'livraison' ? `Livraison: ${cmd.adresse}` : `Mode: ${cmd.type === 'sur_place' ? 'Sur Place' : 'Emporter'}`;
-    if(cmd.commentaire) t += `\nNOTE: ${cmd.commentaire}`;
+    let t = `Nom : ${cmd.client}\nTél : ${cmd.tel}\n`;
     
-    t += `\n-- Commande --\n`;
-    cmd.items.forEach(it => {
-        const patesInfo = it.choixPates ? ` [${it.choixPates}]` : '';
-        t += `[${it.categorie}] ${it.nom}${patesInfo} (${it.varianteNom || 'Standard'}) : ${it.prixFinal}DH\n`;
-        if(it.sauces) t += `  Sauces: ${formatOptions(it.sauces)}\n`;
-        if(it.optionsChoisies) t += `  Options: ${formatOptions(it.optionsChoisies)}\n`;
-    });
-    if(cmd.fraisLivraison > 0) t += `Livraison: ${cmd.fraisLivraison} DH\n`;
-    t += `TOTAL: ${cmd.total} DH`;
+    if (cmd.type === 'livraison') {
+        t += `Adresse : ${cmd.adresse}`;
+    } else {
+        t += `Mode : ${cmd.type === 'sur_place' ? 'Sur Place' : 'Emporter'}`;
+    }
 
-    navigator.clipboard.writeText(t).then(() => alert("📋 Copié !"));
+    if (cmd.commentaire) t += `\nNote : ${cmd.commentaire}`;
+
+    navigator.clipboard.writeText(t).then(() => alert("📋 Infos Client Copiées !"));
   };
   
   const changerStatus = async (id, st) => await updateDoc(doc(db, "commandes", id), { status: st });
