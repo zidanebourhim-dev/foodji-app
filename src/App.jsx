@@ -11,6 +11,9 @@ const LISTE_GARNITURES_PIZZA = ["Viande Hachée", "Poulet", "4 Fromages", "Canni
 const LISTE_SAUCES = ["Algérienne Fait Maison", "Biggy Fait Maison", "Barbecue Fait Maison"];
 const TYPES_PATES = ["Penne", "Tagliatelle", "Spaghetti"];
 
+// LISTE COMPLETE DES CATEGORIES POSSIBLES (Pour le menu déroulant Admin)
+const TOUTES_CATEGORIES = ["Tacos", "Pizzas", "Burgers", "Pâtes", "Sides", "Les Burritos", "Koniks", "Plats", "Salades", "Boissons", "Desserts"];
+
 const NOTIF_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
 
 // --- IMAGES ---
@@ -56,7 +59,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   
   // Admin Form & Edit Mode
-  const [editId, setEditId] = useState(null); // ID du produit en cours de modif
+  const [editId, setEditId] = useState(null); 
   const [nom, setNom] = useState('');
   const [description, setDescription] = useState('');
   const [image, setImage] = useState('');
@@ -91,6 +94,9 @@ function App() {
 
   // --- LOGIQUE CATEGORIES ---
   const categoriesReelles = [...new Set(menu.map(p => p.categorie))];
+  
+  // Construction de la liste complète pour le SELECT Admin (Fusion Réelles + Liste par défaut)
+  const categoriesSelectAdmin = [...new Set([...TOUTES_CATEGORIES, ...categoriesReelles])];
 
   useEffect(() => {
       if (categoriesReelles.length > 0 && !adminCategorie) {
@@ -157,7 +163,7 @@ function App() {
 
       if(confirm(`Importer ${rows.length} lignes ?`)) {
         setLoading(true);
-        for (let i = 1; i < rows.length; i++) { // Sauter entête si besoin
+        for (let i = 1; i < rows.length; i++) { 
           const row = rows[i];
           const tokens = row.split(','); 
           
@@ -168,7 +174,8 @@ function App() {
              const p3Raw = tokens[len - 1];
              const p2Raw = tokens[len - 2];
              const p1Raw = tokens[len - 3];
-             const desc = tokens.slice(2, len - 3).join(', ').replace(/"/g, '').trim();
+             const descTokens = tokens.slice(2, len - 3);
+             const desc = descTokens.join(', ').replace(/"/g, '').trim();
              const cleanPrice = (val) => val ? Number(val.toString().replace(/[^0-9.]/g, '')) : 0;
              const p1 = cleanPrice(p1Raw.replace(',','.'));
              const p2 = cleanPrice(p2Raw.replace(',','.'));
@@ -222,19 +229,22 @@ function App() {
       else setView('login'); 
   };
 
-  const ajouterAuPanier = (itemFinal) => {
-    if (itemFinal.isInfo) return alert("Ceci est une offre. Ajoutez vos pizzas normalement !");
+  // --- AJOUT AU PANIER (VERSION CORRIGÉE V43) ---
+  const ajouterAuPanier = (itemMerged) => {
+    // itemMerged contient DÉJÀ tout : varianteNom, sauces, choixPates, etc.
+    if (itemMerged.isInfo) return alert("Ceci est une offre informative.");
+    
     if (navigator.vibrate) navigator.vibrate(50);
     
-    let safePrice = Number(itemFinal.prixFinal);
-    if (safePrice === 0 && itemFinal.variantes?.length > 0) {
-        safePrice = itemFinal.prix || 0; 
+    let safePrice = Number(itemMerged.prixFinal);
+    if (safePrice === 0 && itemMerged.variantes?.length > 0) {
+        safePrice = itemMerged.prix || 0; 
     }
 
     const itemSafe = {
-        ...itemFinal,
+        ...itemMerged, // On garde TOUTES les infos fusionnées
         prixFinal: safePrice, 
-        originalPrice: safePrice, // Pour garder le prix de base en mémoire
+        originalPrice: safePrice,
         uniqueId: Date.now()
     };
     setPanier([...panier, itemSafe]);
@@ -246,7 +256,6 @@ function App() {
   // --- CALCUL PRIX DYNAMIQUE (REGLE PIZZA PEP'S) ---
   const getPrixItemAjuste = (item) => {
       let prix = Number(item.originalPrice) || 0;
-      // REGLE : Pizza Pep's +5DH si Emporter ou Livraison
       if (item.nom.toLowerCase().includes("pep's") || item.nom.toLowerCase().includes("peps")) {
           if (typeCommande === 'livraison' || typeCommande === 'emporter') {
               prix += 5;
@@ -255,12 +264,8 @@ function App() {
       return prix;
   };
 
-  // Calcul du sous-total avec les ajustements (Pep's)
   const sousTotal = panier.reduce((acc, i) => acc + getPrixItemAjuste(i), 0);
-  
-  // REGLE : Frais de livraison 5DH si < 45DH
   const fraisLivraison = (typeCommande === 'livraison' && sousTotal < 45 && sousTotal > 0) ? 5 : 0;
-  
   const grandTotal = sousTotal + fraisLivraison;
 
   const envoyerCommande = async () => {
@@ -279,10 +284,9 @@ function App() {
 
     setLoading(true);
     
-    // On met à jour les prix finaux dans le panier avant envoi
     const panierFinal = panier.map(item => ({
         ...item,
-        prixFinal: getPrixItemAjuste(item) // On fige le prix ajusté (Pep's)
+        prixFinal: getPrixItemAjuste(item)
     }));
 
     try {
@@ -302,14 +306,12 @@ function App() {
     await updateDoc(doc(db, "produits", item.id), { available: (item.available === false ? true : false) });
   };
   
-  // FONCTION EDIT (REMPLIR LE FORM)
   const handleEdit = (p) => {
       setEditId(p.id);
       setNom(p.nom);
       setDescription(p.description);
       setCategorie(p.categorie);
       setPrixBase(p.prix);
-      // Pour les variantes, c'est plus complexe, on simplifie pour le prix de base ici
       window.scrollTo(0,0);
   };
 
@@ -328,17 +330,13 @@ function App() {
     if(image) data.image = image;
 
     if (editId) {
-        // MODE MODIFICATION
         await updateDoc(doc(db, "produits", editId), data);
         alert("Produit modifié !");
         setEditId(null);
     } else {
-        // MODE CREATION
         await addDoc(collection(db, "produits"), data);
         alert("Produit ajouté !");
     }
-    
-    // Reset Form
     setNom(''); setDescription(''); setImage(''); setPrixBase(''); setVariantes([]); 
     setLoading(false);
   };
@@ -551,7 +549,10 @@ function App() {
              <div style={{marginTop:'10px'}}>
                  <input placeholder="Nom" value={nom} onChange={e=>setNom(e.target.value)} style={inputStyle} />
                  <div style={{display:'flex', gap:'10px'}}>
-                   <select value={categorie} onChange={e=>setCategorie(e.target.value)} style={{...inputStyle, width:'50%'}}><option>Burgers</option><option>Pizzas</option><option>Tacos</option><option>Pâtes</option></select>
+                   {/* SELECTEUR DE CATEGORIE CORRIGÉ */}
+                   <select value={categorie} onChange={e=>setCategorie(e.target.value)} style={{...inputStyle, width:'50%'}}>
+                       {categoriesSelectAdmin.map(cat => <option key={cat}>{cat}</option>)}
+                   </select>
                    <input type="number" placeholder="Prix" value={prixBase} onChange={e=>setPrixBase(e.target.value)} style={{...inputStyle, width:'50%'}} />
                  </div>
                  <button onClick={saveProduit} style={{...btnStyle, width:'auto'}}>{editId ? 'Mettre à jour' : 'Ajouter'}</button>
@@ -863,7 +864,17 @@ function ProductModal({ product, onClose, onAdd }) {
             if (isPates && !typePates) return alert("Veuillez choisir le type de pâtes !");
             if (minChoix > 0 && optionsChoisies.length < minChoix) return alert(`Veuillez choisir au moins ${minChoix} options !`); 
             
-            onAdd({ ...product, prixFinal: currentPrice }, selectedVar ? { ...selectedVar, optionsChoisies, sauces, choixPates: typePates } : { optionsChoisies, sauces, choixPates: typePates });
+            // FUSIONNER TOUTES LES DONNEES DANS UN SEUL OBJET (CORRECTION DU BUG V42)
+            const itemMerged = {
+                ...product,
+                prixFinal: currentPrice,
+                varianteNom: selectedVar ? selectedVar.nom : null, // La taille
+                sauces: sauces,
+                optionsChoisies: optionsChoisies,
+                choixPates: typePates
+            };
+
+            onAdd(itemMerged);
         }} style={{
             background: COLORS.primary, color: 'white', border: 'none', borderRadius: '12px', 
             padding: '15px', fontWeight: 'bold', width: '100%', marginTop: '30px', fontSize: '1.1rem',
