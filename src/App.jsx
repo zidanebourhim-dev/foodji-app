@@ -11,6 +11,9 @@ const LISTE_GARNITURES_PIZZA = ["Viande Hachée", "Poulet", "4 Fromages", "Canni
 const LISTE_SAUCES = ["Algérienne Fait Maison", "Biggy Fait Maison", "Barbecue Fait Maison"];
 const TYPES_PATES = ["Penne", "Tagliatelle", "Spaghetti"];
 
+// EXCLUSIONS PROMO DIMANCHE (Minuscule pour comparaison)
+const PIZZAS_EXCLUES_PROMO = ["4 saisons", "fruits de mer", "cannibale"];
+
 const TOUTES_CATEGORIES = ["Tacos", "Pizzas", "Burgers", "Pâtes", "Sides", "Les Burritos", "Koniks", "Plats", "Salades", "Boissons", "Desserts"];
 
 const NOTIF_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
@@ -126,16 +129,26 @@ function App() {
   // --- FILTRAGE CLIENT ---
   let menuClient = [];
   if (categorieActive === '🔥 PROMOTIONS') {
-      menuClient = [{
-          id: 'promo-sunday',
-          nom: '2 PIZZAS ACHETÉES = 1 OFFERTE',
-          description: 'Offre du Dimanche : Ajoutez 3 pizzas, la moins chère est offerte en caisse !',
-          categorie: '🔥 PROMOTIONS',
-          prix: 0,
-          image: 'https://img.freepik.com/free-vector/pizza-time-promo-banner_23-2148967986.jpg',
-          available: true,
-          isInfo: true 
-      }];
+      // On affiche les pizzas ELIGIBLES dans l'onglet promo pour faciliter le choix
+      const pizzasEligibles = menu.filter(p => 
+          p.categorie === 'Pizzas' && 
+          p.available !== false &&
+          !PIZZAS_EXCLUES_PROMO.some(exclu => p.nom.toLowerCase().includes(exclu))
+      );
+
+      menuClient = [
+          {
+              id: 'promo-sunday-info',
+              nom: 'OFFRE DIMANCHE : 2 ACHETÉES = 1 OFFERTE',
+              description: 'Ajoutez 3 pizzas éligibles au panier, la moins chère sera automatiquement offerte ! (Hors: 4 Saisons, Fruits de Mer, Cannibale)',
+              categorie: '🔥 PROMOTIONS',
+              prix: 0,
+              image: 'https://img.freepik.com/free-vector/pizza-time-promo-banner_23-2148967986.jpg',
+              available: true,
+              isInfo: true 
+          },
+          ...pizzasEligibles // On affiche directement les pizzas qu'on peut prendre
+      ];
   } else {
       menuClient = menu.filter(p => p.categorie === categorieActive && p.available !== false);
   }
@@ -237,7 +250,7 @@ function App() {
   };
 
   const ajouterAuPanier = (itemMerged) => {
-    if (itemMerged.isInfo) return alert("Ceci est une offre informative.");
+    if (itemMerged.isInfo) return alert("Ceci est une offre informative. Ajoutez les pizzas ci-dessous !");
     if (navigator.vibrate) navigator.vibrate(50);
     
     let safePrice = Number(itemMerged.prixFinal);
@@ -257,6 +270,7 @@ function App() {
 
   const retirerDuPanier = (uid) => setPanier(panier.filter(i => i.uniqueId !== uid));
   
+  // --- CALCUL PRIX ITEM (REGLE PIZZA PEP'S) ---
   const getPrixItemAjuste = (item) => {
       let prix = Number(item.originalPrice) || 0;
       if (item.nom.toLowerCase().includes("pep's") || item.nom.toLowerCase().includes("peps")) {
@@ -267,9 +281,48 @@ function App() {
       return prix;
   };
 
-  const sousTotal = panier.reduce((acc, i) => acc + getPrixItemAjuste(i), 0);
-  const fraisLivraison = (typeCommande === 'livraison' && sousTotal < 45 && sousTotal > 0) ? 5 : 0;
-  const grandTotal = sousTotal + fraisLivraison;
+  // --- CALCUL TOTAL & PROMO DIMANCHE (NOUVEAU) ---
+  const calculerTotalEtPromo = () => {
+      let sousTotal = 0;
+      let pizzasEligibles = [];
+
+      // 1. Calculer Sous-Total et lister les pizzas éligibles
+      panier.forEach(item => {
+          const prixAjuste = getPrixItemAjuste(item);
+          sousTotal += prixAjuste;
+
+          // Détection Pizza Eligible pour Promo
+          const isPizza = item.categorie === 'Pizzas';
+          const isExclue = PIZZAS_EXCLUES_PROMO.some(ex => item.nom.toLowerCase().includes(ex));
+          
+          if (isPizza && !isExclue) {
+              pizzasEligibles.push({ ...item, prixCalcul: prixAjuste });
+          }
+      });
+
+      // 2. Calculer Remise Promo Dimanche (2 achetées = 1 offerte, la moins chère)
+      let remisePromo = 0;
+      if (isDimanche && pizzasEligibles.length >= 3) {
+          // On trie par prix croissant (la moins chère en premier)
+          pizzasEligibles.sort((a, b) => a.prixCalcul - b.prixCalcul);
+          
+          // Combien de pizzas gratuites ? (1 pour 3, 2 pour 6...)
+          const nbGratuites = Math.floor(pizzasEligibles.length / 3);
+          
+          for (let i = 0; i < nbGratuites; i++) {
+              remisePromo += pizzasEligibles[i].prixCalcul;
+          }
+      }
+
+      // 3. Frais de Livraison
+      const fraisLivraison = (typeCommande === 'livraison' && (sousTotal - remisePromo) < 45 && (sousTotal - remisePromo) > 0) ? 5 : 0;
+      
+      const grandTotal = (sousTotal - remisePromo) + fraisLivraison;
+
+      return { sousTotal, remisePromo, fraisLivraison, grandTotal };
+  };
+
+  const { sousTotal, remisePromo, fraisLivraison, grandTotal } = calculerTotalEtPromo();
 
   const envoyerCommande = async () => {
     if (panier.length === 0) return alert("Panier vide !");
@@ -300,7 +353,7 @@ function App() {
       await addDoc(collection(db, "commandes"), {
         client: clientNom, tel: telClean, type: typeCommande, adresse, 
         commentaire: commentaire,
-        items: panierFinal, total: grandTotal, fraisLivraison, date: new Date(), status: 'En attente'
+        items: panierFinal, total: grandTotal, remisePromo, fraisLivraison, date: new Date(), status: 'En attente'
       });
       setPanier([]); setCommentaire('');
       alert("✅ Commande envoyée !"); setView('client');
@@ -313,32 +366,6 @@ function App() {
     await updateDoc(doc(db, "produits", item.id), { available: (item.available === false ? true : false) });
   };
   
-  // --- INTELLIGENCE FORMULAIRE ---
-  const handleCategoryChange = (e) => {
-      const cat = e.target.value;
-      setCategorie(cat);
-
-      // Si on est pas en mode édition, on auto-génère les variantes
-      if (!editId) {
-          if (cat === 'Tacos') {
-              setVariantes([
-                  {nom: 'L', prix: ''},
-                  {nom: 'XL', prix: ''},
-                  {nom: 'XXL', prix: ''}
-              ]);
-              setPrixBase('');
-          } else if (cat === 'Pizzas') {
-              setVariantes([
-                  {nom: 'M', prix: ''},
-                  {nom: 'L', prix: ''}
-              ]);
-              setPrixBase('');
-          } else {
-              setVariantes([]); // Prix unique pour le reste
-          }
-      }
-  };
-
   const handleEdit = (p) => {
       setEditId(p.id);
       setNom(p.nom);
@@ -502,6 +529,9 @@ function App() {
                 <div style={{marginBottom:'10px'}}>
                     {cmd.type === 'livraison' && <div style={{background:'#FEF3C7', color:'#D97706', padding:'8px', borderRadius:'8px', fontSize:'0.9rem', marginBottom:'5px'}}>🛵 <strong>{cmd.adresse}</strong></div>}
                     {cmd.commentaire && <div style={{background: COLORS.warning, color:'white', padding:'8px', borderRadius:'8px', fontSize:'0.9rem', fontWeight:'bold'}}>📝 Note: {cmd.commentaire}</div>}
+                    
+                    {/* AFFICHAGE PROMO ADMIN */}
+                    {cmd.remisePromo > 0 && <div style={{color: COLORS.success, fontSize:'0.9rem', fontWeight:'bold'}}>🎁 Promo Dimanche : -{cmd.remisePromo} DH</div>}
                     {cmd.fraisLivraison > 0 && <div style={{color: COLORS.primary, fontSize:'0.85rem'}}>+ Livraison: 5 DH</div>}
                 </div>
                 
@@ -535,9 +565,9 @@ function App() {
             ))}
           </div>
 
+          {/* ... (Reste de l'admin identique) ... */}
           <div style={{marginTop:'40px', borderTop:'2px solid #eee', paddingTop:'20px'}}>
              <h3 style={{marginBottom:'15px'}}>📦 Menu</h3>
-             {/* ONGLETS ADMIN */}
              <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '15px', display:'flex', gap:'10px' }}>
               {categoriesReelles.map(c => (
                 <button key={c} onClick={() => setAdminCategorie(c)} style={{
@@ -546,13 +576,7 @@ function App() {
                     color:adminCategorie===c?'white':'black', cursor:'pointer'
                 }}>{c}</button>
               ))}
-              
-              <button onClick={() => setAdminCategorie('RUPTURE')} style={{
-                  padding:'8px 15px', borderRadius:'20px', border:'none', 
-                  background: adminCategorie==='RUPTURE'?COLORS.danger:'#FEE2E2', 
-                  color: adminCategorie==='RUPTURE'?'white':COLORS.danger, 
-                  fontWeight:'bold', cursor:'pointer'
-              }}>🚫 RUPTURE</button>
+              <button onClick={() => setAdminCategorie('RUPTURE')} style={{padding:'8px 15px', borderRadius:'20px', border:'none', background: adminCategorie==='RUPTURE'?COLORS.danger:'#FEE2E2', color: adminCategorie==='RUPTURE'?'white':COLORS.danger, fontWeight:'bold', cursor:'pointer'}}>🚫 RUPTURE</button>
              </div>
 
              {menuAdmin.map(p => (
@@ -576,39 +600,23 @@ function App() {
                 </div>
               </div>
             ))}
-            
-            {menuAdmin.length === 0 && <div style={{textAlign:'center', padding:'20px', color:'#999'}}>Aucun article ici.</div>}
           </div>
           
            <details style={{marginTop:'30px', background:'white', padding:'15px', borderRadius:'10px'}}>
              <summary>{editId ? '✏️ Modifier Produit' : 'Ajout Manuel'}</summary>
              <div style={{marginTop:'10px'}}>
                  <input placeholder="Nom" value={nom} onChange={e=>setNom(e.target.value)} style={inputStyle} />
-                 
-                 <textarea 
-                    placeholder="Description" 
-                    value={description} 
-                    onChange={e=>setDescription(e.target.value)} 
-                    style={{...inputStyle, height:'60px', fontFamily:'inherit', resize:'vertical'}} 
-                 />
-
+                 <textarea placeholder="Description" value={description} onChange={e=>setDescription(e.target.value)} style={{...inputStyle, height:'60px', fontFamily:'inherit', resize:'vertical'}} />
                  <div style={{display:'flex', gap:'10px', alignItems:'start'}}>
-                   {/* SELECTEUR INTELLIGENT */}
-                   <select value={categorie} onChange={handleCategoryChange} style={{...inputStyle, width:'50%'}}>
+                   <select value={categorie} onChange={e=>setCategorie(e.target.value)} style={{...inputStyle, width:'50%'}}>
                        {categoriesSelectAdmin.map(cat => <option key={cat}>{cat}</option>)}
                    </select>
-                   
                    {variantes.length > 0 ? (
                        <div style={{width:'50%', display:'flex', gap:'5px', flexWrap:'wrap'}}>
                            {variantes.map((v, index) => (
                                <div key={index} style={{flex:1, minWidth:'80px'}}>
                                    <label style={{fontSize:'0.7rem', fontWeight:'bold', color: COLORS.textLight}}>{v.nom}</label>
-                                   <input 
-                                       type="number" 
-                                       value={v.prix} 
-                                       onChange={(e) => updateVariantPrice(index, e.target.value)} 
-                                       style={{...inputStyle, marginBottom:0}} 
-                                   />
+                                   <input type="number" value={v.prix} onChange={(e) => updateVariantPrice(index, e.target.value)} style={{...inputStyle, marginBottom:0}} />
                                </div>
                            ))}
                        </div>
@@ -621,7 +629,6 @@ function App() {
              </div>
            </details>
 
-           {/* ZONE DANGEREUSE */}
            <details style={{marginTop:'50px', background:'#FEE2E2', padding:'15px', borderRadius:'10px', border:`1px solid ${COLORS.danger}`}}>
              <summary style={{fontWeight:'bold', color: COLORS.danger, cursor:'pointer'}}>💀 ZONE DANGEREUSE (Import / Reset)</summary>
              <input type="file" accept=".csv" ref={fileInputRef} onChange={handleCSVImport} style={{display:'none'}} />
@@ -712,6 +719,13 @@ function App() {
                   </div>
                 ))}
                 
+                {/* LIGNE PROMO */}
+                {remisePromo > 0 && (
+                    <div style={{background: '#ECFDF5', color: COLORS.success, padding:'10px', borderRadius:'8px', marginTop:'15px', fontWeight:'bold', textAlign:'center'}}>
+                        🎁 Promo Dimanche : -{remisePromo} DH
+                    </div>
+                )}
+
                 {fraisLivraison > 0 && <div style={{textAlign:'right', color: COLORS.textLight, marginTop:'10px'}}>+ Frais de livraison (petites commandes) : 5 DH</div>}
                 
                 <div style={{textAlign:'right', fontSize:'1.5rem', fontWeight:'800', marginTop:'10px', color: COLORS.secondary}}>Total : {grandTotal} DH</div>
