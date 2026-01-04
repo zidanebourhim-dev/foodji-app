@@ -9,7 +9,7 @@ const SECURITY_CODE = "1234";
 const LISTE_VIANDES = ["Poulet", "Viande Hachée", "Cordon Bleu", "Nuggets", "Poulet Crispy"];
 const LISTE_GARNITURES_PIZZA = ["Viande Hachée", "Poulet", "4 Fromages", "Cannibale", "Pepperoni", "Thon", "Charcuterie", "Végétarienne", "Fruits de Mer"];
 const LISTE_SAUCES = ["Algérienne Fait Maison", "Biggy Fait Maison", "Barbecue Fait Maison"];
-const TYPES_PATES = ["Penne", "Tagliatelle", "Spaghetti"]; // NOUVEAU
+const TYPES_PATES = ["Penne", "Tagliatelle", "Spaghetti"];
 
 const NOTIF_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
 
@@ -55,14 +55,14 @@ function App() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   
+  // Admin Form & Edit Mode
+  const [editId, setEditId] = useState(null); // ID du produit en cours de modif
   const [nom, setNom] = useState('');
   const [description, setDescription] = useState('');
   const [image, setImage] = useState('');
   const [categorie, setCategorie] = useState('Burgers');
   const [prixBase, setPrixBase] = useState('');
   const [variantes, setVariantes] = useState([]);
-  const [tempVarNom, setTempVarNom] = useState('');
-  const [tempVarPrix, setTempVarPrix] = useState('');
 
   // --- DATA ---
   useEffect(() => {
@@ -142,11 +142,8 @@ function App() {
   };
 
   const triggerImport = () => {
-      if(checkSecurity()) {
-          fileInputRef.current.click();
-      } else {
-          alert("Code incorrect ❌");
-      }
+      if(checkSecurity()) fileInputRef.current.click();
+      else alert("Code incorrect ❌");
   };
 
   const handleCSVImport = (e) => {
@@ -160,9 +157,7 @@ function App() {
 
       if(confirm(`Importer ${rows.length} lignes ?`)) {
         setLoading(true);
-        const start = rows[0].toLowerCase().includes('catégorie') ? 1 : 0;
-
-        for (let i = start; i < rows.length; i++) {
+        for (let i = 1; i < rows.length; i++) { // Sauter entête si besoin
           const row = rows[i];
           const tokens = row.split(','); 
           
@@ -173,8 +168,7 @@ function App() {
              const p3Raw = tokens[len - 1];
              const p2Raw = tokens[len - 2];
              const p1Raw = tokens[len - 3];
-             const descTokens = tokens.slice(2, len - 3);
-             const desc = descTokens.join(', ').replace(/"/g, '').trim();
+             const desc = tokens.slice(2, len - 3).join(', ').replace(/"/g, '').trim();
              const cleanPrice = (val) => val ? Number(val.toString().replace(/[^0-9.]/g, '')) : 0;
              const p1 = cleanPrice(p1Raw.replace(',','.'));
              const p2 = cleanPrice(p2Raw.replace(',','.'));
@@ -240,6 +234,7 @@ function App() {
     const itemSafe = {
         ...itemFinal,
         prixFinal: safePrice, 
+        originalPrice: safePrice, // Pour garder le prix de base en mémoire
         uniqueId: Date.now()
     };
     setPanier([...panier, itemSafe]);
@@ -247,7 +242,26 @@ function App() {
   };
 
   const retirerDuPanier = (uid) => setPanier(panier.filter(i => i.uniqueId !== uid));
-  const total = panier.reduce((acc, i) => acc + (Number(i.prixFinal) || 0), 0);
+  
+  // --- CALCUL PRIX DYNAMIQUE (REGLE PIZZA PEP'S) ---
+  const getPrixItemAjuste = (item) => {
+      let prix = Number(item.originalPrice) || 0;
+      // REGLE : Pizza Pep's +5DH si Emporter ou Livraison
+      if (item.nom.toLowerCase().includes("pep's") || item.nom.toLowerCase().includes("peps")) {
+          if (typeCommande === 'livraison' || typeCommande === 'emporter') {
+              prix += 5;
+          }
+      }
+      return prix;
+  };
+
+  // Calcul du sous-total avec les ajustements (Pep's)
+  const sousTotal = panier.reduce((acc, i) => acc + getPrixItemAjuste(i), 0);
+  
+  // REGLE : Frais de livraison 5DH si < 45DH
+  const fraisLivraison = (typeCommande === 'livraison' && sousTotal < 45 && sousTotal > 0) ? 5 : 0;
+  
+  const grandTotal = sousTotal + fraisLivraison;
 
   const envoyerCommande = async () => {
     if (panier.length === 0) return alert("Panier vide !");
@@ -264,11 +278,18 @@ function App() {
     if (typeCommande === 'livraison' && !adresse.trim()) return alert("Adresse obligatoire.");
 
     setLoading(true);
+    
+    // On met à jour les prix finaux dans le panier avant envoi
+    const panierFinal = panier.map(item => ({
+        ...item,
+        prixFinal: getPrixItemAjuste(item) // On fige le prix ajusté (Pep's)
+    }));
+
     try {
       await addDoc(collection(db, "commandes"), {
         client: clientNom, tel: telClean, type: typeCommande, adresse, 
         commentaire: commentaire,
-        items: panier, total: total, date: new Date(), status: 'En attente'
+        items: panierFinal, total: grandTotal, fraisLivraison, date: new Date(), status: 'En attente'
       });
       setPanier([]); setClientNom(''); setClientTel(''); setAdresse(''); setCommentaire('');
       alert("✅ Commande envoyée !"); setView('client');
@@ -280,6 +301,50 @@ function App() {
   const toggleAvailability = async (item) => {
     await updateDoc(doc(db, "produits", item.id), { available: (item.available === false ? true : false) });
   };
+  
+  // FONCTION EDIT (REMPLIR LE FORM)
+  const handleEdit = (p) => {
+      setEditId(p.id);
+      setNom(p.nom);
+      setDescription(p.description);
+      setCategorie(p.categorie);
+      setPrixBase(p.prix);
+      // Pour les variantes, c'est plus complexe, on simplifie pour le prix de base ici
+      window.scrollTo(0,0);
+  };
+
+  const saveProduit = async () => {
+    if(!nom) return; 
+    setLoading(true);
+    
+    const data = { 
+        nom, description, categorie, 
+        prix: variantes.length > 0 ? 0 : Number(prixBase), 
+        variantes, 
+        available: true,
+        date: new Date()
+    };
+
+    if(image) data.image = image;
+
+    if (editId) {
+        // MODE MODIFICATION
+        await updateDoc(doc(db, "produits", editId), data);
+        alert("Produit modifié !");
+        setEditId(null);
+    } else {
+        // MODE CREATION
+        await addDoc(collection(db, "produits"), data);
+        alert("Produit ajouté !");
+    }
+    
+    // Reset Form
+    setNom(''); setDescription(''); setImage(''); setPrixBase(''); setVariantes([]); 
+    setLoading(false);
+  };
+
+  const supprimerProduit = async (id) => { if(confirm("Supprimer ?")) await deleteDoc(doc(db, "produits", id)); };
+  
   const copierOdoo = (cmd) => {
     let t = `Nom: ${cmd.client}\nTél: ${cmd.tel}\n`;
     t += cmd.type === 'livraison' ? `Livraison: ${cmd.adresse}` : `Mode: ${cmd.type === 'sur_place' ? 'Sur Place' : 'Emporter'}`;
@@ -287,17 +352,17 @@ function App() {
     
     t += `\n-- Commande --\n`;
     cmd.items.forEach(it => {
-        // AJOUT DU TYPE DE PATES SI EXISTANT
         const patesInfo = it.choixPates ? ` [${it.choixPates}]` : '';
-        
         t += `[${it.categorie}] ${it.nom}${patesInfo} (${it.varianteNom || 'Standard'}) : ${it.prixFinal}DH\n`;
         if(it.sauces) t += `  Sauces: ${formatOptions(it.sauces)}\n`;
         if(it.optionsChoisies) t += `  Options: ${formatOptions(it.optionsChoisies)}\n`;
     });
+    if(cmd.fraisLivraison > 0) t += `Livraison: ${cmd.fraisLivraison} DH\n`;
     t += `TOTAL: ${cmd.total} DH`;
 
     navigator.clipboard.writeText(t).then(() => alert("📋 Copié !"));
   };
+  
   const changerStatus = async (id, st) => await updateDoc(doc(db, "commandes", id), { status: st });
   const supprimerCmd = async (id) => { if(confirm("Supprimer ?")) await deleteDoc(doc(db, "commandes", id)); };
   
@@ -316,14 +381,6 @@ function App() {
     };
   };
 
-  const saveProduit = async () => {
-    if(!nom) return; setLoading(true);
-    await addDoc(collection(db, "produits"), { nom, description, categorie, image, date: new Date(), prix: variantes.length>0?0:Number(prixBase), variantes, available: true });
-    setNom(''); setDescription(''); setImage(''); setPrixBase(''); setVariantes([]); setLoading(false); alert("Plat ajouté");
-  };
-
-  const supprimerProduit = async (id) => { if(confirm("Supprimer ?")) await deleteDoc(doc(db, "produits", id)); };
-  
   // --- STYLES ---
   const btnStyle = { background: COLORS.primary, color: 'white', border: 'none', borderRadius: '12px', padding: '12px 20px', fontWeight: '600', cursor: 'pointer', width: '100%', fontSize: '1rem', boxShadow: '0 4px 6px rgba(168, 68, 56, 0.2)' };
   const inputStyle = { width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #E5E7EB', background: 'white', marginBottom: '10px', fontSize: '1rem', outline: 'none' };
@@ -393,6 +450,7 @@ function App() {
                 <h2 style={{margin:0}}>⚙️ Admin</h2>
                 <div style={{fontSize:'0.8rem', color: COLORS.success, background:'#ECFDF5', padding:'5px 10px', borderRadius:'10px'}}>🔊 Son Actif</div>
               </div>
+              <button onClick={viderMenu} style={{background: COLORS.danger, color:'white', border:'none', padding:'8px 15px', borderRadius:'8px', cursor:'pointer', fontWeight:'bold'}}>🗑️ Reset</button>
           </div>
 
           <h3 style={{marginTop:'30px'}}>Commandes ({commandes.filter(c => c.status !== 'Terminé').length})</h3>
@@ -410,6 +468,7 @@ function App() {
                 <div style={{marginBottom:'10px'}}>
                     {cmd.type === 'livraison' && <div style={{background:'#FEF3C7', color:'#D97706', padding:'8px', borderRadius:'8px', fontSize:'0.9rem', marginBottom:'5px'}}>🛵 <strong>{cmd.adresse}</strong></div>}
                     {cmd.commentaire && <div style={{background: COLORS.warning, color:'white', padding:'8px', borderRadius:'8px', fontSize:'0.9rem', fontWeight:'bold'}}>📝 Note: {cmd.commentaire}</div>}
+                    {cmd.fraisLivraison > 0 && <div style={{color: COLORS.primary, fontSize:'0.85rem'}}>+ Livraison: 5 DH</div>}
                 </div>
                 
                 <ul style={{listStyle:'none', marginBottom:'15px'}}>
@@ -423,7 +482,6 @@ function App() {
                       </div>
                       <div style={{display:'flex', justifyContent:'space-between', color: COLORS.secondary}}>
                           <span>
-                              {/* AFFICHAGE DU TYPE DE PATES SI PRESENT */}
                               {it.choixPates && <strong style={{color: COLORS.primary, marginRight:'5px'}}>{it.choixPates}</strong>}
                               {it.varianteNom && <strong style={{color: COLORS.secondary, fontSize:'0.95rem'}}>({it.varianteNom})</strong>}
                           </span>
@@ -478,7 +536,10 @@ function App() {
                     <div style={{fontSize:'0.8rem', color: COLORS.textLight}}>{p.categorie} • {p.variantes?.length > 0 ? 'Multi-tailles' : p.prix + ' DH'}</div>
                   </div>
                 </div>
-                <button onClick={()=>supprimerProduit(p.id)} style={{color:'red', border:'none', background:'transparent', cursor:'pointer'}}>X</button>
+                <div style={{display:'flex', gap:'10px'}}>
+                    <button onClick={() => handleEdit(p)} style={{border:'none', background:'transparent', fontSize:'1.2rem', cursor:'pointer'}}>✏️</button>
+                    <button onClick={()=>supprimerProduit(p.id)} style={{color:'red', border:'none', background:'transparent', cursor:'pointer'}}>X</button>
+                </div>
               </div>
             ))}
             
@@ -486,30 +547,25 @@ function App() {
           </div>
           
            <details style={{marginTop:'30px', background:'white', padding:'15px', borderRadius:'10px'}}>
-             <summary>Ajout Manuel</summary>
+             <summary>{editId ? '✏️ Modifier Produit' : 'Ajout Manuel'}</summary>
              <div style={{marginTop:'10px'}}>
                  <input placeholder="Nom" value={nom} onChange={e=>setNom(e.target.value)} style={inputStyle} />
                  <div style={{display:'flex', gap:'10px'}}>
-                   <select value={categorie} onChange={e=>setCategorie(e.target.value)} style={{...inputStyle, width:'50%'}}><option>Burgers</option><option>Pizzas</option><option>Tacos</option></select>
+                   <select value={categorie} onChange={e=>setCategorie(e.target.value)} style={{...inputStyle, width:'50%'}}><option>Burgers</option><option>Pizzas</option><option>Tacos</option><option>Pâtes</option></select>
                    <input type="number" placeholder="Prix" value={prixBase} onChange={e=>setPrixBase(e.target.value)} style={{...inputStyle, width:'50%'}} />
                  </div>
-                 <button onClick={saveProduit} style={{...btnStyle, width:'auto'}}>Ajouter</button>
+                 <button onClick={saveProduit} style={{...btnStyle, width:'auto'}}>{editId ? 'Mettre à jour' : 'Ajouter'}</button>
+                 {editId && <button onClick={() => {setEditId(null); setNom(''); setPrixBase('');}} style={{...btnStyle, background:'gray', width:'auto', marginLeft:'10px'}}>Annuler</button>}
              </div>
            </details>
 
            {/* ZONE DANGEREUSE */}
            <details style={{marginTop:'50px', background:'#FEE2E2', padding:'15px', borderRadius:'10px', border:`1px solid ${COLORS.danger}`}}>
              <summary style={{fontWeight:'bold', color: COLORS.danger, cursor:'pointer'}}>💀 ZONE DANGEREUSE (Import / Reset)</summary>
-             
              <input type="file" accept=".csv" ref={fileInputRef} onChange={handleCSVImport} style={{display:'none'}} />
-             
              <div style={{marginTop:'20px', display:'flex', gap:'10px', flexDirection:'column'}}>
-                <button onClick={triggerImport} style={{...btnStyle, background: 'white', color: COLORS.secondary, border:'1px solid #ccc'}}>
-                    📂 IMPORTER UN MENU (CSV)
-                </button>
-                <button onClick={viderMenu} style={{...btnStyle, background: COLORS.danger, color:'white'}}>
-                    🗑️ TOUT SUPPRIMER (RESET)
-                </button>
+                <button onClick={triggerImport} style={{...btnStyle, background: 'white', color: COLORS.secondary, border:'1px solid #ccc'}}>📂 IMPORTER UN MENU (CSV)</button>
+                <button onClick={viderMenu} style={{...btnStyle, background: COLORS.danger, color:'white'}}>🗑️ TOUT SUPPRIMER (RESET)</button>
              </div>
            </details>
 
@@ -579,7 +635,6 @@ function App() {
                         </div>
                         <div style={{fontWeight:'600'}}>
                             {item.nom} 
-                            {/* AFFICHAGE DU TYPE DE PATES */}
                             {item.choixPates && <span style={{color: COLORS.secondary, fontWeight:'bold'}}> ({item.choixPates})</span>}
                             {item.varianteNom && <span style={{color: COLORS.textLight}}> ({item.varianteNom})</span>}
                         </div>
@@ -589,12 +644,15 @@ function App() {
                         </div>
                     </div>
                     <div style={{display:'flex', gap:'15px', alignItems:'center'}}>
-                      <strong style={{color: COLORS.primary}}>{Number(item.prixFinal) || 0} DH</strong>
+                      <strong style={{color: COLORS.primary}}>{getPrixItemAjuste(item)} DH</strong>
                       <button onClick={() => retirerDuPanier(item.uniqueId)} style={{color:'#ccc', background:'transparent', border:'none', fontSize:'1.5rem'}}>×</button>
                     </div>
                   </div>
                 ))}
-                <div style={{textAlign:'right', fontSize:'1.5rem', fontWeight:'800', marginTop:'20px', color: COLORS.secondary}}>Total : {total} DH</div>
+                
+                {fraisLivraison > 0 && <div style={{textAlign:'right', color: COLORS.textLight, marginTop:'10px'}}>+ Frais de livraison (petites commandes) : 5 DH</div>}
+                
+                <div style={{textAlign:'right', fontSize:'1.5rem', fontWeight:'800', marginTop:'10px', color: COLORS.secondary}}>Total : {grandTotal} DH</div>
               </div>
               
               <div style={{background: COLORS.bg, padding: '20px', borderRadius: '16px'}}>
@@ -638,7 +696,7 @@ function App() {
             <span style={{background: COLORS.primary, color:'white', width:'28px', height:'28px', borderRadius:'50%', display:'flex', justifyContent:'center', alignItems:'center', fontWeight:'bold', fontSize:'0.9rem'}}>{panier.length}</span>
             <span style={{fontSize:'1rem', fontWeight:'500'}}>Voir le panier</span>
           </div>
-          <span style={{fontWeight:'800', fontSize:'1.1rem'}}>{total} DH</span>
+          <span style={{fontWeight:'800', fontSize:'1.1rem'}}>{grandTotal} DH</span>
         </div>
       )}
     </div>
@@ -658,7 +716,7 @@ function ProductModal({ product, onClose, onAdd }) {
   const [selectedVar, setSelectedVar] = useState(product.variantes && product.variantes.length > 0 ? product.variantes[0] : null);
   const [optionsChoisies, setOptionsChoisies] = useState([]); 
   const [sauces, setSauces] = useState([]); 
-  const [typePates, setTypePates] = useState(null); // NOUVEAU ETAT POUR LES PATES
+  const [typePates, setTypePates] = useState(null); 
 
   let maxChoix = 0;
   let minChoix = 0;
@@ -667,10 +725,7 @@ function ProductModal({ product, onClose, onAdd }) {
   
   const nomLower = product.nom.toLowerCase();
   const catLower = product.categorie.toLowerCase();
-  
-  // DETECTION AUTOMATIQUE SI C'EST DES PATES
   const isPates = catLower.includes('pâtes') || catLower.includes('pates');
-
   const isTacos = catLower.includes('tacos');
   const isMixte = isTacos && nomLower.includes('mixte');
 
@@ -737,7 +792,7 @@ function ProductModal({ product, onClose, onAdd }) {
             </div>
         )}
 
-        {/* --- SECTION SPECIALE PATES (NOUVEAU) --- */}
+        {/* --- SECTION PATES --- */}
         {isPates && (
             <div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}>
                 <div style={{fontWeight:'bold', marginBottom:'10px'}}>Type de Pâtes (Obligatoire)</div>
@@ -756,7 +811,7 @@ function ProductModal({ product, onClose, onAdd }) {
             </div>
         )}
 
-        {/* Choix Sauces (TOUS LES TACOS) */}
+        {/* Choix Sauces */}
         {isTacos && (
             <div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}>
                 <div style={{fontWeight:'bold', marginBottom:'10px'}}>Sauces Maison <small style={{color:COLORS.textLight}}>(Max 2)</small></div>
@@ -778,7 +833,7 @@ function ProductModal({ product, onClose, onAdd }) {
             </div>
         )}
 
-        {/* Choix Options (Viandes / Garnitures) avec Compteurs */}
+        {/* Choix Options */}
         {maxChoix > 0 && (
             <div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}>
                 <div style={{fontWeight:'bold', marginBottom:'10px'}}>
@@ -805,16 +860,9 @@ function ProductModal({ product, onClose, onAdd }) {
         )}
 
         <button onClick={() => {
-            // VERIFICATION OBLIGATOIRE POUR LES PATES
-            if (isPates && !typePates) {
-                return alert("Veuillez choisir le type de pâtes !");
-            }
-
-            if (minChoix > 0 && optionsChoisies.length < minChoix) { 
-                alert(`Veuillez choisir au moins ${minChoix} options !`); 
-                return; 
-            }
-            // ON AJOUTE LE CHOIX DES PATES DANS L'OBJET
+            if (isPates && !typePates) return alert("Veuillez choisir le type de pâtes !");
+            if (minChoix > 0 && optionsChoisies.length < minChoix) return alert(`Veuillez choisir au moins ${minChoix} options !`); 
+            
             onAdd({ ...product, prixFinal: currentPrice }, selectedVar ? { ...selectedVar, optionsChoisies, sauces, choixPates: typePates } : { optionsChoisies, sauces, choixPates: typePates });
         }} style={{
             background: COLORS.primary, color: 'white', border: 'none', borderRadius: '12px', 
