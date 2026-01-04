@@ -11,7 +11,6 @@ const LISTE_GARNITURES_PIZZA = ["Viande Hachée", "Poulet", "4 Fromages", "Canni
 const LISTE_SAUCES = ["Algérienne Fait Maison", "Biggy Fait Maison", "Barbecue Fait Maison"];
 const TYPES_PATES = ["Penne", "Tagliatelle", "Spaghetti"];
 
-// EXCLUSIONS PROMO (Minuscule)
 const PIZZAS_EXCLUES_PROMO = ["4 saisons", "fruits de mer", "cannibale", "2 saisons"];
 
 const TOUTES_CATEGORIES = ["Tacos", "Pizzas", "Burgers", "Pâtes", "Sides", "Les Burritos", "Koniks", "Plats", "Salades", "Boissons", "Desserts"];
@@ -58,6 +57,9 @@ function App() {
   const [typeCommande, setTypeCommande] = useState('sur_place');
   const [adresse, setAdresse] = useState('');
   
+  // NOUVEAU : Ticket Persistant
+  const [derniereCommande, setDerniereCommande] = useState(null);
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -71,14 +73,17 @@ function App() {
   const [prixBase, setPrixBase] = useState('');
   const [variantes, setVariantes] = useState([]); 
 
-  // --- CHARGEMENT MEMOIRE CLIENT ---
+  // --- CHARGEMENT MEMOIRE CLIENT (INFOS + TICKET) ---
   useEffect(() => {
       const savedNom = localStorage.getItem('clientNom');
       const savedTel = localStorage.getItem('clientTel');
       const savedAdresse = localStorage.getItem('clientAdresse');
+      const savedTicket = localStorage.getItem('derniereCommande'); // Récupération du ticket
+
       if (savedNom) setClientNom(savedNom);
       if (savedTel) setClientTel(savedTel);
       if (savedAdresse) setAdresse(savedAdresse);
+      if (savedTicket) setDerniereCommande(JSON.parse(savedTicket));
   }, []);
 
   // --- DATA ---
@@ -147,7 +152,7 @@ function App() {
       menuClient = menu.filter(p => p.categorie === categorieActive && p.available !== false);
   }
 
-  // --- FILTRAGE ADMIN (CORRIGÉ V51 - SECURITÉ CRASH) ---
+  // --- FILTRAGE ADMIN ---
   let menuAdmin = [];
   if (adminCategorie === 'RUPTURE') {
       menuAdmin = menu.filter(p => p.available === false);
@@ -246,7 +251,6 @@ function App() {
         setShowPromoWizard(true);
         return;
     }
-    
     if (itemMerged.isInfo) return alert("Info seulement.");
     if (navigator.vibrate) navigator.vibrate(50);
     
@@ -286,7 +290,6 @@ function App() {
       return prix;
   };
 
-  // --- CALCUL TOTAL & PROMO DIMANCHE (FIABILISÉ V51) ---
   const calculerTotalEtPromo = () => {
       let sousTotal = 0;
       let pizzasEligibles = [];
@@ -294,20 +297,15 @@ function App() {
       panier.forEach(item => {
           const prixAjuste = getPrixItemAjuste(item);
           sousTotal += prixAjuste;
-
-          // V51 : On utilise le flag explicite "isPromoEligible" ajouté par le Wizard
-          // C'est beaucoup plus robuste que de revérifier les noms
           if (item.isPromoEligible === true) {
               pizzasEligibles.push({ ...item, prixCalcul: prixAjuste });
           }
       });
 
       let remisePromo = 0;
-      if (isDimanche && pizzasEligibles.length >= 3) {
-          // Tri croissant : les moins chères en premier
+      if (pizzasEligibles.length >= 3) {
           pizzasEligibles.sort((a, b) => a.prixCalcul - b.prixCalcul);
           const nbGratuites = Math.floor(pizzasEligibles.length / 3);
-          
           for (let i = 0; i < nbGratuites; i++) {
               remisePromo += pizzasEligibles[i].prixCalcul;
           }
@@ -346,19 +344,31 @@ function App() {
         prixFinal: getPrixItemAjuste(item)
     }));
 
-    try {
-      await addDoc(collection(db, "commandes"), {
+    // Objet Commande Complet
+    const commandeData = {
         client: clientNom, tel: telClean, type: typeCommande, adresse, 
         commentaire: commentaire,
         items: panierFinal, 
         total: grandTotal, 
-        remisePromo, // IMPORTANT: On sauvegarde la remise pour l'admin
+        remisePromo, 
         fraisLivraison, 
         date: new Date(), 
         status: 'En attente'
-      });
+    };
+
+    try {
+      // 1. Envoi Firebase
+      const docRef = await addDoc(collection(db, "commandes"), commandeData);
+      
+      // 2. Création du Ticket Persistant (avec ID)
+      const ticketClient = { ...commandeData, id: docRef.id, date: new Date().toLocaleString() };
+      localStorage.setItem('derniereCommande', JSON.stringify(ticketClient));
+      setDerniereCommande(ticketClient);
+
+      // 3. Reset et Redirection Ticket
       setPanier([]); setCommentaire('');
-      alert("✅ Commande envoyée !"); setView('client');
+      setView('ticket'); // On envoie vers la vue ticket
+      
     } catch (e) { alert("Erreur réseau"); }
     setLoading(false);
   };
@@ -477,6 +487,17 @@ function App() {
             background: COLORS.primary, color: 'white', border: 'none', padding: '20px 50px', 
             borderRadius: '50px', fontSize: '1.3rem', fontWeight: 'bold', boxShadow: '0 5px 20px rgba(168, 68, 56, 0.4)', cursor:'pointer'
           }}>VOIR LE MENU</button>
+          
+          {/* BOUTON RETROUVER TICKET (Si existe) */}
+          {derniereCommande && (
+              <button onClick={() => setView('ticket')} style={{
+                  marginTop: '20px', background: 'transparent', border: '1px solid #374151', 
+                  color: COLORS.primary, padding: '10px 20px', borderRadius: '30px', cursor:'pointer'
+              }}>
+                  📄 Voir ma dernière commande
+              </button>
+          )}
+
           <button onClick={handleStaffAccess} style={{background: 'transparent', border: '1px solid #374151', color: '#6B7280', padding: '10px 25px', borderRadius: '30px', marginTop: '60px', fontSize: '0.8rem', cursor:'pointer'}}>Accès Staff</button>
         </div>
       )}
@@ -512,6 +533,50 @@ function App() {
           onClose={() => setSelectedProduct(null)} 
           onAdd={ajouterAuPanier}
         />
+      )}
+
+      {/* --- VUE TICKET CLIENT (V53) --- */}
+      {view === 'ticket' && derniereCommande && (
+          <div style={{padding: '20px', background: COLORS.bg, minHeight: '100vh', display:'flex', flexDirection:'column', alignItems:'center'}}>
+              <div style={{background: 'white', padding: '30px 20px', borderRadius: '20px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', width: '100%', maxWidth: '400px', textAlign: 'center'}}>
+                  <div style={{width:'60px', height:'60px', background: COLORS.success, color:'white', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'2rem', margin:'0 auto 20px auto'}}>✓</div>
+                  <h2 style={{margin: '0 0 10px 0', color: COLORS.secondary}}>Commande Validée !</h2>
+                  <p style={{color: COLORS.textLight, fontSize:'0.9rem', marginBottom:'30px'}}>Votre commande a bien été transmise en cuisine.</p>
+                  
+                  <div style={{borderTop: '2px dashed #eee', borderBottom: '2px dashed #eee', padding: '20px 0', marginBottom: '20px', textAlign:'left'}}>
+                      <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', fontWeight:'bold'}}>
+                          <span>Commande N°</span>
+                          <span>#{derniereCommande.id ? derniereCommande.id.slice(-4).toUpperCase() : '----'}</span>
+                      </div>
+                      <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', color: COLORS.textLight}}>
+                          <span>Client</span>
+                          <span>{derniereCommande.client}</span>
+                      </div>
+                      <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', color: COLORS.textLight}}>
+                          <span>Date</span>
+                          <span>{new Date().toLocaleDateString()}</span>
+                      </div>
+                      
+                      <ul style={{listStyle:'none', padding:0, marginTop:'20px'}}>
+                          {derniereCommande.items.map((it, i) => (
+                              <li key={i} style={{display:'flex', justifyContent:'space-between', marginBottom:'8px', fontSize:'0.95rem'}}>
+                                  <span>{it.nom} {it.varianteNom && `(${it.varianteNom})`}</span>
+                                  <span style={{fontWeight:'bold'}}>{it.prixFinal} DH</span>
+                              </li>
+                          ))}
+                      </ul>
+                  </div>
+
+                  <div style={{display:'flex', justifyContent:'space-between', fontSize:'1.2rem', fontWeight:'800', color: COLORS.primary}}>
+                      <span>TOTAL</span>
+                      <span>{derniereCommande.total} DH</span>
+                  </div>
+              </div>
+
+              <button onClick={() => { setView('client'); }} style={{marginTop:'30px', background: COLORS.secondary, color:'white', border:'none', padding:'15px 30px', borderRadius:'30px', fontWeight:'bold', cursor:'pointer', boxShadow:'0 5px 15px rgba(0,0,0,0.2)'}}>
+                  Commander à nouveau
+              </button>
+          </div>
       )}
 
       {/* --- LOGIN --- */}
@@ -552,7 +617,6 @@ function App() {
                 <div style={{marginBottom:'10px'}}>
                     {cmd.type === 'livraison' && <div style={{background:'#FEF3C7', color:'#D97706', padding:'8px', borderRadius:'8px', fontSize:'0.9rem', marginBottom:'5px'}}>🛵 <strong>{cmd.adresse}</strong></div>}
                     {cmd.commentaire && <div style={{background: COLORS.warning, color:'white', padding:'8px', borderRadius:'8px', fontSize:'0.9rem', fontWeight:'bold'}}>📝 Note: {cmd.commentaire}</div>}
-                    {/* CORRECTION AFFICHAGE REMISE ADMIN */}
                     {cmd.remisePromo > 0 && <div style={{color: COLORS.danger, fontSize:'0.9rem', fontWeight:'bold', border:'1px solid red', padding:'5px', borderRadius:'5px', display:'inline-block'}}>🎁 REMISE PROMO: -{cmd.remisePromo} DH</div>}
                     {cmd.fraisLivraison > 0 && <div style={{color: COLORS.primary, fontSize:'0.85rem'}}>+ Livraison: 5 DH</div>}
                 </div>
@@ -709,6 +773,18 @@ function App() {
             )})}
           </div>
           {menuClient.length === 0 && <div style={{textAlign:'center', marginTop:'50px', color: COLORS.textLight}}>Aucun plat disponible.</div>}
+          
+          {/* BOUTON FLOTTANT TICKET SI EXISTE */}
+          {derniereCommande && (
+              <div onClick={() => setView('ticket')} style={{
+                  position: 'fixed', bottom: panier.length > 0 ? '90px' : '30px', right: '20px', 
+                  background: 'white', padding: '10px 20px', borderRadius: '30px', 
+                  boxShadow: '0 5px 15px rgba(0,0,0,0.1)', fontWeight: 'bold', color: COLORS.success,
+                  display: 'flex', alignItems: 'center', gap: '10px', cursor:'pointer', border:'1px solid #eee'
+              }}>
+                  <span>🧾</span> Ma dernière commande
+              </div>
+          )}
         </div>
       )}
 
@@ -809,11 +885,12 @@ function formatOptions(list) {
     return Object.entries(counts).map(([name, count]) => count > 1 ? `${name} x${count}` : name).join(', ');
 }
 
-// --- MODAL ASSISTANT PROMO (CORRIGÉ V51 - FIABILITÉ 100%) ---
+// --- MODAL ASSISTANT PROMO (V52) ---
 function PromoWizard({ menu, onClose, onValidate }) {
     const [choix, setChoix] = useState([]);
     
-    // Filtrer les pizzas éligibles (Hors exclusions + Disponibles)
+    useEffect(() => { setChoix([]); }, []);
+
     const pizzasEligibles = menu.filter(p => 
         p.categorie === 'Pizzas' && 
         p.available !== false &&
@@ -821,10 +898,9 @@ function PromoWizard({ menu, onClose, onValidate }) {
     );
 
     const handleSelect = (pizza) => {
-        // Trouver la variante M (ou Standard)
+        if (choix.length >= 3) return;
+
         let varianteM = pizza.variantes?.find(v => v.nom === 'M' || v.nom === 'Standard');
-        
-        // Si pas de variante M trouvée mais qu'il y a des variantes, on prend la première
         if (!varianteM && pizza.variantes?.length > 0) varianteM = pizza.variantes[0];
 
         const prixFinal = varianteM ? varianteM.prix : pizza.prix;
@@ -835,37 +911,62 @@ function PromoWizard({ menu, onClose, onValidate }) {
             prixFinal: Number(prixFinal),
             originalPrice: Number(prixFinal),
             varianteNom: varianteNom, // FORCE M
-            isPromoEligible: true // <--- LE BADGE MAGIQUE POUR LE CALCUL
+            isPromoEligible: true // FLAG
         };
 
-        const newChoix = [...choix, newItem];
-        setChoix(newChoix);
+        setChoix([...choix, newItem]);
+    };
 
-        if (newChoix.length === 3) {
-            onValidate(newChoix);
-        }
+    const handleRemoveChoice = (indexToRemove) => {
+        setChoix(choix.filter((_, index) => index !== indexToRemove));
     };
 
     return (
         <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.9)', zIndex:2000, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'20px'}}>
-            <div style={{background:'white', width:'100%', maxWidth:'500px', borderRadius:'20px', padding:'20px', maxHeight:'90vh', overflowY:'auto'}}>
+            <div style={{background:'white', width:'100%', maxWidth:'600px', borderRadius:'20px', padding:'20px', maxHeight:'90vh', overflowY:'auto'}}>
+                
                 <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px'}}>
-                    <h3 style={{margin:0}}>Choix {choix.length + 1} / 3 (Moyenne)</h3>
+                    <h3 style={{margin:0}}>Choix {choix.length} / 3</h3>
                     <button onClick={onClose} style={{border:'none', background:'transparent', fontSize:'1.5rem'}}>×</button>
                 </div>
-                
-                <div style={{display:'grid', gridTemplateColumns:'1fr', gap:'10px'}}>
-                    {pizzasEligibles.map(p => (
-                        <button key={p.id} onClick={() => handleSelect(p)} style={{
-                            padding:'15px', borderRadius:'12px', border:'1px solid #eee', 
-                            background:'white', textAlign:'left', display:'flex', justifyContent:'space-between', alignItems:'center',
-                            boxShadow:'0 2px 5px rgba(0,0,0,0.05)'
+
+                <div style={{display:'flex', gap:'10px', marginBottom:'20px', background:'#F3F4F6', padding:'10px', borderRadius:'10px'}}>
+                    {[0, 1, 2].map(i => (
+                        <div key={i} style={{
+                            flex:1, height:'60px', background:'white', border:'2px dashed #ddd', borderRadius:'8px',
+                            display:'flex', alignItems:'center', justifyContent:'center', fontSize:'0.8rem', textAlign:'center', position:'relative', fontWeight:'bold'
                         }}>
-                            <span style={{fontWeight:'bold'}}>{p.nom}</span>
-                            <span style={{color: COLORS.primary}}>Ajouter +</span>
-                        </button>
+                            {choix[i] ? (
+                                <>
+                                    {choix[i].nom}
+                                    <div onClick={() => handleRemoveChoice(i)} style={{position:'absolute', top:'-5px', right:'-5px', background:'red', color:'white', width:'20px', height:'20px', borderRadius:'50%', cursor:'pointer', fontSize:'0.7rem', display:'flex', alignItems:'center', justifyContent:'center'}}>×</div>
+                                </>
+                            ) : <span style={{color:'#ccc'}}>Vide</span>}
+                        </div>
                     ))}
                 </div>
+                
+                {choix.length < 3 ? (
+                    <div style={{display:'grid', gridTemplateColumns:'1fr', gap:'10px'}}>
+                        {pizzasEligibles.map(p => (
+                            <button key={p.id} onClick={() => handleSelect(p)} style={{
+                                padding:'15px', borderRadius:'12px', border:'1px solid #eee', 
+                                background:'white', textAlign:'left', display:'flex', justifyContent:'space-between', alignItems:'center',
+                                boxShadow:'0 2px 5px rgba(0,0,0,0.05)', cursor:'pointer'
+                            }}>
+                                <span style={{fontWeight:'bold'}}>{p.nom}</span>
+                                <span style={{color: COLORS.primary, fontWeight:'bold', background:'#FEE2E2', padding:'5px 10px', borderRadius:'15px'}}>+ Ajouter</span>
+                            </button>
+                        ))}
+                    </div>
+                ) : (
+                    <button onClick={() => onValidate(choix)} style={{
+                        background: COLORS.success, color:'white', width:'100%', padding:'20px', border:'none', 
+                        borderRadius:'15px', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer'
+                    }}>
+                        ✅ VALIDER CES 3 PIZZAS
+                    </button>
+                )}
             </div>
         </div>
     );
