@@ -57,27 +57,26 @@ function App() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   
+  // Admin Form & Edit Mode
   const [editId, setEditId] = useState(null); 
   const [nom, setNom] = useState('');
   const [description, setDescription] = useState('');
   const [image, setImage] = useState('');
   const [categorie, setCategorie] = useState('Burgers');
   const [prixBase, setPrixBase] = useState('');
-  const [variantes, setVariantes] = useState([]);
+  const [variantes, setVariantes] = useState([]); // C'est ici que les tailles sont stockées
 
-  // --- CHARGEMENT DES INFOS CLIENT (MEMOIRE) ---
+  // --- CHARGEMENT MEMOIRE CLIENT ---
   useEffect(() => {
-      // On récupère les infos sauvegardées si elles existent
       const savedNom = localStorage.getItem('clientNom');
       const savedTel = localStorage.getItem('clientTel');
       const savedAdresse = localStorage.getItem('clientAdresse');
-
       if (savedNom) setClientNom(savedNom);
       if (savedTel) setClientTel(savedTel);
       if (savedAdresse) setAdresse(savedAdresse);
   }, []);
 
-  // --- DATA FIREBASE ---
+  // --- DATA ---
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (u) => {
       setUser(u);
@@ -239,7 +238,6 @@ function App() {
 
   const ajouterAuPanier = (itemMerged) => {
     if (itemMerged.isInfo) return alert("Ceci est une offre informative.");
-    
     if (navigator.vibrate) navigator.vibrate(50);
     
     let safePrice = Number(itemMerged.prixFinal);
@@ -289,7 +287,6 @@ function App() {
 
     setLoading(true);
     
-    // --- SAUVEGARDE AUTOMATIQUE DES INFOS CLIENT ---
     localStorage.setItem('clientNom', clientNom);
     localStorage.setItem('clientTel', telClean);
     if(adresse) localStorage.setItem('clientAdresse', adresse);
@@ -305,7 +302,6 @@ function App() {
         commentaire: commentaire,
         items: panierFinal, total: grandTotal, fraisLivraison, date: new Date(), status: 'En attente'
       });
-      // On vide le panier mais on garde les infos client dans le state (et localStorage)
       setPanier([]); setCommentaire('');
       alert("✅ Commande envoyée !"); setView('client');
     } catch (e) { alert("Erreur réseau"); }
@@ -317,13 +313,28 @@ function App() {
     await updateDoc(doc(db, "produits", item.id), { available: (item.available === false ? true : false) });
   };
   
+  // --- MODIFICATION INTELLIGENTE (V46) ---
   const handleEdit = (p) => {
       setEditId(p.id);
       setNom(p.nom);
       setDescription(p.description);
       setCategorie(p.categorie);
-      setPrixBase(p.prix);
+      
+      // Si le produit a des variantes (L, XL...), on les charge et on vide le prix unique
+      if (p.variantes && p.variantes.length > 0) {
+          setVariantes(p.variantes);
+          setPrixBase(''); 
+      } else {
+          setVariantes([]);
+          setPrixBase(p.prix);
+      }
       window.scrollTo(0,0);
+  };
+
+  const updateVariantPrice = (index, newVal) => {
+      const newVars = [...variantes];
+      newVars[index].prix = Number(newVal);
+      setVariantes(newVars);
   };
 
   const saveProduit = async () => {
@@ -332,6 +343,7 @@ function App() {
     
     const data = { 
         nom, description, categorie, 
+        // Si variantes existent, le prix de base est 0 (ou calculé min), sinon prix unique
         prix: variantes.length > 0 ? 0 : Number(prixBase), 
         variantes, 
         available: true,
@@ -356,15 +368,9 @@ function App() {
   
   const copierOdoo = (cmd) => {
     let t = `Nom : ${cmd.client}\nTél : ${cmd.tel}\n`;
-    
-    if (cmd.type === 'livraison') {
-        t += `Adresse : ${cmd.adresse}`;
-    } else {
-        t += `Mode : ${cmd.type === 'sur_place' ? 'Sur Place' : 'Emporter'}`;
-    }
-
+    if (cmd.type === 'livraison') t += `Adresse : ${cmd.adresse}`;
+    else t += `Mode : ${cmd.type === 'sur_place' ? 'Sur Place' : 'Emporter'}`;
     if (cmd.commentaire) t += `\nNote : ${cmd.commentaire}`;
-
     navigator.clipboard.writeText(t).then(() => alert("📋 Infos Client Copiées !"));
   };
   
@@ -555,15 +561,32 @@ function App() {
              <summary>{editId ? '✏️ Modifier Produit' : 'Ajout Manuel'}</summary>
              <div style={{marginTop:'10px'}}>
                  <input placeholder="Nom" value={nom} onChange={e=>setNom(e.target.value)} style={inputStyle} />
-                 <div style={{display:'flex', gap:'10px'}}>
-                   {/* SELECTEUR DE CATEGORIE CORRIGÉ */}
+                 <div style={{display:'flex', gap:'10px', alignItems:'start'}}>
                    <select value={categorie} onChange={e=>setCategorie(e.target.value)} style={{...inputStyle, width:'50%'}}>
                        {categoriesSelectAdmin.map(cat => <option key={cat}>{cat}</option>)}
                    </select>
-                   <input type="number" placeholder="Prix" value={prixBase} onChange={e=>setPrixBase(e.target.value)} style={{...inputStyle, width:'50%'}} />
+                   
+                   {/* GESTION INTELLIGENTE DES PRIX VARIANTES */}
+                   {variantes.length > 0 ? (
+                       <div style={{width:'50%', display:'flex', gap:'5px', flexWrap:'wrap'}}>
+                           {variantes.map((v, index) => (
+                               <div key={index} style={{flex:1, minWidth:'80px'}}>
+                                   <label style={{fontSize:'0.7rem', fontWeight:'bold', color: COLORS.textLight}}>{v.nom}</label>
+                                   <input 
+                                       type="number" 
+                                       value={v.prix} 
+                                       onChange={(e) => updateVariantPrice(index, e.target.value)} 
+                                       style={{...inputStyle, marginBottom:0}} 
+                                   />
+                               </div>
+                           ))}
+                       </div>
+                   ) : (
+                       <input type="number" placeholder="Prix" value={prixBase} onChange={e=>setPrixBase(e.target.value)} style={{...inputStyle, width:'50%'}} />
+                   )}
                  </div>
-                 <button onClick={saveProduit} style={{...btnStyle, width:'auto'}}>{editId ? 'Mettre à jour' : 'Ajouter'}</button>
-                 {editId && <button onClick={() => {setEditId(null); setNom(''); setPrixBase('');}} style={{...btnStyle, background:'gray', width:'auto', marginLeft:'10px'}}>Annuler</button>}
+                 <button onClick={saveProduit} style={{...btnStyle, width:'auto', marginTop:'15px'}}>{editId ? 'Mettre à jour' : 'Ajouter'}</button>
+                 {editId && <button onClick={() => {setEditId(null); setNom(''); setPrixBase(''); setVariantes([]);}} style={{...btnStyle, background:'gray', width:'auto', marginLeft:'10px'}}>Annuler</button>}
              </div>
            </details>
 
@@ -871,11 +894,10 @@ function ProductModal({ product, onClose, onAdd }) {
             if (isPates && !typePates) return alert("Veuillez choisir le type de pâtes !");
             if (minChoix > 0 && optionsChoisies.length < minChoix) return alert(`Veuillez choisir au moins ${minChoix} options !`); 
             
-            // FUSIONNER TOUTES LES DONNEES DANS UN SEUL OBJET (CORRECTION DU BUG V42)
             const itemMerged = {
                 ...product,
                 prixFinal: currentPrice,
-                varianteNom: selectedVar ? selectedVar.nom : null, // La taille
+                varianteNom: selectedVar ? selectedVar.nom : null, 
                 sauces: sauces,
                 optionsChoisies: optionsChoisies,
                 choixPates: typePates
