@@ -519,30 +519,52 @@ function App() {
                     <button onClick={() => setShowCGV(false)} style={{border:'none', background:'transparent', fontSize:'1.5rem', fontWeight:'bold', cursor:'pointer'}}>×</button>
                 </div>
                 <div style={{fontSize:'0.9rem', lineHeight:'1.6', color:'#333', textAlign:'justify'}}>
-                    <h3 style={{fontSize:'1rem', fontWeight:'bold', marginTop:'15px'}}>ARTICLE 1 : OBJET</h3>
-                    <p>Les présentes conditions régissent les ventes par Foodji via l'application. Toute commande implique l'adhésion aux présentes conditions.</p>
                     
-                    <h3 style={{fontSize:'1rem', fontWeight:'bold', marginTop:'15px'}}>ARTICLE 2 : HORAIRES</h3>
+                    <h3 style={{fontSize:'1rem', fontWeight:'bold', marginTop:'15px'}}>ARTICLE 1 : OBJET</h3>
+                    <p>Les présentes conditions régissent les ventes de produits alimentaires et boissons par la société Foodji via son application mobile et son site internet. Toute commande passée implique l'adhésion entière et sans réserve du client aux présentes conditions générales.</p>
+
+                    <h3 style={{fontSize:'1rem', fontWeight:'bold', marginTop:'15px'}}>ARTICLE 2 : HORAIRES D'OUVERTURE</h3>
+                    <p>Le service de commande est assuré selon les horaires suivants :</p>
                     <ul style={{paddingLeft:'20px', margin:'5px 0'}}>
-                        <li>Lun-Jeu : 12h00 - 01h00</li>
-                        <li>Vendredi : 12h00 - 02h00</li>
-                        <li>Sam-Dim : 18h00 - 02h00</li>
+                        <li><strong>Lundi au Jeudi :</strong> 12h00 - 01h00 du matin.</li>
+                        <li><strong>Vendredi :</strong> 12h00 - 02h00 du matin.</li>
+                        <li><strong>Samedi :</strong> 18h00 - 02h00 du matin.</li>
+                        <li><strong>Dimanche :</strong> 18h00 - 02h00 du matin.</li>
                     </ul>
+                    <p>En dehors de ces horaires, la prise de commande est désactivée.</p>
 
                     <h3 style={{fontSize:'1rem', fontWeight:'bold', marginTop:'15px'}}>ARTICLE 3 : ZONES DE LIVRAISON</h3>
-                    <p>Livraison max 10km. Zone > 4km : Minimum 300 DH. Zones spéciales (UIR, Technopolis...) : Supplément 10-15 DH au livreur.</p>
+                    <p>La livraison est assurée dans un rayon maximal de <strong>10 km</strong>. L'application utilise la géolocalisation.</p>
+                    <ul style={{paddingLeft:'20px', margin:'5px 0'}}>
+                        <li><strong>Zone Standard (0-4 km) :</strong> Pas de minimum spécifique.</li>
+                        <li><strong>Zone Étendue (4-10 km) :</strong> Minimum de commande de <strong>300 DH</strong>.</li>
+                        <li><strong>Zones Spéciales (UIR, Technopolis...) :</strong> Supplément de 10-15 DH à régler au livreur.</li>
+                    </ul>
 
                     <h3 style={{fontSize:'1rem', fontWeight:'bold', marginTop:'15px'}}>ARTICLE 4 : COMMANDES</h3>
-                    <p>Commande > 300 DH soumise à validation téléphonique. Foodji peut refuser une commande en cas d'indisponibilité.</p>
+                    <p>Le client s'engage à fournir des coordonnées exactes. Toute commande supérieure à <strong>300 DH</strong> sera mise en statut "En cours de validation" et nécessitera une confirmation téléphonique. Foodji peut refuser une commande en cas d'indisponibilité.</p>
 
-                    <h3 style={{fontSize:'1rem', fontWeight:'bold', marginTop:'15px'}}>ARTICLE 5 : FRAIS</h3>
-                    <p>Livraison +5 DH pour commande -45 DH.</p>
+                    <h3 style={{fontSize:'1rem', fontWeight:'bold', marginTop:'15px'}}>ARTICLE 5 : PRIX ET FRAIS</h3>
+                    <p>Les prix sont TTC. Une participation aux frais de livraison de <strong>5 DH</strong> est demandée pour toute commande inférieure à 45 DH.</p>
 
                     <h3 style={{fontSize:'1rem', fontWeight:'bold', marginTop:'15px'}}>ARTICLE 6 : PROMO DIMANCHE</h3>
-                    <p>2 Pizzas achetées = 1 offerte (Moyennes uniquement). Non cumulable.</p>
+                    <p>L'offre "2 Pizzas Achetées = 1 Offerte" est valable uniquement le Dimanche, sur les pizzas de taille <strong>Moyenne</strong>. La moins chère est offerte. Non cumulable.</p>
 
                     <h3 style={{fontSize:'1rem', fontWeight:'bold', marginTop:'15px'}}>ARTICLE 7 : ALLERGÈNES</h3>
-                    <p>Les plats peuvent contenir des allergènes (gluten, lait, etc.). Vérifiez la composition.</p>
+                    <p>Les produits peuvent contenir des allergènes (gluten, lait, œufs, etc.). Le client doit se renseigner ou signaler une allergie grave en commentaire.</p>
+
+                    <h3 style={{fontSize:'1rem', fontWeight:'bold', marginTop:'15px'}}>ARTICLE 8 : PAIEMENT</h3>
+                    <p>Le paiement s'effectue à la livraison (espèces ou autres moyens acceptés par le livreur).</p>
+
+                    <h3 style={{fontSize:'1rem', fontWeight:'bold', marginTop:'15px'}}>ARTICLE 9 : DÉLAIS</h3>
+                    <p>Les délais sont indicatifs (dépendent de la météo, circulation, cuisine). Un retard ne donne pas droit à annulation si la commande est préparée.</p>
+
+                    <h3 style={{fontSize:'1rem', fontWeight:'bold', marginTop:'15px'}}>ARTICLE 10 : RÉTRACTATION</h3>
+                    <p>S'agissant de produits périssables, le droit de rétractation ne s'applique pas. Toute commande validée est due.</p>
+
+                    <h3 style={{fontSize:'1rem', fontWeight:'bold', marginTop:'15px'}}>ARTICLE 11 : DONNÉES PERSONNELLES</h3>
+                    <p>Les données (Nom, Tél, Adresse, GPS) sont utilisées uniquement pour la livraison et le suivi de commande.</p>
+
                 </div>
                 <button onClick={() => setShowCGV(false)} style={{marginTop:'20px', width:'100%', background:'black', color:'white', padding:'15px', borderRadius:'10px', fontWeight:'bold', border:'none', cursor:'pointer'}}>J'ai compris</button>
             </div>
