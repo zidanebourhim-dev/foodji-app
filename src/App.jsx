@@ -4,17 +4,10 @@ import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebas
 import { collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, query, writeBatch } from 'firebase/firestore';
 import './App.css';
 
-// ==========================================
-// 1. CONFIGURATION DU RESTAURANT
-// ==========================================
 const CODE_MANAGER = "1234"; 
 const PHONE_NUMBER = "0537536689"; 
-// Coordonnées GPS (Sala Al Jadida)
 const RESTO_COORDS = { lat: 33.997484, lng: -6.735644 }; 
 
-// ==========================================
-// 2. LISTES DES INGRÉDIENTS & OPTIONS
-// ==========================================
 const LISTE_VIANDES = ["Poulet", "Viande Hachée", "Cordon Bleu", "Nuggets", "Poulet Crispy"];
 const LISTE_GARNITURES_PIZZA = ["Viande Hachée", "Poulet", "4 Fromages", "Cannibale", "Pepperoni", "Thon", "Charcuterie", "Végétarienne", "Fruits de Mer"];
 const LISTE_SAUCES = ["Algérienne Fait Maison", "Biggy Fait Maison", "Barbecue Fait Maison", "Pas de sauce"]; 
@@ -33,12 +26,10 @@ const TOUTES_CATEGORIES = ["Tacos", "Pizzas", "Burgers", "Pâtes", "Sides", "Les
 
 const NOTIF_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
 
-// Images locales (dans le dossier public)
 const logoImg = "/logo.png";
 const iconImg = "/icon.png";
 const promoImg = "/promo.jpg"; 
 
-// Couleurs de la charte graphique
 const COLORS = {
   primary: '#A84438',    
   secondary: '#1A1E29',  
@@ -52,30 +43,24 @@ const COLORS = {
   pending: '#F97316' 
 };
 
-// ==========================================
-// 3. APPLICATION PRINCIPALE
-// ==========================================
 function App() {
-  // --- Gestion Utilisateur ---
   const [user, setUser] = useState(null);
   const [view, setView] = useState('landing'); 
-  
-  // --- Données Firebase ---
   const [menu, setMenu] = useState([]);
   const [commandes, setCommandes] = useState([]);
   
-  // --- Références ---
+  // State pour l'animation de zoom
+  const [isZooming, setIsZooming] = useState(false);
+
   const prevCommandesLength = useRef(0);
   const audioRef = useRef(new Audio(NOTIF_SOUND));
   const fileInputRef = useRef(null); 
 
-  // --- États Interface Client ---
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [showPromoWizard, setShowPromoWizard] = useState(false); 
   const [categorieActive, setCategorieActive] = useState(''); 
   const [adminCategorie, setAdminCategorie] = useState(''); 
 
-  // --- Panier & Formulaire ---
   const [panier, setPanier] = useState([]);
   const [clientNom, setClientNom] = useState('');
   const [clientTel, setClientTel] = useState('');
@@ -83,19 +68,16 @@ function App() {
   const [typeCommande, setTypeCommande] = useState('sur_place');
   const [adresse, setAdresse] = useState('');
   
-  // --- Géolocalisation & Sécurité ---
   const [distanceClient, setDistanceClient] = useState(null);
   const [clientCoords, setClientCoords] = useState(null);
-  const [showDistanceBlocker, setShowDistanceBlocker] = useState(false); // Le "Mur" 10km
+  const [showDistanceBlocker, setShowDistanceBlocker] = useState(false);
   
   const [derniereCommande, setDerniereCommande] = useState(null);
 
-  // --- Admin ---
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   
-  // --- Édition Produit (Admin) ---
   const [editId, setEditId] = useState(null); 
   const [nom, setNom] = useState('');
   const [description, setDescription] = useState(''); 
@@ -104,9 +86,6 @@ function App() {
   const [prixBase, setPrixBase] = useState('');
   const [variantes, setVariantes] = useState([]); 
 
-  // ==========================================
-  // FONCTIONS UTILITAIRES
-  // ==========================================
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
       const R = 6371; 
       const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -118,7 +97,6 @@ function App() {
       return R * c; 
   };
 
-  // Chargement initial (LocalStorage)
   useEffect(() => {
       const savedNom = localStorage.getItem('clientNom');
       const savedTel = localStorage.getItem('clientTel');
@@ -131,52 +109,34 @@ function App() {
       if (savedTicket) setDerniereCommande(JSON.parse(savedTicket));
   }, []);
 
-  // Connexion Firebase & Écouteurs
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (u) => { setUser(u); });
-    
-    const unsubscribeMenu = onSnapshot(collection(db, "produits"), (snap) => {
-      setMenu(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-
+    const unsubscribeMenu = onSnapshot(collection(db, "produits"), (snap) => { setMenu(snap.docs.map(d => ({ id: d.id, ...d.data() }))); });
     const q = query(collection(db, "commandes"));
     const unsubscribeCmd = onSnapshot(q, (snap) => {
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       list.sort((a, b) => b.date.seconds - a.date.seconds);
-      
-      if (list.length > prevCommandesLength.current && user) {
-          audioRef.current.play().catch(e => console.log("Clic requis pour son"));
-      }
+      if (list.length > prevCommandesLength.current && user) { audioRef.current.play().catch(e => console.log("Clic requis")); }
       prevCommandesLength.current = list.length;
       setCommandes(list);
     });
-
     return () => { unsubscribeAuth(); unsubscribeMenu(); unsubscribeCmd(); };
   }, [user]);
 
-  // Logique Catégories
   const categoriesReelles = [...new Set(menu.map(p => p.categorie))];
   const categoriesSelectAdmin = [...new Set([...TOUTES_CATEGORIES, ...categoriesReelles])];
 
-  useEffect(() => {
-      if (categoriesReelles.length > 0 && !adminCategorie) setAdminCategorie(categoriesReelles[0]);
-  }, [menu, adminCategorie]);
+  useEffect(() => { if (categoriesReelles.length > 0 && !adminCategorie) setAdminCategorie(categoriesReelles[0]); }, [menu, adminCategorie]);
 
   const isDimanche = new Date().getDay() === 0;
   let categoriesClient = [...categoriesReelles];
   if (isDimanche) categoriesClient = ['🔥 PROMOTIONS', ...categoriesReelles];
   
-  useEffect(() => {
-      if (categoriesClient.length > 0 && !categorieActive) setCategorieActive(categoriesClient[0]);
-  }, [menu, categorieActive, isDimanche]);
+  useEffect(() => { if (categoriesClient.length > 0 && !categorieActive) setCategorieActive(categoriesClient[0]); }, [menu, categorieActive, isDimanche]);
 
-  // Filtrage Menu
   let menuClient = [];
   if (categorieActive === '🔥 PROMOTIONS') {
-      menuClient = [{
-          id: 'promo-sunday-card', nom: 'OFFRE DIMANCHE', description: '2 PIZZAS ACHETÉES = 1 OFFERTE (Moyennes uniquement)',
-          categorie: '🔥 PROMOTIONS', prix: 0, image: promoImg, available: true, isPromoTrigger: true 
-      }];
+      menuClient = [{ id: 'promo-sunday-card', nom: 'OFFRE DIMANCHE', description: '2 PIZZAS ACHETÉES = 1 OFFERTE (Moyennes uniquement)', categorie: '🔥 PROMOTIONS', prix: 0, image: promoImg, available: true, isPromoTrigger: true }];
   } else {
       menuClient = menu.filter(p => p.categorie === categorieActive && p.available !== false);
   }
@@ -185,9 +145,6 @@ function App() {
   if (adminCategorie === 'RUPTURE') menuAdmin = menu.filter(p => p.available === false);
   else menuAdmin = menu.filter(p => p.categorie === adminCategorie);
 
-  // ==========================================
-  // FONCTIONS ADMIN
-  // ==========================================
   const checkManagerAuth = () => {
       const code = prompt("🔒 Code Manager requis :");
       if (code === CODE_MANAGER) return true;
@@ -246,9 +203,17 @@ function App() {
 
   const handleStaffAccess = () => { if (user) setView('admin'); else setView('login'); };
 
-  // ==========================================
-  // GESTION PANIER & COMMANDE
-  // ==========================================
+  // --- DECLENCHEUR DU ZOOM ---
+  const handleEnterApp = () => {
+      // 1. On lance l'animation
+      setIsZooming(true);
+      // 2. On attend 0.8s (la durée du CSS) avant de changer de page
+      setTimeout(() => {
+          setView('client');
+          setIsZooming(false); // Reset pour la prochaine fois
+      }, 800);
+  };
+
   const ajouterAuPanier = (itemMerged) => {
     if (itemMerged.isPromoTrigger) { setShowPromoWizard(true); return; }
     if (itemMerged.isInfo) return alert("Info seulement.");
@@ -287,10 +252,8 @@ function App() {
 
   const { remisePromo, fraisLivraison, grandTotal } = calculerTotal();
 
-  // --- OUVERTURE PANIER & GÉO ---
   const handleOpenPanier = () => {
       if (panier.length === 0) return alert("Panier vide !");
-
       if ("geolocation" in navigator) {
           navigator.geolocation.getCurrentPosition((position) => {
               const uLat = position.coords.latitude;
@@ -298,49 +261,28 @@ function App() {
               setClientCoords({ lat: uLat, lng: uLng });
               const dist = calculateDistance(RESTO_COORDS.lat, RESTO_COORDS.lng, uLat, uLng);
               setDistanceClient(dist);
-
-              // ⛔️ LE MUR 10KM (Priorité absolue)
-              if (dist > 10) {
-                  setShowDistanceBlocker(true); // Écran Noir Bloquant
-                  return; 
-              }
-
-              // RÈGLES DISTANCE
+              if (dist > 10) { setShowDistanceBlocker(true); return; }
               if (grandTotal >= 300) { setView('panier'); return; }
-              if (dist > 4 && grandTotal < 300) {
-                  return alert(`⛔️ Zone 4km-10km (${dist.toFixed(1)} km).\n\nLe minimum de commande est de 300 DH pour cette distance.`);
-              }
-
+              if (dist > 4 && grandTotal < 300) return alert(`⛔️ Zone 4km-10km (${dist.toFixed(1)} km).\nMinimum 300 DH.`);
               setView('panier');
-
-          }, (error) => {
+          }, () => {
               if (grandTotal >= 300) setView('panier'); 
-              else alert("⚠️ La géolocalisation est OBLIGATOIRE pour vérifier votre zone de livraison.");
+              else alert("⚠️ La géolocalisation est OBLIGATOIRE.");
           });
-      } else {
-          alert("GPS non supporté.");
-      }
+      } else { alert("GPS non supporté."); }
   };
 
   const envoyerCommande = async () => {
-    // --- ICI EST LA SÉCURITÉ HORAIRES QUE TU VEUX ---
-    // Les clients peuvent tout faire, SAUF cliquer sur ce bouton si c'est fermé.
     const now = new Date();
     const heure = now.getHours();
-    
-    // Fermé avant Midi (12h) OU après 23h
-    if (heure < 12 || heure >= 23) {
-        return alert("😴 Oups ! Le restaurant est fermé.\n\nNous ouvrons de 12h00 à 23h00.\nÀ tout à l'heure !");
-    }
-    // ------------------------------------------------
+    if (heure < 12 || heure >= 23) return alert("😴 Le restaurant est fermé.\nHoraires : 12h00 - 23h00");
 
     if (panier.length === 0) return alert("Panier vide !");
     if (!clientNom.trim()) return alert("Nom obligatoire.");
-    
     const telClean = clientTel.replace(/\s/g, ''); 
-    if (!/^(06|07)\d{8}$/.test(telClean)) return alert("Numéro invalide (06... ou 07... sur 10 chiffres)");
+    if (!/^(06|07)\d{8}$/.test(telClean)) return alert("Numéro invalide");
     if (typeCommande === 'livraison' && !adresse.trim()) return alert("Adresse obligatoire.");
-    if (distanceClient > 10) return alert("Commande impossible : Vous êtes à plus de 10km.");
+    if (distanceClient > 10) return alert("Trop loin (>10km).");
 
     setLoading(true);
     localStorage.setItem('clientNom', clientNom);
@@ -368,7 +310,6 @@ function App() {
     setLoading(false);
   };
 
-  // --- CRUD PRODUITS ---
   const toggleAvailability = async (item) => await updateDoc(doc(db, "produits", item.id), { available: !item.available });
   const saveProduit = async () => {
     if(!nom) return; setLoading(true);
@@ -402,7 +343,6 @@ function App() {
   return (
     <div style={{ background: COLORS.bg, minHeight: '100vh', paddingBottom: '100px', color: COLORS.secondary }}>
       
-      {/* ⛔️ ECRAN BLOQUANT 10KM */}
       {showDistanceBlocker && (
           <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.95)', zIndex:9999, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'30px', color:'white', textAlign:'center'}}>
               <div style={{fontSize:'4rem', marginBottom:'20px'}}>⛔</div>
@@ -416,16 +356,55 @@ function App() {
           </div>
       )}
 
-      {/* LANDING ANIMÉE */}
+      {/* LANDING PAGE MINIMALISTE (ZOOM EFFECT) */}
       {view === 'landing' && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'linear-gradient(135deg, #1A1E29 0%, #000000 100%)', color: 'white', zIndex: 2000, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '20px' }}>
-          <img src={logoImg} alt="Foodji" className="logo-anim" style={{width: '220px', height: '220px', objectFit: 'contain', marginBottom: '20px'}} onError={(e) => {e.target.style.display='none';}} /> 
-          <div className="content-anim">
-              <h1 style={{margin: '0 0 10px 0', fontSize: '2.5rem', fontWeight: '900', letterSpacing: '-1px'}}>Foodji</h1>
-              <p style={{fontSize: '1.1rem', color: '#9CA3AF', margin: '0 0 40px 0', maxWidth: '300px'}}>Le goût authentique,<br/>commandé en un clic.</p>
-              <button onClick={() => setView('client')} style={{background: COLORS.primary, color: 'white', border: 'none', padding: '18px 50px', borderRadius: '50px', fontSize: '1.2rem', fontWeight: 'bold', boxShadow: '0 10px 25px rgba(168, 68, 56, 0.4)', cursor:'pointer'}}>VOIR LE MENU</button>
-              {derniereCommande && <button onClick={() => setView('ticket')} style={{marginTop: '30px', display:'block', margin:'30px auto 0 auto', background: 'transparent', border: '1px solid #374151', color: COLORS.primary, padding: '10px 20px', borderRadius: '30px', cursor:'pointer', fontSize:'0.9rem'}}>📄 Voir ma dernière commande</button>}
-              <button onClick={handleStaffAccess} style={{position:'absolute', bottom:'30px', left:'50%', transform:'translateX(-50%)', background: 'transparent', border: 'none', color: '#4B5563', fontSize: '0.8rem', cursor:'pointer'}}>Accès Staff</button>
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', 
+          background: 'linear-gradient(135deg, #1A1E29 0%, #000000 100%)', 
+          color: 'white', zIndex: 2000, 
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '20px', overflow:'hidden'
+        }}>
+          
+          {/* Logo (qui va zoomer) */}
+          <img 
+            src={logoImg} 
+            alt="Foodji" 
+            className={`logo-idle ${isZooming ? 'super-zoom' : ''}`}
+            style={{
+              width: '220px', 
+              height: '220px', 
+              objectFit: 'contain', 
+              marginBottom: '40px',
+              zIndex: 10
+            }} 
+            onError={(e) => {e.target.style.display='none';}} 
+          /> 
+          
+          {/* Boutons (qui vont disparaitre au clic) */}
+          <div className={isZooming ? 'fade-out' : 'content-enter'} style={{width:'100%', maxWidth:'300px'}}>
+              <button onClick={handleEnterApp} style={{
+                background: COLORS.primary, color: 'white', border: 'none', padding: '18px 0', width:'100%',
+                borderRadius: '50px', fontSize: '1.2rem', fontWeight: 'bold', 
+                boxShadow: '0 10px 25px rgba(168, 68, 56, 0.4)', cursor:'pointer'
+              }}>
+                VOIR LE MENU
+              </button>
+
+              {derniereCommande && (
+                  <button onClick={() => setView('ticket')} style={{
+                      marginTop: '20px', display:'block', margin:'20px auto 0 auto', background: 'transparent', 
+                      border: '1px solid #374151', color: COLORS.primary, padding: '10px 20px', 
+                      borderRadius: '30px', cursor:'pointer', fontSize:'0.9rem'
+                  }}>
+                      📄 Voir ma dernière commande
+                  </button>
+              )}
+
+              <button onClick={handleStaffAccess} style={{
+                  marginTop:'60px', background: 'transparent', border: 'none', color: '#4B5563', fontSize: '0.8rem', cursor:'pointer'
+              }}>
+                  Accès Staff
+              </button>
           </div>
         </div>
       )}
@@ -448,7 +427,7 @@ function App() {
       {showPromoWizard && <PromoWizard menu={menu} onClose={()=>setShowPromoWizard(false)} onValidate={ajouterLotAuPanier} />}
       {selectedProduct && <ProductModal product={selectedProduct} onClose={()=>setSelectedProduct(null)} onAdd={ajouterAuPanier} />}
 
-      {/* CLIENT (MENU) */}
+      {/* CLIENT */}
       {view === 'client' && (
         <div style={{ padding: '20px' }}>
           <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '20px', scrollbarWidth: 'none', display:'flex', gap:'10px' }}>
@@ -462,7 +441,6 @@ function App() {
               const displayPrice = plat.prix > 0 ? plat.prix : (plat.variantes?.length > 0 ? Math.min(...plat.variantes.map(v=>v.prix)) : 0);
               return (
               <div key={plat.id} onClick={() => setSelectedProduct(plat)} style={{ ...cardStyle, padding: 0, overflow: 'hidden', display:'flex', flexDirection:'column', cursor: 'pointer', position: 'relative' }}>
-                {/* IMAGE CARRÉE 1:1 */}
                 <div style={{ width: '100%', aspectRatio: '1/1', background: '#eee', backgroundImage: `url(${plat.image || 'https://via.placeholder.com/300?text=Foodji'})`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
                     {plat.isPromoTrigger && <div style={{position:'absolute', bottom:0, width:'100%', background:'rgba(0,0,0,0.6)', color:'white', fontSize:'0.8rem', padding:'5px', textAlign:'center'}}>PROMO</div>}
                 </div>
@@ -644,9 +622,6 @@ function App() {
   );
 }
 
-// ==========================================
-// SOUS-COMPOSANTS (MODALS)
-// ==========================================
 function formatOptions(list) {
     if(!list) return "";
     const counts = {};
