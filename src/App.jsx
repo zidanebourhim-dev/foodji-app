@@ -67,6 +67,7 @@ function App() {
   const [showPromoWizard, setShowPromoWizard] = useState(false); 
   const [showCGV, setShowCGV] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
+  const [isMenuLoading, setIsMenuLoading] = useState(true); // NOUVEAU : État de chargement du menu
   
   const [categorieActive, setCategorieActive] = useState(''); 
   const [adminCategorie, setAdminCategorie] = useState(''); 
@@ -127,8 +128,10 @@ function App() {
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (u) => { setUser(u); });
     
+    // Modification ici : On gère le chargement
     const unsubscribeMenu = onSnapshot(collection(db, "produits"), (snap) => {
       setMenu(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setIsMenuLoading(false); // On arrête le chargement quand les données arrivent
     });
 
     const q = query(collection(db, "commandes"));
@@ -676,43 +679,58 @@ function App() {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-            {menuClient.map((plat) => {
-              const displayPrice = plat.prix > 0 
-                  ? plat.prix 
-                  : (plat.variantes?.length > 0 ? Math.min(...plat.variantes.map(v=>v.prix)) : 0);
+            
+            {/* ICI LA CORRECTION DU CHARGEMENT */}
+            {isMenuLoading ? (
+               <div style={{gridColumn:'span 2', textAlign:'center', padding:'50px', color:'#888'}}>
+                   Chargement du menu...
+               </div>
+            ) : (
+                <>
+                    {menuClient.length === 0 ? (
+                        <div style={{gridColumn:'span 2', textAlign:'center', marginTop:'50px', color: COLORS.textLight}}>
+                            Aucun plat disponible pour cette catégorie.
+                        </div>
+                    ) : (
+                        menuClient.map((plat) => {
+                          const displayPrice = plat.prix > 0 
+                              ? plat.prix 
+                              : (plat.variantes?.length > 0 ? Math.min(...plat.variantes.map(v=>v.prix)) : 0);
 
-              return (
-              <div key={plat.id} onClick={() => setSelectedProduct(plat)} style={{ ...cardStyle, padding: 0, overflow: 'hidden', display:'flex', flexDirection:'column', cursor: 'pointer', position: 'relative' }}>
-                
-                <div style={{ 
-                    width: '100%',
-                    aspectRatio: '1/1',
-                    background: '#eee', 
-                    backgroundImage: `url(${plat.image || 'https://via.placeholder.com/300?text=Foodji'})`, 
-                    backgroundSize: 'cover', 
-                    backgroundPosition: 'center' 
-                }}>
-                    {plat.isPromoTrigger && <div style={{position:'absolute', bottom:0, width:'100%', background:'rgba(0,0,0,0.6)', color:'white', fontSize:'0.8rem', padding:'5px', textAlign:'center'}}>PROMO</div>}
-                </div>
+                          return (
+                          <div key={plat.id} onClick={() => setSelectedProduct(plat)} style={{ ...cardStyle, padding: 0, overflow: 'hidden', display:'flex', flexDirection:'column', cursor: 'pointer', position: 'relative' }}>
+                            
+                            <div style={{ 
+                                width: '100%',
+                                aspectRatio: '1/1',
+                                background: '#eee', 
+                                backgroundImage: `url(${plat.image || 'https://via.placeholder.com/300?text=Foodji'})`, 
+                                backgroundSize: 'cover', 
+                                backgroundPosition: 'center' 
+                            }}>
+                                {plat.isPromoTrigger && <div style={{position:'absolute', bottom:0, width:'100%', background:'rgba(0,0,0,0.6)', color:'white', fontSize:'0.8rem', padding:'5px', textAlign:'center'}}>PROMO</div>}
+                            </div>
 
-                <div style={{padding:'10px', flex:1, display:'flex', flexDirection:'column', justifyContent:'space-between'}}>
-                  <div>
-                    <h4 style={{ margin: '0 0 5px 0', fontSize: '1rem', fontWeight:'700', color: COLORS.secondary }}>{plat.nom}</h4>
-                    <p style={{ fontSize: '0.8rem', color: COLORS.textLight, margin: 0, lineHeight:'1.2', display:'-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>{plat.description}</p>
-                  </div>
-                  {!plat.isPromoTrigger && (
-                      <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ fontWeight: '700', fontSize: '1rem', color: COLORS.primary }}>
-                           {displayPrice > 0 ? (plat.variantes?.length > 0 ? `dès ${displayPrice} DH` : `${displayPrice} DH`) : 'GRATUIT'}
-                          </span>
-                          <div style={{background: COLORS.secondary, color: 'white', width: '32px', height: '32px', borderRadius: '50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.2rem'}}>+</div>
-                      </div>
-                  )}
-                </div>
-              </div>
-            )})}
+                            <div style={{padding:'10px', flex:1, display:'flex', flexDirection:'column', justifyContent:'space-between'}}>
+                              <div>
+                                <h4 style={{ margin: '0 0 5px 0', fontSize: '1rem', fontWeight:'700', color: COLORS.secondary }}>{plat.nom}</h4>
+                                <p style={{ fontSize: '0.8rem', color: COLORS.textLight, margin: 0, lineHeight:'1.2', display:'-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>{plat.description}</p>
+                              </div>
+                              {!plat.isPromoTrigger && (
+                                  <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                      <span style={{ fontWeight: '700', fontSize: '1rem', color: COLORS.primary }}>
+                                       {displayPrice > 0 ? (plat.variantes?.length > 0 ? `dès ${displayPrice} DH` : `${displayPrice} DH`) : 'GRATUIT'}
+                                      </span>
+                                      <div style={{background: COLORS.secondary, color: 'white', width: '32px', height: '32px', borderRadius: '50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.2rem'}}>+</div>
+                                  </div>
+                              )}
+                            </div>
+                          </div>
+                        )})
+                    )}
+                </>
+            )}
           </div>
-          {menuClient.length === 0 && <div style={{textAlign:'center', marginTop:'50px', color: COLORS.textLight}}>Aucun plat disponible.</div>}
           
           {panier.length > 0 && (
             <div onClick={handleOpenPanier} style={{
