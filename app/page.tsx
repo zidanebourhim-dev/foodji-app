@@ -316,23 +316,19 @@ function App() {
       let day = now.getDay();
       const h = now.getHours();
 
-      // Gestion des heures après minuit (appartiennent au jour d'avant pour le service)
       if (h < 5) {
           day = day - 1;
           if (day === -1) day = 6;
       }
 
-      // Lundi (1) à Jeudi (4) : 12h00 - 01h00
       if (day >= 1 && day <= 4) {
           return (h >= 12 || h < 1);
       }
 
-      // Vendredi (5) : 12h00 - 02h00
       if (day === 5) {
           return (h >= 12 || h < 2);
       }
 
-      // Samedi (6) et Dimanche (0) : 18h00 - 02h00
       if (day === 6 || day === 0) {
           return (h >= 18 || h < 2);
       }
@@ -636,7 +632,6 @@ function App() {
           </div>
       )}
 
-      {/* --- POPUP CGU --- */}
       {showCGU && (
           <div style={{
               position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
@@ -654,25 +649,35 @@ function App() {
                       flex: 1, overflowY: 'auto', paddingRight: '10px',
                       fontSize: '0.85rem', lineHeight: '1.6', textAlign: 'justify', borderBottom: '1px solid #eee', marginBottom: '20px'
                   }}>
-                      <p><strong>PRÉAMBULE</strong><br/>L'accès et l'utilisation de l'application Foodji impliquent l'acceptation intégrale et sans réserve des présentes Conditions Générales par tout utilisateur.</p>
-                      <p><strong>ARTICLE 1 : OBJET</strong><br/>Les présentes conditions régissent les ventes entre le restaurant Foodji et le Client.</p>
-                      <p><strong>ARTICLE 2 : GÉOLOCALISATION</strong><br/>L'utilisation du service nécessite l'activation du GPS. Aucune commande ne pourra être livrée si la position du Client se situe au-delà de 10km du restaurant.</p>
-                      <p><strong>ARTICLE 3 : ZONES DE LIVRAISON</strong><br/>- Zone 1 (0 à 4 km) : Aucun minimum de commande.<br/>- Zone 2 (4 à 10 km) : Un minimum de commande de 300,00 DH est exigé.</p>
-                      <p><strong>ARTICLE 4 : ZONES SPÉCIALES</strong><br/>Le Client est informé que certaines zones (UIR, Technopolis, UM6P) font l'objet d'un supplément de livraison (10 à 15 DH) payable directement au livreur.</p>
-                      <p><strong>ARTICLE 5 : PRODUITS ET PHOTOS</strong><br/>Les photographies des produits sont non contractuelles. Foodji ne saurait être tenu responsable des différences visuelles minimes.</p>
-                      <p><strong>ARTICLE 6 : VALIDATION DES COMMANDES</strong><br/>Pour toute commande supérieure à 300,00 DH, une validation téléphonique est obligatoire. Sans réponse du Client, la commande sera annulée.</p>
-                      <p><strong>ARTICLE 7 : PAIEMENT</strong><br/>Le paiement s'effectue intégralement à la livraison. En cas de non-paiement ou de commande "fantôme", le Client sera banni.</p>
-                      <p><strong>ARTICLE 8 : HORAIRES D'OUVERTURE</strong><br/>Le service est ouvert :<br/>- Lundi à Jeudi : 12h00 à 01h00<br/>- Vendredi : 12h00 à 02h00<br/>- Samedi et Dimanche : 18h00 à 02h00.<br/>En dehors de ces horaires, la commande est impossible.</p>
-                      <p><strong>ARTICLE 9 : RUSH ET DÉLAIS</strong><br/>En période de forte affluence signalée, les délais de livraison peuvent être considérablement allongés. Le Client accepte ces délais en validant sa commande.</p>
-                      <p><strong>ARTICLE 10 : ALLERGIES</strong><br/>Le Client est tenu de signaler toute allergie dans les commentaires. Foodji décline toute responsabilité en cas d'omission.</p>
-                      <p><strong>ARTICLE 11 : DONNÉES</strong><br/>Les données collectées servent uniquement au traitement de la commande et ne sont pas revendues.</p>
+                      <p><strong>PRÉAMBULE</strong><br/>L'accès, la consultation et l'utilisation de l'application mobile et web « Foodji » (ci-après désignée « l'Application ») impliquent l'acceptation intégrale et sans réserve des présentes Conditions Générales d'Utilisation et de Vente par tout utilisateur (ci-après désigné « le Client »). Le Client reconnaît avoir la capacité juridique de contracter et garantit la véracité des informations fournies.</p>
+
+                      <p><strong>ARTICLE 1 : OBJET ET CHAMP D'APPLICATION</strong><br/>Les présentes conditions régissent exclusivement les relations contractuelles entre le restaurant Foodji, situé à Sala Al Jadida (ci-après « le Vendeur »), et toute personne passant commande via l'Application. Elles prévalent sur tout autre document ou condition non expressément agréé par le Vendeur. Foodji se réserve le droit de modifier ces conditions à tout moment ; les conditions applicables sont celles en vigueur à la date de validation de la commande.</p>
+
+                      <p><strong>ARTICLE 2 : ACCÈS AU SERVICE ET GÉOLOCALISATION</strong><br/>2.1. L'utilisation du service de commande en livraison nécessite impérativement l'activation de la fonction de géolocalisation (GPS) sur le terminal du Client.<br/>2.2. Le Vendeur a mis en place un système de restriction géographique strict. Le Client reconnaît et accepte que :<br/>* Aucune commande en livraison ne pourra être validée si la position GPS du Client se situe au-delà d'un rayon de **10 kilomètres** (distance à vol d'oiseau ou routière selon l'algorithme du Vendeur) du restaurant.<br/>* Toute tentative de contournement des systèmes de géolocalisation (VPN, fausse localisation) entraînera l'annulation immédiate de la commande et le bannissement du compte utilisateur.</p>
+
+                      <p><strong>ARTICLE 3 : PRODUITS ET DISPONIBILITÉ</strong><br/>3.1. Les produits proposés sont ceux qui figurent dans le menu de l'Application au jour de la commande, dans la limite des stocks disponibles.<br/>3.2. **Photographies non contractuelles :** Les photographies et illustrations présentées sur l'Application ont une valeur purement indicative et n'entrent pas dans le champ contractuel. La responsabilité de Foodji ne saurait être engagée si des différences visuelles existent entre le produit photographié et le produit livré.<br/>3.3. En cas d'indisponibilité d'un produit après passation de la commande, le Client en sera informé par téléphone. Il lui sera proposé soit un produit de substitution de valeur équivalente, soit l'annulation de l'article concerné.</p>
+
+                      <p><strong>ARTICLE 4 : COMMANDE ET VALIDATION</strong><br/>4.1. La validation finale de la commande via le bouton « VALIDER » vaut preuve de l'intégralité de la commande et exigibilité des sommes dues.<br/>4.2. **Seuils de commande et Sécurité :**<br/>* Pour toute commande dont le montant total excède **300,00 DH (Trois cents Dirhams)**, une procédure de validation manuelle est déclenchée. Le Client doit impérativement être joignable sur le numéro de téléphone renseigné. À défaut de réponse du Client lors de l'appel de vérification effectué par le Vendeur, la commande sera purement et simplement annulée et ne sera pas mise en préparation.<br/>4.3. Le Vendeur se réserve le droit de refuser ou d'annuler toute commande d'un Client avec lequel il existerait un litige relatif au paiement d'une commande antérieure ou qui présenterait un comportement inapproprié envers le personnel.</p>
+
+                      <p><strong>ARTICLE 5 : ZONES, FRAIS ET CONDITIONS DE LIVRAISON</strong><br/>5.1. Les frais et conditions de livraison varient dynamiquement en fonction de la distance calculée par l'Application :<br/>* **Zone 1 (0 à 4 km) :** Aucun minimum de commande n'est requis.<br/>* **Zone 2 (4 à 10 km) :** Un minimum de commande strict de **300,00 DH** est exigé. En deçà de ce montant, la livraison est techniquement impossible.<br/>5.2. **Zones Spéciales (Surcharge) :** Le Client est informé que certaines zones spécifiques, incluant sans s'y limiter le campus de l'UIR, Technopolis, et UM6P, font l'objet d'une tarification spéciale appliquée par les prestataires de livraison tiers. Un supplément (généralement compris entre 10 et 15 DH) pourra être réclamé directement par le livreur lors de la remise de la commande. Le Client accepte cette surcharge en validant sa commande à destination de ces lieux.<br/>5.3. Les délais de livraison indiqués dans l'Application ou par téléphone sont donnés à titre indicatif et correspondent aux délais moyens de traitement et de livraison. Foodji ne pourra être tenu responsable des conséquences dues à un retard d'acheminement (intempéries, trafic, panne, force majeure). Un retard de livraison ne peut donner lieu à aucune indemnité ni annulation de la commande une fois celle-ci préparée.</p>
+
+                      <p><strong>ARTICLE 6 : PRIX ET MODALITÉS DE PAIEMENT</strong><br/>6.1. Les prix sont indiqués en Dirhams Marocains (MAD) toutes taxes comprises (TTC).<br/>6.2. Le paiement s'effectue intégralement au moment de la réception de la commande (livraison ou emporter), soit en espèces, soit par tout autre moyen accepté par le livreur (virement instantané sous réserve d'acceptation).<br/>6.3. Le Client s'engage à faire l'appoint en cas de paiement en espèces. Le livreur n'est pas tenu d'avoir la monnaie sur des coupures importantes si cela n'a pas été précisé en commentaire.</p>
+
+                      <p><strong>ARTICLE 7 : ABSENCE DE DROIT DE RÉTRACTATION</strong><br/>Conformément à la législation en vigueur relative à la vente de denrées périssables et de produits confectionnés selon les spécifications du consommateur ou nettement personnalisés, **le Client ne dispose d'aucun droit de rétractation**. Toute commande validée et mise en préparation est due dans son intégralité. En cas de refus de la marchandise à la livraison sans motif légitime (erreur de commande imputable au Vendeur), le montant de la commande reste exigible.</p>
+
+                      <p><strong>ARTICLE 8 : HORAIRES D'OUVERTURE ET AFFLUENCE (RUSH)</strong><br/>8.1. Le service de commande est ouvert exclusivement durant les plages horaires définies par le Vendeur (par défaut 12h00 à 23h00). Toute tentative de commande hors de ces créneaux sera techniquement bloquée.<br/>8.2. **Périodes de forte affluence ("Rush") :** Le Client reconnaît qu'en période de forte demande, le Vendeur peut être amené à suspendre temporairement les commandes ou à allonger les délais de livraison. En acceptant de commander durant une période signalée comme « Rush », le Client renonce expressément à toute réclamation liée à la durée d'attente.</p>
+
+                      <p><strong>ARTICLE 9 : RESPONSABILITÉ ET ALLERGÈNES</strong><br/>9.1. Les produits proposés sont conformes à la législation alimentaire marocaine en vigueur.<br/>9.2. **Allergies :** Il relève de la responsabilité exclusive du Client de se renseigner sur la composition des plats et de signaler toute allergie ou intolérance alimentaire dans le champ « Commentaire » prévu à cet effet avant la validation. Foodji décline toute responsabilité en cas de réaction allergique si le Client n'a pas expressément signalé sa condition ou s'il a consommé un produit malgré la présence d'allergènes connus.</p>
+
+                      <p><strong>ARTICLE 10 : DONNÉES PERSONNELLES ET COMPORTEMENT</strong><br/>10.1. Les données collectées (nom, adresse, téléphone, géolocalisation) sont nécessaires au traitement de la commande.<br/>10.2. Foodji se réserve le droit de bloquer définitivement l'adresse IP et le numéro de téléphone de tout utilisateur ayant passé une commande « fantôme » (client absent à la livraison, refus de paiement, fausse adresse) ou ayant tenu des propos injurieux envers le personnel ou les livreurs.</p>
+
+                      <p><strong>ARTICLE 11 : DROIT APPLICABLE</strong><br/>Les présentes conditions sont soumises au droit marocain. En cas de litige, une solution amiable sera recherchée avant toute action judiciaire.</p>
                   </div>
                   <button onClick={accepterCGU} style={{...btnStyle, padding:'15px', fontSize:'1.1rem'}}>J'ACCEPTE LES CONDITIONS</button>
               </div>
           </div>
       )}
 
-      {/* --- ALERTE RUSH (Visible sur la Landing) --- */}
       {rushLevel && !showCGU && view === 'landing' && (
           <div style={{
               position:'fixed', bottom:'100px', left:'5%', width:'90%', 
@@ -1209,10 +1214,7 @@ function PromoWizard({ menu, onClose, onValidate }) {
                             display:'flex', alignItems:'center', justifyContent:'center', fontSize:'0.8rem', textAlign:'center', position:'relative', fontWeight:'bold'
                         }}>
                             {choix[i] ? (
-                                <>
-                                    {choix[i].nom}
-                                    <div onClick={() => handleRemoveChoice(i)} style={{position:'absolute', top:'-5px', right:'-5px', background:'red', color:'white', width:'20px', height:'20px', borderRadius:'50%', cursor:'pointer', fontSize:'0.7rem', display:'flex', alignItems:'center', justifyContent:'center'}}>×</div>
-                                </>
+                                <>{choix[i].nom}<div onClick={() => handleRemoveChoice(i)} style={{position:'absolute', top:'-5px', right:'-5px', background:'red', color:'white', width:'20px', height:'20px', borderRadius:'50%', cursor:'pointer', fontSize:'0.7rem', display:'flex', alignItems:'center', justifyContent:'center'}}>×</div></>
                             ) : <span style={{color:'#ccc'}}>Vide</span>}
                         </div>
                     ))}
@@ -1221,23 +1223,14 @@ function PromoWizard({ menu, onClose, onValidate }) {
                 {choix.length < 3 ? (
                     <div style={{display:'grid', gridTemplateColumns:'1fr', gap:'10px'}}>
                         {pizzasEligibles.map(p => (
-                            <button key={p.id} onClick={() => handleSelect(p)} style={{
-                                padding:'15px', borderRadius:'12px', border:'1px solid #eee', 
-                                background:'white', textAlign:'left', display:'flex', justifyContent:'space-between', alignItems:'center',
-                                boxShadow:'0 2px 5px rgba(0,0,0,0.05)', cursor:'pointer'
-                            }}>
+                            <button key={p.id} onClick={() => handleSelect(p)} style={{padding:'15px', borderRadius:'12px', border:'1px solid #eee', background:'white', textAlign:'left', display:'flex', justifyContent:'space-between', alignItems:'center', boxShadow:'0 2px 5px rgba(0,0,0,0.05)', cursor:'pointer'}}>
                                 <span style={{fontWeight:'bold'}}>{p.nom}</span>
                                 <span style={{color: COLORS.primary, fontWeight:'bold', background:'#FEE2E2', padding:'5px 10px', borderRadius:'15px'}}>+ Ajouter</span>
                             </button>
                         ))}
                     </div>
                 ) : (
-                    <button onClick={() => onValidate(choix)} style={{
-                        background: COLORS.success, color:'white', width:'100%', padding:'20px', border:'none', 
-                        borderRadius:'15px', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer'
-                    }}>
-                        ✅ VALIDER CES 3 PIZZAS
-                    </button>
+                    <button onClick={() => onValidate(choix)} style={{background: COLORS.success, color:'white', width:'100%', padding:'20px', border:'none', borderRadius:'15px', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer'}}>✅ VALIDER CES 3 PIZZAS</button>
                 )}
             </div>
         </div>
