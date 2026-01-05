@@ -1,3 +1,4 @@
+/* src/App.css */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
 
 body {
@@ -6,6 +7,7 @@ body {
   padding: 0;
   background-color: #F9FAFB;
   -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden; /* Empêche le scroll horizontal pendant le zoom */
 }
 
 button {
@@ -16,42 +18,58 @@ button:active {
   transform: scale(0.96);
 }
 
-/* --- ANIMATIONS LANDING --- */
+/* --- ANIMATIONS --- */
 
-/* 1. Entrée douce du logo au chargement */
+/* 1. Entrée du Logo */
 @keyframes logoEntrance {
-  from { opacity: 0; transform: scale(0.8); }
-  to { opacity: 1; transform: scale(1); }
+  from { opacity: 0; transform: scale(0.5) rotate(-10deg); }
+  to { opacity: 1; transform: scale(1) rotate(0deg); }
 }
 
-/* 2. Pulsation légère (attente) */
+/* 2. Battement de coeur */
 @keyframes heartbeat {
-  0% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(255,255,255,0)); }
-  50% { transform: scale(1.02); filter: drop-shadow(0 0 10px rgba(255,255,255,0.1)); }
-  100% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(255,255,255,0)); }
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
 }
 
+/* 3. Apparition Contenu */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* --- CLASSES LOGIQUES --- */
+
+/* L'état normal du logo */
 .logo-idle {
-  animation: logoEntrance 1s ease-out forwards, 
+  animation: logoEntrance 0.8s ease-out forwards, 
              heartbeat 3s ease-in-out infinite 1s;
+  transform-origin: center center;
+  transition: all 0.5s ease;
 }
 
-/* 3. L'EFFET SUPER ZOOM (Au clic) */
+/* L'état ZOOM (Correction Appliquée) */
 .super-zoom {
-  transform: scale(50); /* Le logo devient immense */
-  opacity: 0; /* Il disparait en fondu à la fin */
-  transition: all 0.8s ease-in-out; /* Durée de l'animation : 0.8 secondes */
+  /* On coupe l'animation heartbeat pour que le transform fonctionne */
+  animation: none !important; 
+  /* On agrandit énormément */
+  transform: scale(100) !important; 
+  opacity: 0; /* Il disparait à la toute fin */
+  transition: transform 0.8s ease-in, opacity 0.8s ease-in 0.2s;
+  z-index: 9999;
 }
 
-/* 4. Disparition des boutons au clic */
+/* Disparition des boutons */
 .fade-out {
   opacity: 0;
-  transform: translateY(20px);
+  transform: scale(0.9);
   transition: all 0.3s ease;
   pointer-events: none;
 }
 
 .content-enter {
   opacity: 0;
-  animation: logoEntrance 0.8s ease-out forwards 0.3s;
+  animation: fadeInUp 0.8s ease-out forwards;
+  animation-delay: 0.5s;
 }
