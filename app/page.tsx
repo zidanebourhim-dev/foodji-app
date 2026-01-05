@@ -137,13 +137,12 @@ function App() {
       const savedTel = localStorage.getItem('clientTel');
       const savedAdresse = localStorage.getItem('clientAdresse');
       const savedTicket = localStorage.getItem('derniereCommande'); 
-      const cguAccepted = localStorage.getItem('cgu_accepted');
 
       if (savedNom) setClientNom(savedNom);
       if (savedTel) setClientTel(savedTel);
       if (savedAdresse) setAdresse(savedAdresse);
       if (savedTicket) setDerniereCommande(JSON.parse(savedTicket));
-      if (!cguAccepted) setShowCGU(true);
+      // Suppression de l'affichage automatique des CGU ici
   }, []);
 
   useEffect(() => {
@@ -297,17 +296,11 @@ function App() {
       }
   };
 
-  const handleStaffAccess = () => {
-      if (user) setView('admin'); 
-      else setView('login'); 
-  };
-
   const handleEnterApp = () => {
       setView('client');
   };
 
-  const accepterCGU = () => {
-      localStorage.setItem('cgu_accepted', 'true');
+  const fermerCGU = () => {
       setShowCGU(false);
   };
 
@@ -632,6 +625,7 @@ function App() {
           </div>
       )}
 
+      {/* --- POPUP CGU (Déclenché par le clic sur le lien) --- */}
       {showCGU && (
           <div style={{
               position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
@@ -673,14 +667,14 @@ function App() {
 
                       <p><strong>ARTICLE 11 : DROIT APPLICABLE</strong><br/>Les présentes conditions sont soumises au droit marocain. En cas de litige, une solution amiable sera recherchée avant toute action judiciaire.</p>
                   </div>
-                  <button onClick={accepterCGU} style={{...btnStyle, padding:'15px', fontSize:'1.1rem'}}>J'ACCEPTE LES CONDITIONS</button>
+                  <button onClick={fermerCGU} style={{...btnStyle, padding:'15px', fontSize:'1.1rem', background:COLORS.secondary}}>Fermer</button>
               </div>
           </div>
       )}
 
       {rushLevel && !showCGU && view === 'landing' && (
           <div style={{
-              position:'fixed', bottom:'100px', left:'5%', width:'90%', 
+              position:'fixed', bottom:'120px', left:'5%', width:'90%', 
               background: rushLevel === 'red' ? '#FEF2F2' : '#FFF7ED', 
               border: rushLevel === 'red' ? '2px solid red' : '2px solid orange', 
               padding:'15px', borderRadius:'15px', zIndex:5000, textAlign:'center', 
@@ -695,7 +689,7 @@ function App() {
           </div>
       )}
 
-      {/* --- LANDING --- */}
+      {/* --- LANDING PAGE (Modifiée) --- */}
       {view === 'landing' && (
         <div style={{
           position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', 
@@ -708,11 +702,11 @@ function App() {
             src={logoImg} 
             alt="Foodji" 
             className="logo-idle"
-            style={{ width: '220px', height: '220px', objectFit: 'contain', marginBottom: '40px', zIndex: 10 }} 
+            style={{ width: '250px', height: '250px', objectFit: 'contain', marginBottom: '40px', zIndex: 10 }} 
             onError={(e) => {e.target.style.display='none';}} 
           /> 
           
-          <div className="content-enter" style={{textAlign:'center', marginTop:'40px', width:'100%', maxWidth:'300px'}}>
+          <div className="content-enter" style={{textAlign:'center', marginTop:'40px', width:'100%', maxWidth:'300px', padding:'0 20px'}}>
               <button onClick={handleEnterApp} style={{
                 background: COLORS.primary, color: 'white', border: 'none', padding: '18px 0', width:'100%',
                 borderRadius: '50px', fontSize: '1.2rem', fontWeight: 'bold', 
@@ -720,6 +714,11 @@ function App() {
               }}>
                 VOIR LE MENU
               </button>
+
+              {/* Lien CGU Passif */}
+              <p style={{ marginTop: '25px', fontSize: '0.8rem', color: '#9CA3AF', lineHeight:'1.4' }}>
+                En continuant, vous acceptez les <span onClick={() => setShowCGU(true)} style={{ textDecoration: 'underline', cursor: 'pointer', color: 'white', fontWeight:'bold' }}>Conditions Générales d'Utilisation</span>.
+              </p>
 
               {derniereCommande && (
                   <button onClick={() => setView('ticket')} style={{
@@ -731,16 +730,12 @@ function App() {
                   </button>
               )}
 
-              <button onClick={handleStaffAccess} style={{
-                  marginTop:'60px', background: 'transparent', border: 'none', color: '#4B5563', fontSize: '0.8rem', cursor:'pointer'
-              }}>
-                  Staff Access
-              </button>
+              {/* Bouton Staff Supprimé ici */}
           </div>
         </div>
       )}
 
-      {/* HEADER */}
+      {/* HEADER (Avec le cadenas pour Staff) */}
       {view !== 'landing' && (
         <div style={{ background: COLORS.card, padding: '15px 20px', position: 'sticky', top: 0, zIndex: 50, display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
           <div style={{display:'flex', alignItems:'center', gap:'10px', cursor:'pointer'}} onClick={() => setView('landing')}>
@@ -750,7 +745,7 @@ function App() {
           {user ? (
             <button onClick={() => setView(view === 'admin' ? 'client' : 'admin')} style={{background: COLORS.secondary, color: 'white', border: 'none', padding: '8px 15px', borderRadius: '20px', fontSize:'0.8rem', fontWeight:'600'}}>{view === 'admin' ? 'App' : 'Admin'}</button>
           ) : (
-            view === 'client' && <button onClick={() => setView('login')} style={{background:'transparent', border:'none', fontSize:'1.2rem'}}>🔒</button>
+            view === 'client' && <button onClick={() => setView('login')} style={{background:'transparent', border:'none', fontSize:'1.5rem'}}>🔒</button>
           )}
         </div>
       )}
