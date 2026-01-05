@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { db, auth } from './firebase';
-import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
+import { signInWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
 import { 
   collection, 
   addDoc, 
@@ -9,23 +9,19 @@ import {
   deleteDoc, 
   updateDoc, 
   query, 
-  writeBatch 
+  writeBatch,
+  setDoc,
+  getDoc
 } from 'firebase/firestore';
 import './App.css';
 
-// ==========================================
-// CONFIGURATION
-// ==========================================
-const CODE_MANAGER = "1234"; 
+const CODE_MANAGER = "1909"; 
 const PHONE_NUMBER = "0537536689"; 
 const RESTO_COORDS = { 
   lat: 33.997484, 
   lng: -6.735644 
 }; 
 
-// ==========================================
-// DATA
-// ==========================================
 const LISTE_VIANDES = [
   "Poulet", "Viande Hachée", "Cordon Bleu", "Nuggets", "Poulet Crispy"
 ];
@@ -80,13 +76,12 @@ const COLORS = {
   pending: '#F97316' 
 };
 
-// ==========================================
-// APP
-// ==========================================
 function App() {
   const [user, setUser] = useState(null);
   const [view, setView] = useState('landing'); 
-  const [isZooming, setIsZooming] = useState(false);
+  const [showCGU, setShowCGU] = useState(false);
+  
+  const [rushLevel, setRushLevel] = useState(null); 
 
   const [menu, setMenu] = useState([]);
   const [commandes, setCommandes] = useState([]);
@@ -141,11 +136,13 @@ function App() {
       const savedTel = localStorage.getItem('clientTel');
       const savedAdresse = localStorage.getItem('clientAdresse');
       const savedTicket = localStorage.getItem('derniereCommande'); 
+      const cguAccepted = localStorage.getItem('cgu_accepted');
 
       if (savedNom) setClientNom(savedNom);
       if (savedTel) setClientTel(savedTel);
       if (savedAdresse) setAdresse(savedAdresse);
       if (savedTicket) setDerniereCommande(JSON.parse(savedTicket));
+      if (!cguAccepted) setShowCGU(true);
   }, []);
 
   useEffect(() => {
@@ -163,13 +160,24 @@ function App() {
       list.sort((a, b) => b.date.seconds - a.date.seconds);
       
       if (list.length > prevCommandesLength.current && user) {
-          audioRef.current.play().catch(e => console.log("Son bloqué"));
+          audioRef.current.play().catch(e => {});
       }
       prevCommandesLength.current = list.length;
       setCommandes(list);
     });
 
-    return () => { unsubscribeAuth(); unsubscribeMenu(); unsubscribeCmd(); };
+    const unsubscribeSettings = onSnapshot(doc(db, "settings", "config"), (doc) => {
+        if (doc.exists()) {
+            const data = doc.data();
+            if (data.rushUntil && data.rushUntil > Date.now()) {
+                setRushLevel(data.rushLevel || 'orange');
+            } else {
+                setRushLevel(null);
+            }
+        }
+    });
+
+    return () => { unsubscribeAuth(); unsubscribeMenu(); unsubscribeCmd(); unsubscribeSettings(); };
   }, [user]);
 
   const categoriesReelles = [...new Set(menu.map(p => p.categorie))];
@@ -294,16 +302,53 @@ function App() {
   };
 
   const handleEnterApp = () => {
-      setIsZooming(true);
-      setTimeout(() => {
-          setView('client');
-          setIsZooming(false); 
-      }, 700);
+      setView('client');
+  };
+
+  const accepterCGU = () => {
+      localStorage.setItem('cgu_accepted', 'true');
+      setShowCGU(false);
+  };
+
+  const checkIsOpen = () => {
+      const now = new Date();
+      let day = now.getDay();
+      const h = now.getHours();
+
+      if (h < 5) {
+          day = day - 1;
+          if (day === -1) day = 6;
+      }
+
+      if (day >= 1 && day <= 4) {
+          return (h >= 12 || h < 1);
+      }
+
+      if (day === 5) {
+          return (h >= 12 || h < 2);
+      }
+
+      if (day === 6 || day === 0) {
+          return (h >= 18 || h < 2);
+      }
+
+      return false;
+  };
+
+  const activateRush = async (level) => {
+      const time = level === 'orange' ? 45 : 60;
+      const until = Date.now() + time * 60 * 1000;
+      await setDoc(doc(db, "settings", "config"), { rushUntil: until, rushLevel: level }, { merge: true });
+      alert(`Mode RUSH ${level === 'orange' ? 'Standard' : 'EXPLOSION'} activé pour ${time} min.`);
   };
 
   const ajouterAuPanier = (itemMerged) => {
-    if (itemMerged.isPromoTrigger) { setShowPromoWizard(true); return; }
+    if (itemMerged.isPromoTrigger) {
+        setShowPromoWizard(true);
+        return;
+    }
     if (itemMerged.isInfo) return alert("Info seulement.");
+    
     setPanier([...panier, { ...itemMerged, uniqueId: Date.now() }]);
     setSelectedProduct(null); 
   };
@@ -313,28 +358,41 @@ function App() {
       setShowPromoWizard(false);
   };
 
-  const retirerDuPanier = (uid) => setPanier(panier.filter(i => i.uniqueId !== uid));
+  const retirerDuPanier = (uid) => {
+      setPanier(panier.filter(i => i.uniqueId !== uid));
+  };
   
   const getPrixItemAjuste = (item) => {
       let prix = Number(item.prixFinal) || 0;
-      if (item.nom.toLowerCase().includes("pep's") && (typeCommande === 'livraison' || typeCommande === 'emporter')) prix += 5;
+      if (item.nom.toLowerCase().includes("pep's") && (typeCommande === 'livraison' || typeCommande === 'emporter')) {
+          prix += 5;
+      }
       return prix;
   };
 
   const calculerTotal = () => {
-      let sousTotal = 0, pizzas = [];
+      let sousTotal = 0;
+      let pizzasEligibles = [];
+
       panier.forEach(item => {
           const p = getPrixItemAjuste(item);
           sousTotal += p;
-          if (item.isPromoEligible) pizzas.push({ ...item, prixCalcul: p });
+          if (item.isPromoEligible) pizzasEligibles.push({ ...item, prixCalcul: p });
       });
-      let remise = 0;
-      if (pizzas.length >= 3) {
-          pizzas.sort((a, b) => a.prixCalcul - b.prixCalcul);
-          for (let i = 0; i < Math.floor(pizzas.length / 3); i++) remise += pizzas[i].prixCalcul;
+
+      let remisePromo = 0;
+      if (pizzasEligibles.length >= 3) {
+          pizzasEligibles.sort((a, b) => a.prixCalcul - b.prixCalcul);
+          const nbGratuites = Math.floor(pizzasEligibles.length / 3);
+          for (let i = 0; i < nbGratuites; i++) {
+              remisePromo += pizzasEligibles[i].prixCalcul;
+          }
       }
-      const frais = (typeCommande === 'livraison' && (sousTotal - remise) < 45 && (sousTotal - remise) > 0) ? 5 : 0;
-      return { sousTotal, remisePromo: remise, fraisLivraison: frais, grandTotal: (sousTotal - remise) + frais };
+
+      const fraisLivraison = (typeCommande === 'livraison' && (sousTotal - remisePromo) < 45 && (sousTotal - remisePromo) > 0) ? 5 : 0;
+      const grandTotal = (sousTotal - remisePromo) + fraisLivraison;
+
+      return { sousTotal, remisePromo, fraisLivraison, grandTotal };
   };
 
   const { remisePromo, fraisLivraison, grandTotal } = calculerTotal();
@@ -347,6 +405,7 @@ function App() {
               const uLat = position.coords.latitude;
               const uLng = position.coords.longitude;
               setClientCoords({ lat: uLat, lng: uLng });
+              
               const dist = calculateDistance(RESTO_COORDS.lat, RESTO_COORDS.lng, uLat, uLng);
               setDistanceClient(dist);
 
@@ -366,8 +425,11 @@ function App() {
               setView('panier');
 
           }, (error) => {
-              if (grandTotal >= 300) setView('panier'); 
-              else alert("⚠️ La géolocalisation est OBLIGATOIRE.");
+              if (grandTotal >= 300) {
+                  setView('panier');
+              } else {
+                  alert("⚠️ La géolocalisation est OBLIGATOIRE pour vérifier votre zone de livraison.");
+              }
           });
       } else {
           alert("GPS non supporté.");
@@ -375,10 +437,8 @@ function App() {
   };
 
   const envoyerCommande = async () => {
-    const now = new Date();
-    const heure = now.getHours();
-    if (heure < 12 || heure >= 23) {
-        return alert("😴 Le restaurant est fermé.\n\nHoraires : 12h00 - 23h00");
+    if (!checkIsOpen()) {
+        return alert("😴 Le restaurant est fermé.\n\nHoraires :\nLundi-Jeudi : 12h00 - 01h00\nVendredi : 12h00 - 02h00\nSamedi-Dimanche : 18h00 - 02h00");
     }
 
     if (panier.length === 0) return alert("Panier vide !");
@@ -403,10 +463,20 @@ function App() {
     if (grandTotal >= 300) status = 'En cours de validation';
 
     const data = {
-        client: clientNom, tel: telClean, type: typeCommande, adresse, commentaire,
-        items: panierFinal, total: grandTotal, remisePromo, fraisLivraison, 
-        date: new Date(), status, distance: distanceClient ? distanceClient.toFixed(2) : 'N/A',
-        lat: clientCoords?.lat || 0, lng: clientCoords?.lng || 0
+        client: clientNom, 
+        tel: telClean, 
+        type: typeCommande, 
+        adresse, 
+        commentaire,
+        items: panierFinal, 
+        total: grandTotal, 
+        remisePromo, 
+        fraisLivraison, 
+        date: new Date(), 
+        status, 
+        distance: distanceClient ? distanceClient.toFixed(2) : 'N/A',
+        lat: clientCoords?.lat || 0,
+        lng: clientCoords?.lng || 0
     };
 
     try {
@@ -414,8 +484,12 @@ function App() {
       const ticket = { ...data, id: ref.id, date: new Date().toLocaleString() };
       localStorage.setItem('derniereCommande', JSON.stringify(ticket));
       setDerniereCommande(ticket);
-      setPanier([]); setCommentaire(''); setView('ticket'); 
-    } catch (e) { alert("Erreur réseau"); }
+      setPanier([]); 
+      setCommentaire('');
+      setView('ticket'); 
+    } catch (e) { 
+        alert("Erreur réseau"); 
+    }
     setLoading(false);
   };
 
@@ -484,7 +558,6 @@ function App() {
   };
 
   const supprimerProduit = async (id) => { 
-      // SÉCURITÉ AJOUTÉE SUR LA CROIX INDIVIDUELLE
       if (!checkManagerAuth()) return;
       if(confirm("Confirmer la suppression définitive ?")) {
           await deleteDoc(doc(db, "produits", id)); 
@@ -527,7 +600,6 @@ function App() {
     };
   };
 
-  // Styles Admin (Restaurés en blanc/propre)
   const btnStyle = { 
       background: COLORS.primary, color: 'white', border: 'none', borderRadius: '12px', 
       padding: '12px 20px', fontWeight: '600', cursor: 'pointer', width: '100%', 
@@ -559,7 +631,34 @@ function App() {
           </div>
       )}
 
-      {/* --- LANDING --- */}
+      {showCGU && (
+          <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'white', zIndex:10000, overflowY:'auto', padding:'20px'}}>
+              <h2 style={{color: COLORS.primary, textAlign:'center', marginTop:'40px'}}>CONDITIONS GÉNÉRALES</h2>
+              <div style={{fontSize:'0.9rem', lineHeight:'1.6', color:'#333', marginBottom:'30px', textAlign:'justify'}}>
+                  <p><strong>ARTICLE 1 : OBJET</strong><br/>L'accès à l'application Foodji et la validation d'une commande impliquent l'acceptation sans réserve des présentes conditions.</p>
+                  <p><strong>ARTICLE 2 : GÉOLOCALISATION</strong><br/>L'utilisation du service nécessite l'activation du GPS. Aucune commande ne pourra être livrée au-delà de 10km.</p>
+                  <p><strong>ARTICLE 3 : ZONES ET MINIMUMS</strong><br/>- Zone 0 à 4 km : Aucun minimum de commande.<br/>- Zone 4 à 10 km : Minimum de commande de 300 DH.</p>
+                  <p><strong>ARTICLE 4 : ZONES SPÉCIALES</strong><br/>Un supplément de livraison (10-15 DH) sera demandé par le livreur pour les zones : UIR, Technopolis, UM6P.</p>
+                  <p><strong>ARTICLE 5 : RUSH ET DÉLAIS</strong><br/>En période de forte affluence, les délais annoncés sont estimatifs. Le restaurant ne peut être tenu responsable des retards liés à la circulation.</p>
+                  <p><strong>ARTICLE 6 : VALIDATION</strong><br/>Toute commande supérieure à 300 DH nécessite une validation téléphonique obligatoire.</p>
+                  <p><strong>ARTICLE 7 : HORAIRES D'OUVERTURE</strong><br/>- Lundi à Jeudi : 12h00 - 01h00<br/>- Vendredi : 12h00 - 02h00<br/>- Samedi et Dimanche : 18h00 - 02h00</p>
+                  <p><strong>ARTICLE 8 : PAIEMENT</strong><br/>Le paiement s'effectue intégralement à la livraison. Toute commande validée est due.</p>
+              </div>
+              <button onClick={accepterCGU} style={{...btnStyle, padding:'20px', fontSize:'1.1rem'}}>J'ACCEPTE LES CONDITIONS</button>
+          </div>
+      )}
+
+      {rushLevel && !showCGU && view === 'landing' && (
+          <div style={{position:'fixed', bottom:'100px', left:'5%', width:'90%', background: rushLevel === 'red' ? '#FEF2F2' : '#FFF7ED', border: rushLevel === 'red' ? '2px solid red' : '2px solid orange', padding:'15px', borderRadius:'15px', zIndex:5000, textAlign:'center', boxShadow:'0 10px 30px rgba(0,0,0,0.2)'}}>
+              <h3 style={{margin:'0 0 5px 0', color: rushLevel === 'red' ? '#991B1B' : '#C2410C'}}>
+                  {rushLevel === 'red' ? '🚨 EXPLOSION EN CUISINE' : '🔥 FORTE AFFLUENCE'}
+              </h3>
+              <p style={{margin:0, fontSize:'0.9rem', color: rushLevel === 'red' ? '#7F1D1D' : '#9A3412'}}>
+                  {rushLevel === 'red' ? 'Délais très longs (> 1h). Merci de votre patience.' : 'Les délais de livraison sont allongés (+45min).'}
+              </p>
+          </div>
+      )}
+
       {view === 'landing' && (
         <div style={{
           position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', 
@@ -568,16 +667,15 @@ function App() {
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', 
           overflow:'hidden'
         }}>
-          {/* Logo avec classe dynamique pour le zoom */}
           <img 
             src={logoImg} 
             alt="Foodji" 
-            className={isZooming ? 'super-zoom' : 'logo-idle'} 
+            className="logo-idle"
             style={{ width: '220px', height: '220px', objectFit: 'contain', marginBottom: '40px', zIndex: 10 }} 
             onError={(e) => {e.target.style.display='none';}} 
           /> 
           
-          <div className={isZooming ? 'fade-out' : 'content-enter'} style={{textAlign:'center', marginTop:'40px', width:'100%', maxWidth:'300px'}}>
+          <div className="content-enter" style={{textAlign:'center', marginTop:'40px', width:'100%', maxWidth:'300px'}}>
               <button onClick={handleEnterApp} style={{
                 background: COLORS.primary, color: 'white', border: 'none', padding: '18px 0', width:'100%',
                 borderRadius: '50px', fontSize: '1.2rem', fontWeight: 'bold', 
@@ -605,7 +703,6 @@ function App() {
         </div>
       )}
 
-      {/* HEADER */}
       {view !== 'landing' && (
         <div style={{ background: COLORS.card, padding: '15px 20px', position: 'sticky', top: 0, zIndex: 50, display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
           <div style={{display:'flex', alignItems:'center', gap:'10px', cursor:'pointer'}} onClick={() => setView('landing')}>
@@ -623,9 +720,20 @@ function App() {
       {showPromoWizard && <PromoWizard menu={menu} onClose={()=>setShowPromoWizard(false)} onValidate={ajouterLotAuPanier} />}
       {selectedProduct && <ProductModal product={selectedProduct} onClose={()=>setSelectedProduct(null)} onAdd={ajouterAuPanier} />}
 
-      {/* --- CLIENT --- */}
       {view === 'client' && (
         <div style={{ padding: '20px' }}>
+          
+          {rushLevel && (
+              <div style={{
+                  background: rushLevel === 'red' ? '#FEF2F2' : '#FFF7ED', 
+                  border: rushLevel === 'red' ? '1px solid #FCA5A5' : '1px solid #FDBA74', 
+                  color: rushLevel === 'red' ? '#991B1B' : '#C2410C', 
+                  padding:'10px', borderRadius:'10px', marginBottom:'20px', textAlign:'center', fontWeight:'bold'
+              }}>
+                  {rushLevel === 'red' ? '🚨 EXPLOSION EN CUISINE (ATTENTE > 1H)' : '🔥 FORTE AFFLUENCE (ATTENTE ~45 MIN)'}
+              </div>
+          )}
+
           <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '20px', scrollbarWidth: 'none', display:'flex', gap:'10px' }}>
             {categoriesClient.map(c => (
               <button key={c} onClick={() => setCategorieActive(c)} style={{
@@ -649,7 +757,6 @@ function App() {
               return (
               <div key={plat.id} onClick={() => setSelectedProduct(plat)} style={{ ...cardStyle, padding: 0, overflow: 'hidden', display:'flex', flexDirection:'column', cursor: 'pointer', position: 'relative' }}>
                 
-                {/* IMAGE CARRÉE 1:1 */}
                 <div style={{ 
                     width: '100%',
                     aspectRatio: '1/1',
@@ -678,8 +785,6 @@ function App() {
               </div>
             )})}
           </div>
-          {menuClient.length === 0 && <div style={{textAlign:'center', marginTop:'50px', color: COLORS.textLight}}>Aucun plat disponible.</div>}
-          
           {panier.length > 0 && (
             <div onClick={handleOpenPanier} style={{
               position: 'fixed', bottom: '30px', left: '5%', width: '90%', 
@@ -697,7 +802,6 @@ function App() {
         </div>
       )}
 
-      {/* --- PANIER --- */}
       {view === 'panier' && (
         <div style={{ padding: '20px', background: 'white', minHeight: '100vh' }}>
           <h2 style={{color: COLORS.secondary}}>🛒 Panier</h2>
@@ -782,7 +886,6 @@ function App() {
         </div>
       )}
 
-      {/* --- TICKET --- */}
       {view === 'ticket' && derniereCommande && (
           <div style={{padding: '20px', background: COLORS.bg, minHeight: '100vh', display:'flex', flexDirection:'column', alignItems:'center'}}>
               <div style={{background: 'white', padding: '30px 20px', borderRadius: '20px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', width: '100%', maxWidth: '400px', textAlign: 'center'}}>
@@ -836,7 +939,6 @@ function App() {
           </div>
       )}
 
-      {/* --- LOGIN --- */}
       {view === 'login' && !user && (
         <div style={{ padding: '40px 20px', maxWidth: '400px', margin: '0 auto', textAlign: 'center' }}>
           <h2 style={{marginBottom: '20px'}}>Staff Access</h2>
@@ -847,7 +949,6 @@ function App() {
         </div>
       )}
 
-      {/* --- ADMIN DASHBOARD (Design Restauré) --- */}
       {view === 'admin' && user && (
         <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
           
@@ -856,7 +957,10 @@ function App() {
                 <h2 style={{margin:0}}>⚙️ Admin</h2>
                 <div style={{fontSize:'0.8rem', color: COLORS.success, background:'#ECFDF5', padding:'5px 10px', borderRadius:'10px'}}>🔊 Son Actif</div>
               </div>
-              {/* BOUTON RESET DU HAUT SUPPRIMÉ COMME DEMANDÉ */}
+              <div style={{display:'flex', gap:'5px'}}>
+                  <button onClick={() => activateRush('orange')} style={{background: 'orange', color:'white', border:'none', padding:'8px 15px', borderRadius:'8px', cursor:'pointer', fontWeight:'bold', fontSize:'0.9rem'}}>🟠 RUSH (45min)</button>
+                  <button onClick={() => activateRush('red')} style={{background: 'red', color:'white', border:'none', padding:'8px 15px', borderRadius:'8px', cursor:'pointer', fontWeight:'bold', fontSize:'0.9rem'}}>🔴 EXPLOSION (1H+)</button>
+              </div>
           </div>
 
           <h3 style={{marginTop:'30px'}}>Commandes ({commandes.filter(c => c.status !== 'Terminé').length})</h3>
@@ -970,7 +1074,6 @@ function App() {
                 </div>
                 <div style={{display:'flex', gap:'10px'}}>
                     <button onClick={() => handleEdit(p)} style={{border:'none', background:'transparent', fontSize:'1.2rem', cursor:'pointer'}}>✏️</button>
-                    {/* CROIX SECURISÉE ICI */}
                     <button onClick={()=>supprimerProduit(p.id)} style={{color:'red', border:'none', background:'transparent', cursor:'pointer'}}>X</button>
                 </div>
               </div>
@@ -1018,10 +1121,6 @@ function App() {
   );
 }
 
-// ==========================================
-// 4. SOUS-COMPOSANTS
-// ==========================================
-
 function formatOptions(list) {
     if(!list) return "";
     const counts = {};
@@ -1041,10 +1140,13 @@ function PromoWizard({ menu, onClose, onValidate }) {
 
     const handleSelect = (pizza) => {
         if (choix.length >= 3) return;
+
         let varianteM = pizza.variantes?.find(v => v.nom === 'M' || v.nom === 'Standard');
         if (!varianteM && pizza.variantes?.length > 0) varianteM = pizza.variantes[0];
+
         const prixFinal = varianteM ? varianteM.prix : pizza.prix;
         const varianteNom = varianteM ? varianteM.nom : null;
+
         setChoix([...choix, { 
             ...pizza, prixFinal: Number(prixFinal), originalPrice: Number(prixFinal), varianteNom: varianteNom, isPromoEligible: true 
         }]);
@@ -1061,26 +1163,43 @@ function PromoWizard({ menu, onClose, onValidate }) {
                     <h3 style={{margin:0}}>Choix {choix.length} / 3</h3>
                     <button onClick={onClose} style={{border:'none', background:'transparent', fontSize:'1.5rem'}}>×</button>
                 </div>
+
                 <div style={{display:'flex', gap:'10px', marginBottom:'20px', background:'#F3F4F6', padding:'10px', borderRadius:'10px'}}>
                     {[0, 1, 2].map(i => (
-                        <div key={i} style={{flex:1, height:'60px', background:'white', border:'2px dashed #ddd', borderRadius:'8px', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'0.8rem', textAlign:'center', position:'relative', fontWeight:'bold'}}>
+                        <div key={i} style={{
+                            flex:1, height:'60px', background:'white', border:'2px dashed #ddd', borderRadius:'8px',
+                            display:'flex', alignItems:'center', justifyContent:'center', fontSize:'0.8rem', textAlign:'center', position:'relative', fontWeight:'bold'
+                        }}>
                             {choix[i] ? (
-                                <>{choix[i].nom}<div onClick={() => handleRemoveChoice(i)} style={{position:'absolute', top:'-5px', right:'-5px', background:'red', color:'white', width:'20px', height:'20px', borderRadius:'50%', cursor:'pointer', fontSize:'0.7rem', display:'flex', alignItems:'center', justifyContent:'center'}}>×</div></>
+                                <>
+                                    {choix[i].nom}
+                                    <div onClick={() => handleRemoveChoice(i)} style={{position:'absolute', top:'-5px', right:'-5px', background:'red', color:'white', width:'20px', height:'20px', borderRadius:'50%', cursor:'pointer', fontSize:'0.7rem', display:'flex', alignItems:'center', justifyContent:'center'}}>×</div>
+                                </>
                             ) : <span style={{color:'#ccc'}}>Vide</span>}
                         </div>
                     ))}
                 </div>
+                
                 {choix.length < 3 ? (
                     <div style={{display:'grid', gridTemplateColumns:'1fr', gap:'10px'}}>
                         {pizzasEligibles.map(p => (
-                            <button key={p.id} onClick={() => handleSelect(p)} style={{padding:'15px', borderRadius:'12px', border:'1px solid #eee', background:'white', textAlign:'left', display:'flex', justifyContent:'space-between', alignItems:'center', boxShadow:'0 2px 5px rgba(0,0,0,0.05)', cursor:'pointer'}}>
+                            <button key={p.id} onClick={() => handleSelect(p)} style={{
+                                padding:'15px', borderRadius:'12px', border:'1px solid #eee', 
+                                background:'white', textAlign:'left', display:'flex', justifyContent:'space-between', alignItems:'center',
+                                boxShadow:'0 2px 5px rgba(0,0,0,0.05)', cursor:'pointer'
+                            }}>
                                 <span style={{fontWeight:'bold'}}>{p.nom}</span>
                                 <span style={{color: COLORS.primary, fontWeight:'bold', background:'#FEE2E2', padding:'5px 10px', borderRadius:'15px'}}>+ Ajouter</span>
                             </button>
                         ))}
                     </div>
                 ) : (
-                    <button onClick={() => onValidate(choix)} style={{background: COLORS.success, color:'white', width:'100%', padding:'20px', border:'none', borderRadius:'15px', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer'}}>✅ VALIDER CES 3 PIZZAS</button>
+                    <button onClick={() => onValidate(choix)} style={{
+                        background: COLORS.success, color:'white', width:'100%', padding:'20px', border:'none', 
+                        borderRadius:'15px', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer'
+                    }}>
+                        ✅ VALIDER CES 3 PIZZAS
+                    </button>
                 )}
             </div>
         </div>
