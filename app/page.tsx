@@ -137,12 +137,12 @@ function App() {
       const savedTel = localStorage.getItem('clientTel');
       const savedAdresse = localStorage.getItem('clientAdresse');
       const savedTicket = localStorage.getItem('derniereCommande'); 
+      // Suppression de la vérification automatique des CGU ici
 
       if (savedNom) setClientNom(savedNom);
       if (savedTel) setClientTel(savedTel);
       if (savedAdresse) setAdresse(savedAdresse);
       if (savedTicket) setDerniereCommande(JSON.parse(savedTicket));
-      // Suppression de l'affichage automatique des CGU ici
   }, []);
 
   useEffect(() => {
@@ -294,6 +294,12 @@ function App() {
           await batch.commit();
           setLoading(false); alert("Menu vidé !");
       }
+  };
+
+  // Suppression du bouton Staff Access de la landing page, donc cette fonction n'est plus appelée depuis là
+  const handleStaffAccess = () => {
+      if (user) setView('admin'); 
+      else setView('login'); 
   };
 
   const handleEnterApp = () => {
@@ -625,7 +631,6 @@ function App() {
           </div>
       )}
 
-      {/* --- POPUP CGU (Déclenché par le clic sur le lien) --- */}
       {showCGU && (
           <div style={{
               position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
@@ -689,7 +694,7 @@ function App() {
           </div>
       )}
 
-      {/* --- LANDING PAGE (Modifiée) --- */}
+      {/* --- LANDING --- */}
       {view === 'landing' && (
         <div style={{
           position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', 
@@ -715,9 +720,8 @@ function App() {
                 VOIR LE MENU
               </button>
 
-              {/* Lien CGU Passif */}
-              <p style={{ marginTop: '25px', fontSize: '0.8rem', color: '#9CA3AF', lineHeight:'1.4' }}>
-                En continuant, vous acceptez les <span onClick={() => setShowCGU(true)} style={{ textDecoration: 'underline', cursor: 'pointer', color: 'white', fontWeight:'bold' }}>Conditions Générales d'Utilisation</span>.
+              <p style={{marginTop: '25px', fontSize: '0.8rem', color: '#9CA3AF', lineHeight:'1.4'}}>
+                En continuant, vous acceptez les <span onClick={() => setShowCGU(true)} style={{textDecoration:'underline', cursor:'pointer', color:'white', fontWeight:'bold'}}>Conditions Générales d'Utilisation</span>.
               </p>
 
               {derniereCommande && (
@@ -729,13 +733,11 @@ function App() {
                       📄 Ma dernière commande
                   </button>
               )}
-
-              {/* Bouton Staff Supprimé ici */}
           </div>
         </div>
       )}
 
-      {/* HEADER (Avec le cadenas pour Staff) */}
+      {/* HEADER */}
       {view !== 'landing' && (
         <div style={{ background: COLORS.card, padding: '15px 20px', position: 'sticky', top: 0, zIndex: 50, display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
           <div style={{display:'flex', alignItems:'center', gap:'10px', cursor:'pointer'}} onClick={() => setView('landing')}>
@@ -1155,151 +1157,6 @@ function App() {
            </details>
         </div>
       )}
-    </div>
-  );
-}
-
-function formatOptions(list) {
-    if(!list) return "";
-    const counts = {};
-    list.forEach(x => { counts[x] = (counts[x] || 0) + 1; });
-    return Object.entries(counts).map(([name, count]) => count > 1 ? `${name} x${count}` : name).join(', ');
-}
-
-function PromoWizard({ menu, onClose, onValidate }) {
-    const [choix, setChoix] = useState([]);
-    useEffect(() => { setChoix([]); }, []);
-
-    const pizzasEligibles = menu.filter(p => 
-        p.categorie === 'Pizzas' && 
-        p.available !== false &&
-        !PIZZAS_EXCLUES_PROMO.some(ex => p.nom.toLowerCase().includes(ex))
-    );
-
-    const handleSelect = (pizza) => {
-        if (choix.length >= 3) return;
-
-        let varianteM = pizza.variantes?.find(v => v.nom === 'M' || v.nom === 'Standard');
-        if (!varianteM && pizza.variantes?.length > 0) varianteM = pizza.variantes[0];
-
-        const prixFinal = varianteM ? varianteM.prix : pizza.prix;
-        const varianteNom = varianteM ? varianteM.nom : null;
-
-        setChoix([...choix, { 
-            ...pizza, prixFinal: Number(prixFinal), originalPrice: Number(prixFinal), varianteNom: varianteNom, isPromoEligible: true 
-        }]);
-    };
-
-    const handleRemoveChoice = (indexToRemove) => {
-        setChoix(choix.filter((_, index) => index !== indexToRemove));
-    };
-
-    return (
-        <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.9)', zIndex:2000, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'20px'}}>
-            <div style={{background:'white', width:'100%', maxWidth:'600px', borderRadius:'20px', padding:'20px', maxHeight:'90vh', overflowY:'auto'}}>
-                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px'}}>
-                    <h3 style={{margin:0}}>Choix {choix.length} / 3</h3>
-                    <button onClick={onClose} style={{border:'none', background:'transparent', fontSize:'1.5rem'}}>×</button>
-                </div>
-
-                <div style={{display:'flex', gap:'10px', marginBottom:'20px', background:'#F3F4F6', padding:'10px', borderRadius:'10px'}}>
-                    {[0, 1, 2].map(i => (
-                        <div key={i} style={{
-                            flex:1, height:'60px', background:'white', border:'2px dashed #ddd', borderRadius:'8px',
-                            display:'flex', alignItems:'center', justifyContent:'center', fontSize:'0.8rem', textAlign:'center', position:'relative', fontWeight:'bold'
-                        }}>
-                            {choix[i] ? (
-                                <>{choix[i].nom}<div onClick={() => handleRemoveChoice(i)} style={{position:'absolute', top:'-5px', right:'-5px', background:'red', color:'white', width:'20px', height:'20px', borderRadius:'50%', cursor:'pointer', fontSize:'0.7rem', display:'flex', alignItems:'center', justifyContent:'center'}}>×</div></>
-                            ) : <span style={{color:'#ccc'}}>Vide</span>}
-                        </div>
-                    ))}
-                </div>
-                
-                {choix.length < 3 ? (
-                    <div style={{display:'grid', gridTemplateColumns:'1fr', gap:'10px'}}>
-                        {pizzasEligibles.map(p => (
-                            <button key={p.id} onClick={() => handleSelect(p)} style={{padding:'15px', borderRadius:'12px', border:'1px solid #eee', background:'white', textAlign:'left', display:'flex', justifyContent:'space-between', alignItems:'center', boxShadow:'0 2px 5px rgba(0,0,0,0.05)', cursor:'pointer'}}>
-                                <span style={{fontWeight:'bold'}}>{p.nom}</span>
-                                <span style={{color: COLORS.primary, fontWeight:'bold', background:'#FEE2E2', padding:'5px 10px', borderRadius:'15px'}}>+ Ajouter</span>
-                            </button>
-                        ))}
-                    </div>
-                ) : (
-                    <button onClick={() => onValidate(choix)} style={{background: COLORS.success, color:'white', width:'100%', padding:'20px', border:'none', borderRadius:'15px', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer'}}>✅ VALIDER CES 3 PIZZAS</button>
-                )}
-            </div>
-        </div>
-    );
-}
-
-function ProductModal({ product, onClose, onAdd }) {
-  const [selectedVar, setSelectedVar] = useState(product.variantes && product.variantes.length > 0 ? product.variantes[0] : null);
-  const [optionsChoisies, setOptionsChoisies] = useState([]); 
-  const [sauces, setSauces] = useState([]); 
-  const [typePates, setTypePates] = useState(null); 
-  const [isCheesyCrust, setIsCheesyCrust] = useState(false);
-  const [extrasPizza, setExtrasPizza] = useState([]); 
-  const [sansIngredients, setSansIngredients] = useState([]); 
-
-  let maxChoix = 0, minChoix = 0, listeOptions = [], titreOptions = "";
-  const nomLower = product.nom.toLowerCase();
-  const catLower = product.categorie.toLowerCase();
-  const isPates = catLower.includes('pâtes') || catLower.includes('pates');
-  const isTacos = catLower.includes('tacos');
-  const isPizza = catLower.includes('pizza');
-  const isBurger = catLower.includes('burger');
-  const isMixte = isTacos && nomLower.includes('mixte');
-
-  if (isMixte) {
-      listeOptions = LISTE_VIANDES;
-      titreOptions = "Choisissez vos viandes";
-      minChoix = 2; 
-      if (selectedVar?.nom === 'L' || selectedVar?.nom === 'Standard') maxChoix = 2;
-      else if (selectedVar?.nom === 'XL') maxChoix = 3;
-      else if (selectedVar?.nom === 'XXL') maxChoix = 4;
-      else maxChoix = 2;
-  }
-  else if (isPizza) {
-      if (nomLower.includes('2 saisons')) { maxChoix = 2; minChoix = 2; listeOptions = LISTE_GARNITURES_PIZZA; titreOptions = "2 Garnitures"; }
-      if (nomLower.includes('4 saisons')) { maxChoix = 4; minChoix = 4; listeOptions = LISTE_GARNITURES_PIZZA; titreOptions = "4 Garnitures"; }
-  }
-
-  const incrementOption = (opt, currentList, setList, max) => { if (currentList.length < max) { setList([...currentList, opt]); } };
-  const decrementOption = (opt, currentList, setList) => { const index = currentList.indexOf(opt); if (index > -1) { const newList = [...currentList]; newList.splice(index, 1); setList(newList); } };
-  const toggleExtraPizza = (extraObj) => { if (extrasPizza.some(e => e.nom === extraObj.nom)) { setExtrasPizza(extrasPizza.filter(e => e.nom !== extraObj.nom)); } else { setExtrasPizza([...extrasPizza, extraObj]); } };
-  const toggleSans = (item) => { if (sansIngredients.includes(item)) { setSansIngredients(sansIngredients.filter(x => x !== item)); } else { setSansIngredients([...sansIngredients, item]); } };
-  const getCount = (opt, list) => list.filter(x => x === opt).length;
-
-  let basePrice = selectedVar ? Number(selectedVar.prix) : Number(product.prix);
-  let totalExtras = extrasPizza.reduce((acc, curr) => acc + curr.prix, 0);
-  let prixCheesy = (isCheesyCrust ? (selectedVar?.nom === 'M' || selectedVar?.nom === 'Standard' || !selectedVar ? 15 : 25) : 0);
-  const finalPriceCalculated = basePrice + totalExtras + prixCheesy;
-
-  return (
-    <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.5)', zIndex:1000, display:'flex', alignItems:'flex-end', justifyContent:'center'}}>
-      <div style={{background:'white', width:'100%', maxWidth:'600px', borderRadius:'20px 20px 0 0', padding:'25px', maxHeight:'90vh', overflowY:'auto'}}>
-        <div style={{display:'flex', justifyContent:'space-between', alignItems:'start'}}>
-            <h2 style={{margin:0, fontSize:'1.4rem'}}>{product.nom}</h2>
-            <button onClick={onClose} style={{border:'none', background:'transparent', fontSize:'1.5rem', fontWeight:'bold'}}>×</button>
-        </div>
-        <p style={{color: COLORS.textLight, marginTop:'5px'}}>{product.description}</p>
-        
-        {product.variantes && product.variantes.length > 0 && (<div style={{marginTop:'20px'}}><div style={{fontWeight:'bold', marginBottom:'10px'}}>Taille</div><div style={{display:'flex', gap:'10px', flexWrap:'wrap'}}>{product.variantes.map(v => (<button key={v.nom} onClick={() => { setSelectedVar(v); setOptionsChoisies([]); }} style={{padding:'10px 20px', borderRadius:'8px', border: selectedVar?.nom === v.nom ? `2px solid ${COLORS.primary}` : '1px solid #ddd', background: selectedVar?.nom === v.nom ? '#FFF5F5' : 'white', fontWeight:'bold'}}>{v.nom} - {v.prix} DH</button>))}</div></div>)}
-        {isPates && (<div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}><div style={{fontWeight:'bold', marginBottom:'10px'}}>Type de Pâtes (Obligatoire)</div><div style={{display:'flex', gap:'10px'}}>{TYPES_PATES.map(type => (<button key={type} onClick={() => setTypePates(type)} style={{flex:1, padding:'12px', borderRadius:'12px', border: typePates === type ? `2px solid ${COLORS.primary}` : '1px solid #ddd', background: typePates === type ? '#FFF5F5' : 'white', fontWeight: 'bold', color: typePates === type ? COLORS.primary : 'black'}}>{type}</button>))}</div></div>)}
-        {isPizza && (<div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}><div style={{fontWeight:'bold', marginBottom:'10px'}}>Suppléments</div><div onClick={() => setIsCheesyCrust(!isCheesyCrust)} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'15px', borderRadius:'10px', border: isCheesyCrust ? `2px solid ${COLORS.promo}` : '1px solid #ddd', background: isCheesyCrust ? '#FFFBF0' : 'white', cursor:'pointer', marginBottom:'15px'}}><span style={{fontWeight:'bold'}}>🧀 Cheesy Crust (Bords Fourrés)</span><span style={{color: COLORS.primary, fontWeight:'bold'}}>+{selectedVar?.nom === 'M' || selectedVar?.nom === 'Standard' || !selectedVar ? '15' : '25'} DH</span></div><div style={{display:'flex', flexWrap:'wrap', gap:'10px'}}>{EXTRAS_PIZZA.map(ex => { const isSelected = extrasPizza.some(e => e.nom === ex.nom); return (<button key={ex.nom} onClick={() => toggleExtraPizza(ex)} style={{padding:'8px 12px', borderRadius:'20px', border: isSelected ? `1px solid ${COLORS.primary}` : '1px solid #ddd', background: isSelected ? '#FFF5F5' : 'white', color: isSelected ? COLORS.primary : 'black', fontWeight:'bold', fontSize:'0.9rem'}}>{isSelected ? '✓ ' : '+ '}{ex.nom} ({ex.prix} DH)</button>) })}</div></div>)}
-        {isBurger && (<div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}><div style={{fontWeight:'bold', marginBottom:'10px', color: COLORS.danger}}>Je ne veux pas de...</div><div style={{display:'flex', flexWrap:'wrap', gap:'10px'}}>{RETRAIT_INGREDIENTS.map(ing => (<button key={ing} onClick={() => toggleSans(ing)} style={{padding:'8px 12px', borderRadius:'20px', border: '1px solid #FCA5A5', background: sansIngredients.includes(ing) ? '#FEF2F2' : 'white', color: COLORS.danger, fontWeight:'bold', fontSize:'0.9rem', opacity: sansIngredients.includes(ing) ? 1 : 0.6}}>{sansIngredients.includes(ing) ? '🚫 ' : ''}{ing}</button>))}</div></div>)}
-        {isTacos && (<div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}><div style={{fontWeight:'bold', marginBottom:'10px'}}>Sauces <small style={{color: COLORS.danger}}>(Minimum 1, Max 2)</small></div><div style={{display:'flex', flexDirection:'column', gap:'10px'}}>{LISTE_SAUCES.map(s => { const count = getCount(s, sauces); return (<div key={s} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'1px dashed #eee'}}><span>{s}</span><div style={{display:'flex', alignItems:'center', gap:'10px'}}>{count > 0 && <button onClick={() => decrementOption(s, sauces, setSauces)} style={{width:'30px', height:'30px', borderRadius:'50%', border:'1px solid #ddd', background:'white', fontWeight:'bold'}}>-</button>}{count > 0 && <span style={{fontWeight:'bold'}}>{count}</span>}<button onClick={() => incrementOption(s, sauces, setSauces, 2)} style={{width:'30px', height:'30px', borderRadius:'50%', border:'none', background:COLORS.secondary, color:'white', fontWeight:'bold'}}>+</button></div></div>); })}</div></div>)}
-        {maxChoix > 0 && (<div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}><div style={{fontWeight:'bold', marginBottom:'10px'}}>{titreOptions} <small style={{color: optionsChoisies.length < minChoix ? COLORS.danger : COLORS.success}}>({optionsChoisies.length}/{maxChoix}) {minChoix > 0 ? `- Min ${minChoix}` : ''}</small></div><div style={{display:'flex', flexDirection:'column', gap:'10px'}}>{listeOptions.map(opt => { const count = getCount(opt, optionsChoisies); return (<div key={opt} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'1px dashed #eee'}}><span>{opt}</span><div style={{display:'flex', alignItems:'center', gap:'10px'}}>{count > 0 && <button onClick={() => decrementOption(opt, optionsChoisies, setOptionsChoisies)} style={{width:'30px', height:'30px', borderRadius:'50%', border:'1px solid #ddd', background:'white', fontWeight:'bold'}}>-</button>}{count > 0 && <span style={{fontWeight:'bold'}}>{count}</span>}<button onClick={() => incrementOption(opt, optionsChoisies, setOptionsChoisies, maxChoix)} style={{width:'30px', height:'30px', borderRadius:'50%', border:'none', background:COLORS.primary, color:'white', fontWeight:'bold'}}>+</button></div></div>); })}</div></div>)}
-
-        <button onClick={() => {
-            if (isPates && !typePates) return alert("Veuillez choisir le type de pâtes !");
-            if (minChoix > 0 && optionsChoisies.length < minChoix) return alert(`Veuillez choisir au moins ${minChoix} options !`); 
-            if (isTacos && sauces.length === 0) return alert("⚠️ Veuillez choisir au moins une sauce (ou 'Pas de sauce') !");
-            onAdd({ ...product, prixFinal: finalPriceCalculated, varianteNom: selectedVar ? selectedVar.nom : null, sauces, optionsChoisies, choixPates: typePates, isCheesyCrust, extras: extrasPizza, sans: sansIngredients });
-        }} style={{background: COLORS.primary, color: 'white', border: 'none', borderRadius: '12px', padding: '15px', fontWeight: 'bold', width: '100%', marginTop: '30px', fontSize: '1.1rem', opacity: (minChoix > 0 && optionsChoisies.length < minChoix) ? 0.5 : 1}}>
-            {minChoix > 0 && optionsChoisies.length < minChoix ? `Choisir encore ${minChoix - optionsChoisies.length}` : `Ajouter au panier - ${finalPriceCalculated} DH`}
-        </button>
-      </div>
     </div>
   );
 }
