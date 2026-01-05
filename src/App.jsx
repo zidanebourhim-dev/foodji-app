@@ -14,17 +14,18 @@ import {
 import './App.css';
 
 // ==========================================
-// 1. CONFIGURATION & CONSTANTES
+// CONFIGURATION
 // ==========================================
 const CODE_MANAGER = "1234"; 
 const PHONE_NUMBER = "0537536689"; 
-// Coordonnées exactes (Sala Al Jadida)
 const RESTO_COORDS = { 
   lat: 33.997484, 
   lng: -6.735644 
 }; 
 
-// --- LISTES ---
+// ==========================================
+// DATA
+// ==========================================
 const LISTE_VIANDES = [
   "Poulet", "Viande Hachée", "Cordon Bleu", "Nuggets", "Poulet Crispy"
 ];
@@ -62,16 +63,14 @@ const TOUTES_CATEGORIES = [
 
 const NOTIF_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
 
-// --- IMAGES ---
 const logoImg = "/logo.png";
 const iconImg = "/icon.png";
 const promoImg = "/promo.jpg"; 
 
-// --- THÈME COULEURS (RESTAURÉ) ---
 const COLORS = {
   primary: '#A84438',    
   secondary: '#1A1E29',  
-  bg: '#F3F4F6', // Gris très clair pour le fond global (plus propre que noir)
+  bg: '#F3F4F6',
   card: '#FFFFFF',       
   success: '#10B981',
   danger: '#EF4444',
@@ -82,30 +81,25 @@ const COLORS = {
 };
 
 // ==========================================
-// 2. COMPOSANT PRINCIPAL
+// APP
 // ==========================================
 function App() {
-  // --- USER & NAVIGATION ---
   const [user, setUser] = useState(null);
   const [view, setView] = useState('landing'); 
-  const [isZooming, setIsZooming] = useState(false); // Animation Zoom
+  const [isZooming, setIsZooming] = useState(false);
 
-  // --- DATA ---
   const [menu, setMenu] = useState([]);
   const [commandes, setCommandes] = useState([]);
   
-  // --- REFS ---
   const prevCommandesLength = useRef(0);
   const audioRef = useRef(new Audio(NOTIF_SOUND));
   const fileInputRef = useRef(null); 
 
-  // --- UI CLIENT ---
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [showPromoWizard, setShowPromoWizard] = useState(false); 
   const [categorieActive, setCategorieActive] = useState(''); 
   const [adminCategorie, setAdminCategorie] = useState(''); 
 
-  // --- PANIER ---
   const [panier, setPanier] = useState([]);
   const [clientNom, setClientNom] = useState('');
   const [clientTel, setClientTel] = useState('');
@@ -113,14 +107,12 @@ function App() {
   const [typeCommande, setTypeCommande] = useState('sur_place');
   const [adresse, setAdresse] = useState('');
   
-  // --- GEO & SECURITE ---
   const [distanceClient, setDistanceClient] = useState(null);
   const [clientCoords, setClientCoords] = useState(null);
   const [showDistanceBlocker, setShowDistanceBlocker] = useState(false);
   
   const [derniereCommande, setDerniereCommande] = useState(null);
 
-  // --- ADMIN AUTH & FORM ---
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -133,11 +125,6 @@ function App() {
   const [prixBase, setPrixBase] = useState('');
   const [variantes, setVariantes] = useState([]); 
 
-  // ==========================================
-  // 3. LOGIQUE & FONCTIONS
-  // ==========================================
-
-  // Calcul Distance
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
       const R = 6371; 
       const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -149,7 +136,6 @@ function App() {
       return R * c; 
   };
 
-  // Chargement Initial
   useEffect(() => {
       const savedNom = localStorage.getItem('clientNom');
       const savedTel = localStorage.getItem('clientTel');
@@ -162,9 +148,10 @@ function App() {
       if (savedTicket) setDerniereCommande(JSON.parse(savedTicket));
   }, []);
 
-  // Firebase Listeners
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (u) => setUser(u));
+    const unsubscribeAuth = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+    });
     
     const unsubscribeMenu = onSnapshot(collection(db, "produits"), (snap) => {
       setMenu(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -185,38 +172,50 @@ function App() {
     return () => { unsubscribeAuth(); unsubscribeMenu(); unsubscribeCmd(); };
   }, [user]);
 
-  // Gestion Catégories
   const categoriesReelles = [...new Set(menu.map(p => p.categorie))];
   const categoriesSelectAdmin = [...new Set([...TOUTES_CATEGORIES, ...categoriesReelles])];
 
   useEffect(() => {
-      if (categoriesReelles.length > 0 && !adminCategorie) setAdminCategorie(categoriesReelles[0]);
+      if (categoriesReelles.length > 0 && !adminCategorie) {
+          setAdminCategorie(categoriesReelles[0]);
+      }
   }, [menu, adminCategorie]);
 
   const isDimanche = new Date().getDay() === 0;
   let categoriesClient = [...categoriesReelles];
-  if (isDimanche) categoriesClient = ['🔥 PROMOTIONS', ...categoriesReelles];
+  if (isDimanche) {
+      categoriesClient = ['🔥 PROMOTIONS', ...categoriesReelles];
+  }
   
   useEffect(() => {
-      if (categoriesClient.length > 0 && !categorieActive) setCategorieActive(categoriesClient[0]);
+      if (categoriesClient.length > 0 && !categorieActive) {
+          setCategorieActive(categoriesClient[0]);
+      }
   }, [menu, categorieActive, isDimanche]);
 
-  // Filtrage Menu
   let menuClient = [];
   if (categorieActive === '🔥 PROMOTIONS') {
       menuClient = [{
-          id: 'promo-sunday-card', nom: 'OFFRE DIMANCHE', description: '2 PIZZAS ACHETÉES = 1 OFFERTE (Moyennes uniquement)',
-          categorie: '🔥 PROMOTIONS', prix: 0, image: promoImg, available: true, isPromoTrigger: true 
+          id: 'promo-sunday-card',
+          nom: 'OFFRE DIMANCHE',
+          description: '2 PIZZAS ACHETÉES = 1 OFFERTE (Moyennes uniquement)',
+          categorie: '🔥 PROMOTIONS',
+          prix: 0,
+          image: promoImg, 
+          available: true,
+          isPromoTrigger: true 
       }];
   } else {
       menuClient = menu.filter(p => p.categorie === categorieActive && p.available !== false);
   }
 
   let menuAdmin = [];
-  if (adminCategorie === 'RUPTURE') menuAdmin = menu.filter(p => p.available === false);
-  else menuAdmin = menu.filter(p => p.categorie === adminCategorie);
+  if (adminCategorie === 'RUPTURE') {
+      menuAdmin = menu.filter(p => p.available === false);
+  } else {
+      menuAdmin = menu.filter(p => p.categorie === adminCategorie);
+  }
 
-  // --- SÉCURITÉ ADMIN ---
   const checkManagerAuth = () => {
       const code = prompt("🔒 Code Manager requis :");
       if (code === CODE_MANAGER) return true;
@@ -225,7 +224,6 @@ function App() {
   };
 
   const triggerImport = () => {
-      // ON REMET LA PROTECTION ICI
       if (checkManagerAuth()) {
           fileInputRef.current.click();
       }
@@ -244,11 +242,18 @@ function App() {
           const row = rows[i];
           const tokens = row.split(','); 
           if (tokens.length >= 5) {
-             const cat = tokens[0].trim(); const name = tokens[1].trim();
+             const cat = tokens[0].trim();
+             const name = tokens[1].trim();
              const len = tokens.length;
-             const p1Raw = tokens[len - 3]; const p2Raw = tokens[len - 2]; const p3Raw = tokens[len - 1];
+             const p1Raw = tokens[len - 3];
+             const p2Raw = tokens[len - 2];
+             const p3Raw = tokens[len - 1];
+             
              const clean = (val) => val ? Number(val.toString().replace(/[^0-9.]/g, '')) : 0;
-             const p1 = clean(p1Raw.replace(',','.')); const p2 = clean(p2Raw.replace(',','.')); const p3 = clean(p3Raw.replace(',','.'));
+             const p1 = clean(p1Raw.replace(',','.'));
+             const p2 = clean(p2Raw.replace(',','.'));
+             const p3 = clean(p3Raw.replace(',','.'));
+
              let vars = [];
              if (p2 > 0 || p3 > 0) {
                 let n1="Standard", n2="Moyen", n3="Grand";
@@ -258,7 +263,12 @@ function App() {
                 if(p2>0) vars.push({nom:n2, prix:p2});
                 if(p3>0) vars.push({nom:n3, prix:p3});
              }
-             if(name && cat) await addDoc(collection(db, "produits"), { categorie: cat, nom: name, description: tokens.slice(2, len - 3).join(', ').replace(/"/g, ''), prix: vars.length>0?0:p1, image: '', variantes: vars, date: new Date(), available: true });
+             if(name && cat) {
+               await addDoc(collection(db, "produits"), {
+                 categorie: cat, nom: name, description: tokens.slice(2, len - 3).join(', ').replace(/"/g, ''),
+                 prix: vars.length>0?0:p1, image: '', variantes: vars, date: new Date(), available: true 
+               });
+             }
           }
         }
         setLoading(false); alert("Import terminé !"); e.target.value = null; 
@@ -268,7 +278,6 @@ function App() {
   };
 
   const viderMenu = async () => {
-      // PROTECTION ICI AUSSI
       if (!checkManagerAuth()) return;
       if(confirm("⚠️ SUPPRIMER TOUT LE MENU ?")) {
           setLoading(true);
@@ -284,7 +293,6 @@ function App() {
       else setView('login'); 
   };
 
-  // --- NAVIGATION ZOOM ---
   const handleEnterApp = () => {
       setIsZooming(true);
       setTimeout(() => {
@@ -293,7 +301,6 @@ function App() {
       }, 700);
   };
 
-  // --- PANIER ---
   const ajouterAuPanier = (itemMerged) => {
     if (itemMerged.isPromoTrigger) { setShowPromoWizard(true); return; }
     if (itemMerged.isInfo) return alert("Info seulement.");
@@ -332,7 +339,6 @@ function App() {
 
   const { remisePromo, fraisLivraison, grandTotal } = calculerTotal();
 
-  // --- OUVERTURE PANIER & GEO ---
   const handleOpenPanier = () => {
       if (panier.length === 0) return alert("Panier vide !");
 
@@ -369,7 +375,6 @@ function App() {
   };
 
   const envoyerCommande = async () => {
-    // HORAIRES
     const now = new Date();
     const heure = now.getHours();
     if (heure < 12 || heure >= 23) {
@@ -414,7 +419,6 @@ function App() {
     setLoading(false);
   };
 
-  // --- CRUD PRODUITS ---
   const toggleAvailability = async (item) => {
     await updateDoc(doc(db, "produits", item.id), { available: !item.available });
   };
@@ -480,7 +484,11 @@ function App() {
   };
 
   const supprimerProduit = async (id) => { 
-      if(confirm("Supprimer ce produit ?")) await deleteDoc(doc(db, "produits", id)); 
+      // SÉCURITÉ AJOUTÉE SUR LA CROIX INDIVIDUELLE
+      if (!checkManagerAuth()) return;
+      if(confirm("Confirmer la suppression définitive ?")) {
+          await deleteDoc(doc(db, "produits", id)); 
+      }
   };
   
   const copierOdoo = (cmd) => {
@@ -519,7 +527,7 @@ function App() {
     };
   };
 
-  // --- STYLES REUTILISABLES (Pour l'Admin propre) ---
+  // Styles Admin (Restaurés en blanc/propre)
   const btnStyle = { 
       background: COLORS.primary, color: 'white', border: 'none', borderRadius: '12px', 
       padding: '12px 20px', fontWeight: '600', cursor: 'pointer', width: '100%', 
@@ -535,13 +543,9 @@ function App() {
       boxShadow: '0 2px 10px rgba(0,0,0,0.03)', border: '1px solid #F3F4F6' 
   };
 
-  // ==========================================
-  // 4. RENDU VISUEL
-  // ==========================================
   return (
     <div style={{ background: COLORS.bg, minHeight: '100vh', paddingBottom: '100px', color: COLORS.secondary }}>
       
-      {/* ⛔️ ECRAN BLOQUANT 10KM */}
       {showDistanceBlocker && (
           <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.95)', zIndex:9999, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'30px', color:'white', textAlign:'center'}}>
               <div style={{fontSize:'4rem', marginBottom:'20px'}}>⛔</div>
@@ -564,10 +568,11 @@ function App() {
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', 
           overflow:'hidden'
         }}>
+          {/* Logo avec classe dynamique pour le zoom */}
           <img 
             src={logoImg} 
             alt="Foodji" 
-            className={`logo-idle ${isZooming ? 'super-zoom' : ''}`}
+            className={isZooming ? 'super-zoom' : 'logo-idle'} 
             style={{ width: '220px', height: '220px', objectFit: 'contain', marginBottom: '40px', zIndex: 10 }} 
             onError={(e) => {e.target.style.display='none';}} 
           /> 
@@ -842,7 +847,7 @@ function App() {
         </div>
       )}
 
-      {/* --- ADMIN RESTAURÉ (V57 Style Clean) --- */}
+      {/* --- ADMIN DASHBOARD (Design Restauré) --- */}
       {view === 'admin' && user && (
         <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
           
@@ -851,7 +856,7 @@ function App() {
                 <h2 style={{margin:0}}>⚙️ Admin</h2>
                 <div style={{fontSize:'0.8rem', color: COLORS.success, background:'#ECFDF5', padding:'5px 10px', borderRadius:'10px'}}>🔊 Son Actif</div>
               </div>
-              <button onClick={viderMenu} style={{background: COLORS.danger, color:'white', border:'none', padding:'8px 15px', borderRadius:'8px', cursor:'pointer', fontWeight:'bold'}}>🗑️ Reset</button>
+              {/* BOUTON RESET DU HAUT SUPPRIMÉ COMME DEMANDÉ */}
           </div>
 
           <h3 style={{marginTop:'30px'}}>Commandes ({commandes.filter(c => c.status !== 'Terminé').length})</h3>
@@ -965,6 +970,7 @@ function App() {
                 </div>
                 <div style={{display:'flex', gap:'10px'}}>
                     <button onClick={() => handleEdit(p)} style={{border:'none', background:'transparent', fontSize:'1.2rem', cursor:'pointer'}}>✏️</button>
+                    {/* CROIX SECURISÉE ICI */}
                     <button onClick={()=>supprimerProduit(p.id)} style={{color:'red', border:'none', background:'transparent', cursor:'pointer'}}>X</button>
                 </div>
               </div>
@@ -1013,7 +1019,7 @@ function App() {
 }
 
 // ==========================================
-// 4. SOUS-COMPOSANTS (MODALS)
+// 4. SOUS-COMPOSANTS
 // ==========================================
 
 function formatOptions(list) {
@@ -1023,10 +1029,8 @@ function formatOptions(list) {
     return Object.entries(counts).map(([name, count]) => count > 1 ? `${name} x${count}` : name).join(', ');
 }
 
-// --- WIZARD PROMO DIMANCHE ---
 function PromoWizard({ menu, onClose, onValidate }) {
     const [choix, setChoix] = useState([]);
-    
     useEffect(() => { setChoix([]); }, []);
 
     const pizzasEligibles = menu.filter(p => 
@@ -1037,19 +1041,12 @@ function PromoWizard({ menu, onClose, onValidate }) {
 
     const handleSelect = (pizza) => {
         if (choix.length >= 3) return;
-
         let varianteM = pizza.variantes?.find(v => v.nom === 'M' || v.nom === 'Standard');
         if (!varianteM && pizza.variantes?.length > 0) varianteM = pizza.variantes[0];
-
         const prixFinal = varianteM ? varianteM.prix : pizza.prix;
         const varianteNom = varianteM ? varianteM.nom : null;
-
         setChoix([...choix, { 
-            ...pizza, 
-            prixFinal: Number(prixFinal), 
-            originalPrice: Number(prixFinal), 
-            varianteNom: varianteNom, 
-            isPromoEligible: true 
+            ...pizza, prixFinal: Number(prixFinal), originalPrice: Number(prixFinal), varianteNom: varianteNom, isPromoEligible: true 
         }]);
     };
 
@@ -1064,62 +1061,42 @@ function PromoWizard({ menu, onClose, onValidate }) {
                     <h3 style={{margin:0}}>Choix {choix.length} / 3</h3>
                     <button onClick={onClose} style={{border:'none', background:'transparent', fontSize:'1.5rem'}}>×</button>
                 </div>
-
                 <div style={{display:'flex', gap:'10px', marginBottom:'20px', background:'#F3F4F6', padding:'10px', borderRadius:'10px'}}>
                     {[0, 1, 2].map(i => (
-                        <div key={i} style={{
-                            flex:1, height:'60px', background:'white', border:'2px dashed #ddd', borderRadius:'8px',
-                            display:'flex', alignItems:'center', justifyContent:'center', fontSize:'0.8rem', textAlign:'center', position:'relative', fontWeight:'bold'
-                        }}>
+                        <div key={i} style={{flex:1, height:'60px', background:'white', border:'2px dashed #ddd', borderRadius:'8px', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'0.8rem', textAlign:'center', position:'relative', fontWeight:'bold'}}>
                             {choix[i] ? (
-                                <>
-                                    {choix[i].nom}
-                                    <div onClick={() => handleRemoveChoice(i)} style={{position:'absolute', top:'-5px', right:'-5px', background:'red', color:'white', width:'20px', height:'20px', borderRadius:'50%', cursor:'pointer', fontSize:'0.7rem', display:'flex', alignItems:'center', justifyContent:'center'}}>×</div>
-                                </>
+                                <>{choix[i].nom}<div onClick={() => handleRemoveChoice(i)} style={{position:'absolute', top:'-5px', right:'-5px', background:'red', color:'white', width:'20px', height:'20px', borderRadius:'50%', cursor:'pointer', fontSize:'0.7rem', display:'flex', alignItems:'center', justifyContent:'center'}}>×</div></>
                             ) : <span style={{color:'#ccc'}}>Vide</span>}
                         </div>
                     ))}
                 </div>
-                
                 {choix.length < 3 ? (
                     <div style={{display:'grid', gridTemplateColumns:'1fr', gap:'10px'}}>
                         {pizzasEligibles.map(p => (
-                            <button key={p.id} onClick={() => handleSelect(p)} style={{
-                                padding:'15px', borderRadius:'12px', border:'1px solid #eee', 
-                                background:'white', textAlign:'left', display:'flex', justifyContent:'space-between', alignItems:'center',
-                                boxShadow:'0 2px 5px rgba(0,0,0,0.05)', cursor:'pointer'
-                            }}>
+                            <button key={p.id} onClick={() => handleSelect(p)} style={{padding:'15px', borderRadius:'12px', border:'1px solid #eee', background:'white', textAlign:'left', display:'flex', justifyContent:'space-between', alignItems:'center', boxShadow:'0 2px 5px rgba(0,0,0,0.05)', cursor:'pointer'}}>
                                 <span style={{fontWeight:'bold'}}>{p.nom}</span>
                                 <span style={{color: COLORS.primary, fontWeight:'bold', background:'#FEE2E2', padding:'5px 10px', borderRadius:'15px'}}>+ Ajouter</span>
                             </button>
                         ))}
                     </div>
                 ) : (
-                    <button onClick={() => onValidate(choix)} style={{
-                        background: COLORS.success, color:'white', width:'100%', padding:'20px', border:'none', 
-                        borderRadius:'15px', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer'
-                    }}>
-                        ✅ VALIDER CES 3 PIZZAS
-                    </button>
+                    <button onClick={() => onValidate(choix)} style={{background: COLORS.success, color:'white', width:'100%', padding:'20px', border:'none', borderRadius:'15px', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer'}}>✅ VALIDER CES 3 PIZZAS</button>
                 )}
             </div>
         </div>
     );
 }
 
-// --- MODAL PRODUIT GÉNÉRALE ---
 function ProductModal({ product, onClose, onAdd }) {
   const [selectedVar, setSelectedVar] = useState(product.variantes && product.variantes.length > 0 ? product.variantes[0] : null);
   const [optionsChoisies, setOptionsChoisies] = useState([]); 
   const [sauces, setSauces] = useState([]); 
   const [typePates, setTypePates] = useState(null); 
-  
   const [isCheesyCrust, setIsCheesyCrust] = useState(false);
   const [extrasPizza, setExtrasPizza] = useState([]); 
   const [sansIngredients, setSansIngredients] = useState([]); 
 
   let maxChoix = 0, minChoix = 0, listeOptions = [], titreOptions = "";
-  
   const nomLower = product.nom.toLowerCase();
   const catLower = product.categorie.toLowerCase();
   const isPates = catLower.includes('pâtes') || catLower.includes('pates');
@@ -1132,244 +1109,49 @@ function ProductModal({ product, onClose, onAdd }) {
       listeOptions = LISTE_VIANDES;
       titreOptions = "Choisissez vos viandes";
       minChoix = 2; 
-      
       if (selectedVar?.nom === 'L' || selectedVar?.nom === 'Standard') maxChoix = 2;
       else if (selectedVar?.nom === 'XL') maxChoix = 3;
       else if (selectedVar?.nom === 'XXL') maxChoix = 4;
       else maxChoix = 2;
   }
   else if (isPizza) {
-      if (nomLower.includes('2 saisons')) { 
-          maxChoix = 2; minChoix = 2; listeOptions = LISTE_GARNITURES_PIZZA; titreOptions = "2 Garnitures"; 
-      }
-      if (nomLower.includes('4 saisons')) { 
-          maxChoix = 4; minChoix = 4; listeOptions = LISTE_GARNITURES_PIZZA; titreOptions = "4 Garnitures"; 
-      }
+      if (nomLower.includes('2 saisons')) { maxChoix = 2; minChoix = 2; listeOptions = LISTE_GARNITURES_PIZZA; titreOptions = "2 Garnitures"; }
+      if (nomLower.includes('4 saisons')) { maxChoix = 4; minChoix = 4; listeOptions = LISTE_GARNITURES_PIZZA; titreOptions = "4 Garnitures"; }
   }
 
-  // --- Helpers Modal ---
-  const incrementOption = (opt, currentList, setList, max) => {
-      if (currentList.length < max) setList([...currentList, opt]);
-  };
-
-  const decrementOption = (opt, currentList, setList) => {
-      const index = currentList.indexOf(opt);
-      if (index > -1) {
-          const newList = [...currentList];
-          newList.splice(index, 1);
-          setList(newList);
-      }
-  };
-
-  const toggleExtraPizza = (extraObj) => {
-      if (extrasPizza.some(e => e.nom === extraObj.nom)) {
-          setExtrasPizza(extrasPizza.filter(e => e.nom !== extraObj.nom));
-      } else {
-          setExtrasPizza([...extrasPizza, extraObj]);
-      }
-  };
-
-  const toggleSans = (item) => {
-      if (sansIngredients.includes(item)) {
-          setSansIngredients(sansIngredients.filter(x => x !== item));
-      } else {
-          setSansIngredients([...sansIngredients, item]);
-      }
-  };
-
+  const incrementOption = (opt, currentList, setList, max) => { if (currentList.length < max) setList([...currentList, opt]); };
+  const decrementOption = (opt, currentList, setList) => { const index = currentList.indexOf(opt); if (index > -1) { const newList = [...currentList]; newList.splice(index, 1); setList(newList); } };
+  const toggleExtraPizza = (extraObj) => { if (extrasPizza.some(e => e.nom === extraObj.nom)) { setExtrasPizza(extrasPizza.filter(e => e.nom !== extraObj.nom)); } else { setExtrasPizza([...extrasPizza, extraObj]); } };
+  const toggleSans = (item) => { if (sansIngredients.includes(item)) { setSansIngredients(sansIngredients.filter(x => x !== item)); } else { setSansIngredients([...sansIngredients, item]); } };
   const getCount = (opt, list) => list.filter(x => x === opt).length;
 
-  // Calcul du prix
   let basePrice = selectedVar ? Number(selectedVar.prix) : Number(product.prix);
   let totalExtras = extrasPizza.reduce((acc, curr) => acc + curr.prix, 0);
-  
-  let prixCheesy = 0;
-  if (isCheesyCrust) {
-      if (selectedVar?.nom === 'M' || selectedVar?.nom === 'Standard' || !selectedVar) {
-          prixCheesy = 15;
-      } else {
-          prixCheesy = 25;
-      }
-  }
-
+  let prixCheesy = (isCheesyCrust ? (selectedVar?.nom === 'M' || selectedVar?.nom === 'Standard' || !selectedVar ? 15 : 25) : 0);
   const finalPriceCalculated = basePrice + totalExtras + prixCheesy;
 
   return (
     <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.5)', zIndex:1000, display:'flex', alignItems:'flex-end', justifyContent:'center'}}>
-      <div style={{background:'white', width:'100%', maxWidth:'600px', borderRadius:'20px 20px 0 0', padding:'25px', maxHeight:'90vh', overflowY:'auto', animation:'slideUp 0.3s'}}>
-        
+      <div style={{background:'white', width:'100%', maxWidth:'600px', borderRadius:'20px 20px 0 0', padding:'25px', maxHeight:'90vh', overflowY:'auto'}}>
         <div style={{display:'flex', justifyContent:'space-between', alignItems:'start'}}>
             <h2 style={{margin:0, fontSize:'1.4rem'}}>{product.nom}</h2>
             <button onClick={onClose} style={{border:'none', background:'transparent', fontSize:'1.5rem', fontWeight:'bold'}}>×</button>
         </div>
         <p style={{color: COLORS.textLight, marginTop:'5px'}}>{product.description}</p>
         
-        {/* TAILLES */}
-        {product.variantes && product.variantes.length > 0 && (
-            <div style={{marginTop:'20px'}}>
-                <div style={{fontWeight:'bold', marginBottom:'10px'}}>Taille</div>
-                <div style={{display:'flex', gap:'10px', flexWrap:'wrap'}}>
-                    {product.variantes.map(v => (
-                        <button key={v.nom} 
-                            onClick={() => { setSelectedVar(v); setOptionsChoisies([]); }} 
-                            style={{
-                                padding:'10px 20px', borderRadius:'8px', 
-                                border: selectedVar?.nom === v.nom ? `2px solid ${COLORS.primary}` : '1px solid #ddd',
-                                background: selectedVar?.nom === v.nom ? '#FFF5F5' : 'white', 
-                                fontWeight:'bold'
-                            }}>
-                            {v.nom} - {v.prix} DH
-                        </button>
-                    ))}
-                </div>
-            </div>
-        )}
-
-        {/* PATES */}
-        {isPates && (
-            <div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}>
-                <div style={{fontWeight:'bold', marginBottom:'10px'}}>Type de Pâtes (Obligatoire)</div>
-                <div style={{display:'flex', gap:'10px'}}>
-                    {TYPES_PATES.map(type => (
-                        <button key={type} onClick={() => setTypePates(type)} style={{
-                            flex:1, padding:'12px', borderRadius:'12px', 
-                            border: typePates === type ? `2px solid ${COLORS.primary}` : '1px solid #ddd',
-                            background: typePates === type ? '#FFF5F5' : 'white',
-                            fontWeight: 'bold', color: typePates === type ? COLORS.primary : 'black'
-                        }}>
-                            {type}
-                        </button>
-                    ))}
-                </div>
-            </div>
-        )}
-
-        {/* PIZZA EXTRAS */}
-        {isPizza && (
-            <div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}>
-                 <div style={{fontWeight:'bold', marginBottom:'10px'}}>Suppléments</div>
-                 
-                 <div onClick={() => setIsCheesyCrust(!isCheesyCrust)} style={{
-                     display:'flex', justifyContent:'space-between', alignItems:'center', padding:'15px', borderRadius:'10px',
-                     border: isCheesyCrust ? `2px solid ${COLORS.promo}` : '1px solid #ddd',
-                     background: isCheesyCrust ? '#FFFBF0' : 'white', cursor:'pointer', marginBottom:'15px'
-                 }}>
-                     <span style={{fontWeight:'bold'}}>🧀 Cheesy Crust (Bords Fourrés)</span>
-                     <span style={{color: COLORS.primary, fontWeight:'bold'}}>
-                         +{selectedVar?.nom === 'M' || selectedVar?.nom === 'Standard' || !selectedVar ? '15' : '25'} DH
-                     </span>
-                 </div>
-
-                 <div style={{display:'flex', flexWrap:'wrap', gap:'10px'}}>
-                     {EXTRAS_PIZZA.map(ex => {
-                         const isSelected = extrasPizza.some(e => e.nom === ex.nom);
-                         return (
-                            <button key={ex.nom} onClick={() => toggleExtraPizza(ex)} style={{
-                                padding:'8px 12px', borderRadius:'20px', 
-                                border: isSelected ? `1px solid ${COLORS.primary}` : '1px solid #ddd',
-                                background: isSelected ? '#FFF5F5' : 'white', 
-                                color: isSelected ? COLORS.primary : 'black', fontWeight:'bold', fontSize:'0.9rem'
-                            }}>
-                                {isSelected ? '✓ ' : '+ '}{ex.nom} ({ex.prix} DH)
-                            </button>
-                         )
-                     })}
-                 </div>
-            </div>
-        )}
-
-        {/* SANS INGREDIENTS (Burgers) */}
-        {isBurger && (
-            <div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}>
-                <div style={{fontWeight:'bold', marginBottom:'10px', color: COLORS.danger}}>Je ne veux pas de...</div>
-                <div style={{display:'flex', flexWrap:'wrap', gap:'10px'}}>
-                    {RETRAIT_INGREDIENTS.map(ing => (
-                         <button key={ing} onClick={() => toggleSans(ing)} style={{
-                            padding:'8px 12px', borderRadius:'20px', border: '1px solid #FCA5A5',
-                            background: sansIngredients.includes(ing) ? '#FEF2F2' : 'white', 
-                            color: COLORS.danger, fontWeight:'bold', fontSize:'0.9rem', 
-                            opacity: sansIngredients.includes(ing) ? 1 : 0.6
-                        }}>
-                            {sansIngredients.includes(ing) ? '🚫 ' : ''}{ing}
-                        </button>
-                    ))}
-                </div>
-            </div>
-        )}
-
-        {/* SAUCES (Tacos) */}
-        {isTacos && (
-            <div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}>
-                <div style={{fontWeight:'bold', marginBottom:'10px'}}>
-                    Sauces <small style={{color: COLORS.danger}}>(Minimum 1, Max 2)</small>
-                </div>
-                <div style={{display:'flex', flexDirection:'column', gap:'10px'}}>
-                    {LISTE_SAUCES.map(s => {
-                        const count = getCount(s, sauces);
-                        return (
-                            <div key={s} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'1px dashed #eee'}}>
-                                <span>{s}</span>
-                                <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
-                                    {count > 0 && <button onClick={() => decrementOption(s, sauces, setSauces)} style={{width:'30px', height:'30px', borderRadius:'50%', border:'1px solid #ddd', background:'white', fontWeight:'bold'}}>-</button>}
-                                    {count > 0 && <span style={{fontWeight:'bold'}}>{count}</span>}
-                                    <button onClick={() => incrementOption(s, sauces, setSauces, 2)} style={{width:'30px', height:'30px', borderRadius:'50%', border:'none', background:COLORS.secondary, color:'white', fontWeight:'bold'}}>+</button>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
-        )}
-
-        {/* OPTIONS MULTIPLES (Viandes, Garnitures) */}
-        {maxChoix > 0 && (
-            <div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}>
-                <div style={{fontWeight:'bold', marginBottom:'10px'}}>
-                    {titreOptions} <small style={{color: optionsChoisies.length < minChoix ? COLORS.danger : COLORS.success}}>
-                        ({optionsChoisies.length}/{maxChoix}) {minChoix > 0 ? `- Min ${minChoix}` : ''}
-                    </small>
-                </div>
-                <div style={{display:'flex', flexDirection:'column', gap:'10px'}}>
-                    {listeOptions.map(opt => {
-                        const count = getCount(opt, optionsChoisies);
-                        return (
-                            <div key={opt} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'1px dashed #eee'}}>
-                                <span>{opt}</span>
-                                <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
-                                    {count > 0 && <button onClick={() => decrementOption(opt, optionsChoisies, setOptionsChoisies)} style={{width:'30px', height:'30px', borderRadius:'50%', border:'1px solid #ddd', background:'white', fontWeight:'bold'}}>-</button>}
-                                    {count > 0 && <span style={{fontWeight:'bold'}}>{count}</span>}
-                                    <button onClick={() => incrementOption(opt, optionsChoisies, setOptionsChoisies, maxChoix)} style={{width:'30px', height:'30px', borderRadius:'50%', border:'none', background:COLORS.primary, color:'white', fontWeight:'bold'}}>+</button>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
-        )}
+        {product.variantes && product.variantes.length > 0 && (<div style={{marginTop:'20px'}}><div style={{fontWeight:'bold', marginBottom:'10px'}}>Taille</div><div style={{display:'flex', gap:'10px', flexWrap:'wrap'}}>{product.variantes.map(v => (<button key={v.nom} onClick={() => { setSelectedVar(v); setOptionsChoisies([]); }} style={{padding:'10px 20px', borderRadius:'8px', border: selectedVar?.nom === v.nom ? `2px solid ${COLORS.primary}` : '1px solid #ddd', background: selectedVar?.nom === v.nom ? '#FFF5F5' : 'white', fontWeight:'bold'}}>{v.nom} - {v.prix} DH</button>))}</div></div>)}
+        {isPates && (<div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}><div style={{fontWeight:'bold', marginBottom:'10px'}}>Type de Pâtes (Obligatoire)</div><div style={{display:'flex', gap:'10px'}}>{TYPES_PATES.map(type => (<button key={type} onClick={() => setTypePates(type)} style={{flex:1, padding:'12px', borderRadius:'12px', border: typePates === type ? `2px solid ${COLORS.primary}` : '1px solid #ddd', background: typePates === type ? '#FFF5F5' : 'white', fontWeight: 'bold', color: typePates === type ? COLORS.primary : 'black'}}>{type}</button>))}</div></div>)}
+        {isPizza && (<div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}><div style={{fontWeight:'bold', marginBottom:'10px'}}>Suppléments</div><div onClick={() => setIsCheesyCrust(!isCheesyCrust)} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'15px', borderRadius:'10px', border: isCheesyCrust ? `2px solid ${COLORS.promo}` : '1px solid #ddd', background: isCheesyCrust ? '#FFFBF0' : 'white', cursor:'pointer', marginBottom:'15px'}}><span style={{fontWeight:'bold'}}>🧀 Cheesy Crust (Bords Fourrés)</span><span style={{color: COLORS.primary, fontWeight:'bold'}}>+{selectedVar?.nom === 'M' || selectedVar?.nom === 'Standard' || !selectedVar ? '15' : '25'} DH</span></div><div style={{display:'flex', flexWrap:'wrap', gap:'10px'}}>{EXTRAS_PIZZA.map(ex => { const isSelected = extrasPizza.some(e => e.nom === ex.nom); return (<button key={ex.nom} onClick={() => toggleExtraPizza(ex)} style={{padding:'8px 12px', borderRadius:'20px', border: isSelected ? `1px solid ${COLORS.primary}` : '1px solid #ddd', background: isSelected ? '#FFF5F5' : 'white', color: isSelected ? COLORS.primary : 'black', fontWeight:'bold', fontSize:'0.9rem'}}>{isSelected ? '✓ ' : '+ '}{ex.nom} ({ex.prix} DH)</button>) })}</div></div>)}
+        {isBurger && (<div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}><div style={{fontWeight:'bold', marginBottom:'10px', color: COLORS.danger}}>Je ne veux pas de...</div><div style={{display:'flex', flexWrap:'wrap', gap:'10px'}}>{RETRAIT_INGREDIENTS.map(ing => (<button key={ing} onClick={() => toggleSans(ing)} style={{padding:'8px 12px', borderRadius:'20px', border: '1px solid #FCA5A5', background: sansIngredients.includes(ing) ? '#FEF2F2' : 'white', color: COLORS.danger, fontWeight:'bold', fontSize:'0.9rem', opacity: sansIngredients.includes(ing) ? 1 : 0.6}}>{sansIngredients.includes(ing) ? '🚫 ' : ''}{ing}</button>))}</div></div>)}
+        {isTacos && (<div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}><div style={{fontWeight:'bold', marginBottom:'10px'}}>Sauces <small style={{color: COLORS.danger}}>(Minimum 1, Max 2)</small></div><div style={{display:'flex', flexDirection:'column', gap:'10px'}}>{LISTE_SAUCES.map(s => { const count = getCount(s, sauces); return (<div key={s} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'1px dashed #eee'}}><span>{s}</span><div style={{display:'flex', alignItems:'center', gap:'10px'}}>{count > 0 && <button onClick={() => decrementOption(s, sauces, setSauces)} style={{width:'30px', height:'30px', borderRadius:'50%', border:'1px solid #ddd', background:'white', fontWeight:'bold'}}>-</button>}{count > 0 && <span style={{fontWeight:'bold'}}>{count}</span>}<button onClick={() => incrementOption(s, sauces, setSauces, 2)} style={{width:'30px', height:'30px', borderRadius:'50%', border:'none', background:COLORS.secondary, color:'white', fontWeight:'bold'}}>+</button></div></div>); })}</div></div>)}
+        {maxChoix > 0 && (<div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}><div style={{fontWeight:'bold', marginBottom:'10px'}}>{titreOptions} <small style={{color: optionsChoisies.length < minChoix ? COLORS.danger : COLORS.success}}>({optionsChoisies.length}/{maxChoix}) {minChoix > 0 ? `- Min ${minChoix}` : ''}</small></div><div style={{display:'flex', flexDirection:'column', gap:'10px'}}>{listeOptions.map(opt => { const count = getCount(opt, optionsChoisies); return (<div key={opt} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'1px dashed #eee'}}><span>{opt}</span><div style={{display:'flex', alignItems:'center', gap:'10px'}}>{count > 0 && <button onClick={() => decrementOption(opt, optionsChoisies, setOptionsChoisies)} style={{width:'30px', height:'30px', borderRadius:'50%', border:'1px solid #ddd', background:'white', fontWeight:'bold'}}>-</button>}{count > 0 && <span style={{fontWeight:'bold'}}>{count}</span>}<button onClick={() => incrementOption(opt, optionsChoisies, setOptionsChoisies, maxChoix)} style={{width:'30px', height:'30px', borderRadius:'50%', border:'none', background:COLORS.primary, color:'white', fontWeight:'bold'}}>+</button></div></div>); })}</div></div>)}
 
         <button onClick={() => {
             if (isPates && !typePates) return alert("Veuillez choisir le type de pâtes !");
             if (minChoix > 0 && optionsChoisies.length < minChoix) return alert(`Veuillez choisir au moins ${minChoix} options !`); 
             if (isTacos && sauces.length === 0) return alert("⚠️ Veuillez choisir au moins une sauce (ou 'Pas de sauce') !");
-
-            const itemMerged = {
-                ...product,
-                prixFinal: finalPriceCalculated,
-                varianteNom: selectedVar ? selectedVar.nom : null, 
-                sauces: sauces,
-                optionsChoisies: optionsChoisies,
-                choixPates: typePates,
-                isCheesyCrust: isCheesyCrust,
-                extras: extrasPizza,
-                sans: sansIngredients
-            };
-
-            onAdd(itemMerged);
-        }} style={{
-            background: COLORS.primary, color: 'white', border: 'none', borderRadius: '12px', 
-            padding: '15px', fontWeight: 'bold', width: '100%', marginTop: '30px', fontSize: '1.1rem',
-            opacity: (minChoix > 0 && optionsChoisies.length < minChoix) ? 0.5 : 1
-        }}>
+            onAdd({ ...product, prixFinal: finalPriceCalculated, varianteNom: selectedVar ? selectedVar.nom : null, sauces, optionsChoisies, choixPates: typePates, isCheesyCrust, extras: extrasPizza, sans: sansIngredients });
+        }} style={{background: COLORS.primary, color: 'white', border: 'none', borderRadius: '12px', padding: '15px', fontWeight: 'bold', width: '100%', marginTop: '30px', fontSize: '1.1rem', opacity: (minChoix > 0 && optionsChoisies.length < minChoix) ? 0.5 : 1}}>
             {minChoix > 0 && optionsChoisies.length < minChoix ? `Choisir encore ${minChoix - optionsChoisies.length}` : `Ajouter au panier - ${finalPriceCalculated} DH`}
         </button>
       </div>

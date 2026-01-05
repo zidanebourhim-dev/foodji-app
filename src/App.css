@@ -1,13 +1,12 @@
-/* src/App.css */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
 
 body {
   font-family: 'Inter', sans-serif;
   margin: 0;
   padding: 0;
-  background-color: #F9FAFB;
+  background-color: #F3F4F6;
   -webkit-tap-highlight-color: transparent;
-  overflow-x: hidden; /* Empêche le scroll horizontal pendant le zoom */
+  overflow-x: hidden;
 }
 
 button {
@@ -20,47 +19,38 @@ button:active {
 
 /* --- ANIMATIONS --- */
 
-/* 1. Entrée du Logo */
 @keyframes logoEntrance {
   from { opacity: 0; transform: scale(0.5) rotate(-10deg); }
   to { opacity: 1; transform: scale(1) rotate(0deg); }
 }
 
-/* 2. Battement de coeur */
 @keyframes heartbeat {
   0% { transform: scale(1); }
   50% { transform: scale(1.05); }
   100% { transform: scale(1); }
 }
 
-/* 3. Apparition Contenu */
 @keyframes fadeInUp {
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* --- CLASSES LOGIQUES --- */
-
-/* L'état normal du logo */
+/* État 1 : Le logo au repos (bat) */
 .logo-idle {
   animation: logoEntrance 0.8s ease-out forwards, 
              heartbeat 3s ease-in-out infinite 1s;
   transform-origin: center center;
-  transition: all 0.5s ease;
 }
 
-/* L'état ZOOM (Correction Appliquée) */
+/* État 2 : Le logo qui explose (Zoom) */
 .super-zoom {
-  /* On coupe l'animation heartbeat pour que le transform fonctionne */
-  animation: none !important; 
-  /* On agrandit énormément */
-  transform: scale(100) !important; 
-  opacity: 0; /* Il disparait à la toute fin */
-  transition: transform 0.8s ease-in, opacity 0.8s ease-in 0.2s;
+  animation: none !important; /* On tue le battement */
+  transform: scale(80); /* Zoom massif */
+  opacity: 0;
+  transition: transform 0.8s ease-in, opacity 0.8s ease-in 0.1s;
   z-index: 9999;
 }
 
-/* Disparition des boutons */
 .fade-out {
   opacity: 0;
   transform: scale(0.9);
