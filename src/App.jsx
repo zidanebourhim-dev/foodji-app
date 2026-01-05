@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { db, auth } from './firebase';
-import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
+import { signInWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
 import { 
   collection, 
   addDoc, 
@@ -66,6 +66,7 @@ function App() {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [showPromoWizard, setShowPromoWizard] = useState(false); 
   const [showCGV, setShowCGV] = useState(false);
+  const [gpsLoading, setGpsLoading] = useState(false);
   
   const [categorieActive, setCategorieActive] = useState(''); 
   const [adminCategorie, setAdminCategorie] = useState(''); 
@@ -278,6 +279,8 @@ function App() {
   const handleOpenPanier = () => {
       if (panier.length === 0) return alert("Panier vide !");
 
+      setGpsLoading(true);
+
       if ("geolocation" in navigator) {
           navigator.geolocation.getCurrentPosition((position) => {
               const uLat = position.coords.latitude;
@@ -285,6 +288,7 @@ function App() {
               setClientCoords({ lat: uLat, lng: uLng });
               const dist = calculateDistance(RESTO_COORDS.lat, RESTO_COORDS.lng, uLat, uLng);
               setDistanceClient(dist);
+              setGpsLoading(false);
 
               if (dist > 10) {
                   setShowDistanceBlocker(true); 
@@ -302,10 +306,12 @@ function App() {
               setView('panier');
 
           }, (error) => {
+              setGpsLoading(false);
               if (grandTotal >= 300) setView('panier'); 
               else alert("⚠️ La géolocalisation est OBLIGATOIRE.");
           });
       } else {
+          setGpsLoading(false);
           alert("GPS non supporté.");
       }
   };
@@ -676,11 +682,17 @@ function App() {
               borderRadius: '50px', display: 'flex', justifyContent: 'space-between', 
               alignItems: 'center', boxShadow: '0 10px 25px rgba(0,0,0,0.2)', cursor: 'pointer', zIndex: 99
             }}>
-              <div style={{display:'flex', alignItems:'center', gap:'12px'}}>
-                <span style={{background: COLORS.primary, color:'white', width:'28px', height:'28px', borderRadius:'50%', display:'flex', justifyContent:'center', alignItems:'center', fontWeight:'bold', fontSize:'0.9rem'}}>{panier.length}</span>
-                <span style={{fontSize:'1rem', fontWeight:'500'}}>Voir le panier</span>
-              </div>
-              <span style={{fontWeight:'800', fontSize:'1.1rem'}}>{grandTotal} DH</span>
+              {gpsLoading ? (
+                  <div style={{width:'100%', textAlign:'center', fontWeight:'bold', fontSize:'1rem'}}>Chargement...</div>
+              ) : (
+                  <>
+                      <div style={{display:'flex', alignItems:'center', gap:'12px'}}>
+                        <span style={{background: COLORS.primary, color:'white', width:'28px', height:'28px', borderRadius:'50%', display:'flex', justifyContent:'center', alignItems:'center', fontWeight:'bold', fontSize:'0.9rem'}}>{panier.length}</span>
+                        <span style={{fontSize:'1rem', fontWeight:'500'}}>Voir le panier</span>
+                      </div>
+                      <span style={{fontWeight:'800', fontSize:'1.1rem'}}>{grandTotal} DH</span>
+                  </>
+              )}
             </div>
           )}
         </div>
