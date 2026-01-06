@@ -33,6 +33,7 @@ const RETRAIT_INGREDIENTS = ["Sans Tomate", "Sans Salade", "Sans Oignons", "Sans
 const PIZZAS_EXCLUES_PROMO = ["4 saisons", "fruits de mer", "cannibale", "2 saisons"];
 const TOUTES_CATEGORIES = ["Tacos", "Pizzas", "Burgers", "Pâtes", "Sides", "Les Burritos", "Koniks", "Plats", "Salades", "Boissons", "Desserts"];
 
+// Le lien est là, mais il ne sera chargé que si l'admin est connecté
 const NOTIF_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
 
 const logoImg = "/logo.png";
@@ -60,14 +61,17 @@ function App() {
   const [commandes, setCommandes] = useState([]);
   
   const prevCommandesLength = useRef(0);
-  const audioRef = useRef(new Audio(NOTIF_SOUND));
+  
+  // CORRECTION ICI : On initialise à null pour ne pas charger le son au démarrage client
+  const audioRef = useRef(null);
+  
   const fileInputRef = useRef(null); 
 
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [showPromoWizard, setShowPromoWizard] = useState(false); 
   const [showCGV, setShowCGV] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
-  const [isMenuLoading, setIsMenuLoading] = useState(true); // NOUVEAU : État de chargement du menu
+  const [isMenuLoading, setIsMenuLoading] = useState(true); 
   
   const [categorieActive, setCategorieActive] = useState(''); 
   const [adminCategorie, setAdminCategorie] = useState(''); 
@@ -128,10 +132,9 @@ function App() {
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (u) => { setUser(u); });
     
-    // Modification ici : On gère le chargement
     const unsubscribeMenu = onSnapshot(collection(db, "produits"), (snap) => {
       setMenu(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      setIsMenuLoading(false); // On arrête le chargement quand les données arrivent
+      setIsMenuLoading(false); 
     });
 
     const q = query(collection(db, "commandes"));
@@ -139,7 +142,12 @@ function App() {
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       list.sort((a, b) => b.date.seconds - a.date.seconds);
       
+      // CORRECTION SON : On ne joue le son que si c'est l'ADMIN (user existe)
       if (list.length > prevCommandesLength.current && user) {
+          if (!audioRef.current) {
+             // On crée l'objet Audio uniquement maintenant, pas au chargement de la page
+             audioRef.current = new Audio(NOTIF_SOUND);
+          }
           audioRef.current.play().catch(e => console.log("Son bloqué"));
       }
       prevCommandesLength.current = list.length;
@@ -680,7 +688,6 @@ function App() {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
             
-            {/* ICI LA CORRECTION DU CHARGEMENT */}
             {isMenuLoading ? (
                <div style={{gridColumn:'span 2', textAlign:'center', padding:'50px', color:'#888'}}>
                    Chargement du menu...
