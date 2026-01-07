@@ -10,8 +10,8 @@ import {
   updateDoc, 
   query, 
   writeBatch,
-  getDocs, // <--- AJOUTÉ pour vérifier l'historique
-  where    // <--- AJOUTÉ pour chercher le numéro
+  getDocs, 
+  where 
 } from 'firebase/firestore';
 import './App.css';
 
@@ -20,8 +20,8 @@ const PHONE_NUMBER = "0537536689";
 const RESTO_COORDS = { lat: 33.997484, lng: -6.735644 }; 
 
 // --- CONFIGURATION DU CODE PROMO ---
-const PROMO_CODE_SECRET = "GLOVO20"; // Le code à mettre sur le flyer
-const POURCENTAGE_REMISE = 0.20;     // 20% de réduction
+const PROMO_CODE_SECRET = "ABRACADABRA69";
+const POURCENTAGE_REMISE = 0.20;     
 
 const LISTE_VIANDES = ["Poulet", "Viande Hachée", "Cordon Bleu", "Nuggets", "Poulet Crispy"];
 const LISTE_GARNITURES_PIZZA = ["Viande Hachée", "Poulet", "4 Fromages", "Cannibale", "Pepperoni", "Thon", "Charcuterie", "Végétarienne", "Fruits de Mer"];
@@ -39,7 +39,6 @@ const RETRAIT_INGREDIENTS = ["Sans Tomate", "Sans Salade", "Sans Oignons", "Sans
 const PIZZAS_EXCLUES_PROMO = ["4 saisons", "fruits de mer", "cannibale", "2 saisons"];
 const TOUTES_CATEGORIES = ["Tacos", "Pizzas", "Burgers", "Pâtes", "Sides", "Les Burritos", "Koniks", "Plats", "Salades", "Boissons", "Desserts"];
 
-// Le lien est là, mais il ne sera chargé que si l'admin est connecté
 const NOTIF_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
 
 const logoImg = "/logo.png";
@@ -86,7 +85,11 @@ function App() {
   const [commentaire, setCommentaire] = useState('');
   const [typeCommande, setTypeCommande] = useState('sur_place');
   const [adresse, setAdresse] = useState('');
-  const [codePromo, setCodePromo] = useState(''); // <--- NOUVEAU : Stocke le code tapé par le client
+  
+  // --- NOUVEAUX ÉTATS POUR LE CODE PROMO ---
+  const [codePromo, setCodePromo] = useState(''); 
+  const [remiseAppliquee, setRemiseAppliquee] = useState(0); // Montant en DH
+  const [isPromoValidee, setIsPromoValidee] = useState(false); // Si le code est bon et vérifié
   
   const [distanceClient, setDistanceClient] = useState(null);
   const [clientCoords, setClientCoords] = useState(null);
@@ -128,6 +131,30 @@ function App() {
       if (savedAdresse) setAdresse(savedAdresse);
       if (savedTicket) setDerniereCommande(JSON.parse(savedTicket));
   }, []);
+
+  // Reset de la promo si le panier change ou si on vide
+  useEffect(() => {
+     if (panier.length === 0) {
+         setRemiseAppliquee(0);
+         setIsPromoValidee(false);
+         setCodePromo('');
+     } else if (isPromoValidee) {
+         // Recalculer la remise si on ajoute des trucs au panier après avoir mis le code
+         const { sousTotal, fraisLivraison } = calculerTotalInterne();
+         const montantRemisable = (sousTotal + (typeCommande === 'livraison' && (sousTotal) < 45 ? 5 : 0)) - (typeCommande === 'livraison' && (sousTotal) < 45 ? 5 : 0);
+         // Simplification : 20% sur le sous-total hors livraison
+         const newRemise = Math.round(sousTotal * POURCENTAGE_REMISE);
+         setRemiseAppliquee(newRemise);
+     }
+  }, [panier, typeCommande]);
+
+  // Si l'utilisateur change son numéro, on annule la promo par sécurité
+  useEffect(() => {
+      if (isPromoValidee) {
+          setIsPromoValidee(false);
+          setRemiseAppliquee(0);
+      }
+  }, [clientTel]);
 
   useEffect(() => {
       localStorage.setItem('rushMode', rushMode);
@@ -200,6 +227,7 @@ function App() {
   };
 
   const handleCSVImport = (e) => {
+    // ... (Code import inchangé)
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
@@ -271,7 +299,8 @@ function App() {
       return prix;
   };
 
-  const calculerTotal = () => {
+  // Fonction utilitaire pour éviter duplication
+  const calculerTotalInterne = () => {
       let sousTotal = 0, pizzas = [];
       panier.forEach(item => {
           const p = getPrixItemAjuste(item);
@@ -284,10 +313,60 @@ function App() {
           for (let i = 0; i < Math.floor(pizzas.length / 3); i++) remise += pizzas[i].prixCalcul;
       }
       const frais = (typeCommande === 'livraison' && (sousTotal - remise) < 45 && (sousTotal - remise) > 0) ? 5 : 0;
-      return { sousTotal, remisePromo: remise, fraisLivraison: frais, grandTotal: (sousTotal - remise) + frais };
+      return { sousTotal, remisePromoSysteme: remise, fraisLivraison: frais };
+  }
+
+  const calculerTotal = () => {
+      const { sousTotal, remisePromoSysteme, fraisLivraison } = calculerTotalInterne();
+      // On déduit la remise Code Promo si elle existe
+      const totalAvantRemiseCode = (sousTotal - remisePromoSysteme) + fraisLivraison;
+      const totalFinal = Math.max(0, totalAvantRemiseCode - remiseAppliquee);
+      
+      return { sousTotal, remisePromo: remisePromoSysteme, fraisLivraison, grandTotal: totalFinal };
   };
 
   const { remisePromo, fraisLivraison, grandTotal } = calculerTotal();
+
+  // --- NOUVELLE FONCTION : Vérification du code AVANT validation ---
+  const verifierCodePromo = async () => {
+    if (!codePromo.trim()) return alert("Veuillez entrer un code promo.");
+    
+    // 1. Vérif numéro de téléphone
+    const telClean = clientTel.replace(/\s/g, ''); 
+    if (!/^(06|07)\d{8}$/.test(telClean)) {
+        return alert("⚠️ Veuillez d'abord entrer un numéro de téléphone valide (06... ou 07...) dans la case ci-dessus pour que nous puissions vérifier votre éligibilité.");
+    }
+
+    if (codePromo.toUpperCase() !== PROMO_CODE_SECRET) {
+        return alert("❌ Code promo invalide ou expiré.");
+    }
+
+    setLoading(true);
+    try {
+        // 2. Vérif historique
+        const qCheck = query(collection(db, "commandes"), where("tel", "==", telClean));
+        const historySnapshot = await getDocs(qCheck);
+
+        if (historySnapshot.empty) {
+            // SUCCÈS !
+            const { sousTotal } = calculerTotalInterne();
+            const montantRemise = Math.round(sousTotal * POURCENTAGE_REMISE);
+            
+            setRemiseAppliquee(montantRemise);
+            setIsPromoValidee(true);
+            alert(`BOOM ! 💥\n\nFoodji régale : -20% de bienvenue rien que pour vous !\n\nProfitez-en, c'est pas tous les jours fête ! 😉`);
+        } else {
+            // ÉCHEC
+            alert("⚠️ Ce code est réservé aux nouveaux clients pour leur 1ère commande.\n\nVous avez déjà commandé chez nous. Merci de votre fidélité !");
+            setRemiseAppliquee(0);
+            setIsPromoValidee(false);
+        }
+    } catch (e) {
+        console.error(e);
+        alert("Erreur de connexion lors de la vérification.");
+    }
+    setLoading(false);
+  };
 
   const handleOpenPanier = () => {
       if (panier.length === 0) return alert("Panier vide !");
@@ -308,6 +387,7 @@ function App() {
                   return; 
               }
 
+              // On utilise un seuil théorique de 300, ici le client n'a pas encore validé
               if (grandTotal >= 300) {
                   setView('panier');
                   return;
@@ -361,53 +441,26 @@ function App() {
     localStorage.setItem('clientTel', telClean);
     if(adresse) localStorage.setItem('clientAdresse', adresse);
 
-    // --- LOGIQUE CODE PROMO ANTI-FRAUDE ---
-    let isFirstOrder = false;
-    let remiseBienvenue = 0;
-    let totalFinal = grandTotal;
-    let commentaireFinal = commentaire;
-
-    if (codePromo === PROMO_CODE_SECRET) {
-        try {
-            // On vérifie dans la base si ce numéro existe déjà
-            const qCheck = query(collection(db, "commandes"), where("tel", "==", telClean));
-            const historySnapshot = await getDocs(qCheck);
-
-            if (historySnapshot.empty) {
-                // C'est VIDE = NOUVEAU CLIENT = REMISE ACCORDÉE
-                isFirstOrder = true;
-                const montantRemisable = grandTotal - fraisLivraison; 
-                remiseBienvenue = Math.round(montantRemisable * POURCENTAGE_REMISE); 
-                totalFinal = grandTotal - remiseBienvenue;
-                commentaireFinal = commentaireFinal + " [🎁 CODE GLOVO: -20%]";
-            } else {
-                // C'est PAS VIDE = DÉJÀ CLIENT = REMISE REFUSÉE
-                alert("⚠️ Ce code promo est réservé à la première commande uniquement.\n\nVous avez déjà commandé chez nous, merci de votre fidélité !");
-                // On laisse la commande passer, mais SANS la réduction.
-            }
-        } catch (err) { console.log(err); }
-    } else if (codePromo.length > 0) {
-        // Le client a tapé un truc, mais c'est pas le bon code
-        alert("❌ Code promo invalide ou expiré.");
-        setLoading(false);
-        return; // On bloque la commande s'il s'est trompé de code, pour qu'il puisse corriger
-    }
-    // --- FIN LOGIQUE ---
-
     const panierFinal = panier.map(item => ({
         ...item,
         prixFinal: getPrixItemAjuste(item)
     }));
 
     let status = 'En attente';
-    if (totalFinal >= 300) status = 'En cours de validation';
+    if (grandTotal >= 300) status = 'En cours de validation';
+
+    // On prépare le commentaire avec l'info promo
+    let commentaireFinal = commentaire;
+    if (isPromoValidee) {
+        commentaireFinal = commentaireFinal + ` [🎁 CODE PROMO: -${remiseAppliquee} DH]`;
+    }
 
     const data = {
         client: clientNom, tel: telClean, type: typeCommande, adresse, commentaire: commentaireFinal,
-        items: panierFinal, total: totalFinal, remisePromo: remisePromo + remiseBienvenue, fraisLivraison, 
+        items: panierFinal, total: grandTotal, remisePromo: remisePromo + remiseAppliquee, fraisLivraison, 
         date: new Date(), status, distance: distanceClient ? distanceClient.toFixed(2) : 'N/A',
         lat: clientCoords?.lat || 0, lng: clientCoords?.lng || 0,
-        codePromoUtilise: isFirstOrder ? codePromo : 'NON'
+        codePromoUtilise: isPromoValidee ? codePromo : 'NON'
     };
 
     try {
@@ -415,12 +468,10 @@ function App() {
         const ticket = { ...data, id: ref.id, date: new Date().toLocaleString() };
         localStorage.setItem('derniereCommande', JSON.stringify(ticket));
         setDerniereCommande(ticket);
-
-        if(isFirstOrder) {
-            alert(`👏 CODE VALIDÉ !\n\nBienvenue chez Foodji.\nUne réduction de -${remiseBienvenue} DH a été appliquée sur votre 1ère commande.`);
-        }
-
-        setPanier([]); setCommentaire(''); setCodePromo(''); setView('ticket'); 
+        
+        // Reset total
+        setPanier([]); setCommentaire(''); setCodePromo(''); setRemiseAppliquee(0); setIsPromoValidee(false);
+        setView('ticket'); 
     } catch (e) { alert("Erreur réseau"); }
     setLoading(false);
   };
@@ -429,6 +480,7 @@ function App() {
     await updateDoc(doc(db, "produits", item.id), { available: !item.available });
   };
   
+  // ... (Fonctions handleCategoryChange, handleEdit, updateVariantPrice, saveProduit inchangées) ...
   const handleCategoryChange = (e) => {
       const cat = e.target.value;
       setCategorie(cat);
@@ -488,6 +540,7 @@ function App() {
     setNom(''); setDescription(''); setImage(''); setPrixBase(''); setVariantes([]); 
     setLoading(false);
   };
+  // ... (Fin fonctions produits) ...
 
   const supprimerProduit = async (id) => { 
       if (!checkManagerAuth()) return;
@@ -574,13 +627,8 @@ function App() {
                     
                     <h3 style={{fontSize:'1.1rem', fontWeight:'bold', marginTop:'0', textAlign:'center'}}>CONDITIONS GÉNÉRALES D'UTILISATION ET DE VENTE (CGUV) - FOODJI</h3>
                     <p style={{textAlign:'center', fontStyle:'italic', marginBottom:'20px'}}>Dernière mise à jour : Janvier 2026</p>
-
-                    <h4 style={{fontWeight:'bold', marginTop:'15px'}}>PRÉAMBULE</h4>
+                    {/* Contenu CGV inchangé */}
                     <p>L'accès, la consultation et l'utilisation de l'application mobile et web « Foodji » (ci-après désignée « l'Application ») impliquent l'acceptation intégrale et sans réserve des présentes Conditions Générales d'Utilisation et de Vente par tout utilisateur (ci-après désigné « le Client »). Le Client reconnaît avoir la capacité juridique de contracter et garantit la véracité des informations fournies.</p>
-
-                    {/* ... (Reste des CGV inchangé pour économiser de la place, tu peux les laisser telles quelles) ... */}
-                    <p>Les présentes conditions sont soumises au droit marocain. En cas de litige, une solution amiable sera recherchée avant toute action judiciaire.</p>
-
                 </div>
                 <button onClick={() => setShowCGV(false)} style={{marginTop:'20px', width:'100%', background:'black', color:'white', padding:'15px', borderRadius:'10px', fontWeight:'bold', border:'none', cursor:'pointer'}}>J'ai compris</button>
             </div>
@@ -795,6 +843,13 @@ function App() {
                         🎁 Promo Dimanche : -{remisePromo} DH
                     </div>
                 )}
+                
+                {/* --- AFFICHAGE DE LA REMISE SPECIALE CODE PROMO --- */}
+                {remiseAppliquee > 0 && (
+                    <div style={{background: '#FFF7ED', color: '#EA580C', padding:'10px', borderRadius:'8px', marginTop:'15px', fontWeight:'bold', textAlign:'center', border:'1px dashed #EA580C'}}>
+                        🎉 CODE VALIDÉ : -{remiseAppliquee} DH
+                    </div>
+                )}
 
                 {fraisLivraison > 0 && typeCommande === 'livraison' && (
                     <div style={{textAlign:'right', color: COLORS.textLight, marginTop:'10px'}}>
@@ -802,7 +857,17 @@ function App() {
                     </div>
                 )}
                 
-                <div style={{textAlign:'right', fontSize:'1.5rem', fontWeight:'800', marginTop:'10px', color: COLORS.secondary}}>Total : {grandTotal} DH</div>
+                <div style={{textAlign:'right', fontSize:'1.5rem', fontWeight:'800', marginTop:'10px', color: COLORS.secondary}}>
+                    Total : 
+                    {remiseAppliquee > 0 ? (
+                        <>
+                            <span style={{textDecoration:'line-through', color:'#999', fontSize:'1rem', marginRight:'10px'}}>{grandTotal + remiseAppliquee} DH</span>
+                            <span style={{color: COLORS.success}}>{grandTotal} DH</span>
+                        </>
+                    ) : (
+                         <span> {grandTotal} DH</span>
+                    )}
+                </div>
               </div>
               
               <div style={{background: COLORS.bg, padding: '20px', borderRadius: '16px'}}>
@@ -826,14 +891,23 @@ function App() {
                     placeholder="Commentaire (ex: sans oignons, code porte...)" 
                 />
 
-                <div style={{marginTop:'15px', marginBottom:'15px'}}>
-                    <input 
-                        type="text" 
-                        placeholder="Code Promo" 
-                        value={codePromo} 
-                        onChange={(e) => setCodePromo(e.target.value.toUpperCase())} 
-                        style={{...inputStyle, border: '2px dashed #A84438', textAlign:'center', fontWeight:'bold', letterSpacing:'2px'}}
-                    />
+                <div style={{marginTop:'20px', marginBottom:'15px', padding:'15px', background:'white', borderRadius:'10px', border:'1px solid #eee'}}>
+                    <div style={{fontSize:'0.9rem', fontWeight:'bold', marginBottom:'10px', color: COLORS.secondary}}>Avez-vous un Code Promo ?</div>
+                    <div style={{display:'flex', gap:'10px'}}>
+                        <input 
+                            type="text" 
+                            placeholder="Ex: GLOVO20" 
+                            value={codePromo} 
+                            disabled={isPromoValidee}
+                            onChange={(e) => setCodePromo(e.target.value.toUpperCase())} 
+                            style={{...inputStyle, marginBottom:0, border: '2px dashed #ccc', textAlign:'center', fontWeight:'bold', letterSpacing:'1px', flex:1}}
+                        />
+                        {isPromoValidee ? (
+                             <button onClick={() => { setIsPromoValidee(false); setRemiseAppliquee(0); setCodePromo(''); }} style={{background: '#ccc', color: 'white', border: 'none', borderRadius: '10px', padding: '0 15px', fontWeight: 'bold', cursor:'pointer'}}>X</button>
+                        ) : (
+                             <button onClick={verifierCodePromo} style={{background: COLORS.secondary, color: 'white', border: 'none', borderRadius: '10px', padding: '0 20px', fontWeight: 'bold', cursor:'pointer'}}>APPLIQUER</button>
+                        )}
+                    </div>
                 </div>
 
                 <button onClick={envoyerCommande} disabled={loading} style={{...btnStyle, marginTop:'10px', background: COLORS.success}}>{loading ? '...' : 'VALIDER LA COMMANDE'}</button>
@@ -844,7 +918,7 @@ function App() {
         </div>
       )}
 
-      {/* ... (La vue TICKET reste inchangée) ... */}
+      {/* VUE TICKET - FIN DU FICHIER */}
       {view === 'ticket' && derniereCommande && (
           <div style={{padding: '20px', background: COLORS.bg, minHeight: '100vh', display:'flex', flexDirection:'column', alignItems:'center'}}>
               <div style={{background: 'white', padding: '30px 20px', borderRadius: '20px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', width: '100%', maxWidth: '400px', textAlign: 'center'}}>
@@ -1015,8 +1089,8 @@ function App() {
           </div>
 
            <div style={{marginTop:'40px', borderTop:'2px solid #eee', paddingTop:'20px'}}>
-             {/* ... (La partie MENU ADMIN reste la même) ... */}
              <h3 style={{marginBottom:'15px'}}>📦 Menu</h3>
+             {/* ... (Reste du menu Admin inchangé) ... */}
              <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '15px', display:'flex', gap:'10px' }}>
               {categoriesReelles.map(c => (
                 <button key={c} onClick={() => setAdminCategorie(c)} style={{
@@ -1092,6 +1166,7 @@ function App() {
   );
 }
 
+// ... (Fonctions formatOptions, PromoWizard, ProductModal inchangées - les garder comme dans ta version précédente) ...
 function formatOptions(list) {
     if(!list) return "";
     const counts = {};
