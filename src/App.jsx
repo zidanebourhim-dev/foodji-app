@@ -829,7 +829,7 @@ function App() {
                 <div style={{marginTop:'15px', marginBottom:'15px'}}>
                     <input 
                         type="text" 
-                        placeholder="Code Promo (ex: GLOVO20)" 
+                        placeholder="Code Promo" 
                         value={codePromo} 
                         onChange={(e) => setCodePromo(e.target.value.toUpperCase())} 
                         style={{...inputStyle, border: '2px dashed #A84438', textAlign:'center', fontWeight:'bold', letterSpacing:'2px'}}
