@@ -20,7 +20,7 @@ const PHONE_NUMBER = "0537536689";
 const RESTO_COORDS = { lat: 33.997484, lng: -6.735644 }; 
 
 // --- CONFIGURATION DU CODE PROMO ---
-const PROMO_CODE_SECRET = "METS_TON_CODE_ICI"; // <--- ⚠️ REMPLACE CECI PAR TON VRAI CODE (ex: GLOVO20)
+const PROMO_CODE_SECRET = "abracadabra69"; 
 const POURCENTAGE_REMISE = 0.20;     // 20% de réduction
 
 const LISTE_VIANDES = ["Poulet", "Viande Hachée", "Cordon Bleu", "Nuggets", "Poulet Crispy"];
