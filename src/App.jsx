@@ -20,8 +20,8 @@ const PHONE_NUMBER = "0537536689";
 const RESTO_COORDS = { lat: 33.997484, lng: -6.735644 }; 
 
 // --- CONFIGURATION DU CODE PROMO ---
-const PROMO_CODE_SECRET = "ABRACADABRA69";
-const POURCENTAGE_REMISE = 0.20;     
+const PROMO_CODE_SECRET = "METS_TON_CODE_ICI"; // <--- ⚠️ REMPLACE CECI PAR TON VRAI CODE (ex: GLOVO20)
+const POURCENTAGE_REMISE = 0.20;     // 20% de réduction
 
 const LISTE_VIANDES = ["Poulet", "Viande Hachée", "Cordon Bleu", "Nuggets", "Poulet Crispy"];
 const LISTE_GARNITURES_PIZZA = ["Viande Hachée", "Poulet", "4 Fromages", "Cannibale", "Pepperoni", "Thon", "Charcuterie", "Végétarienne", "Fruits de Mer"];
@@ -86,10 +86,10 @@ function App() {
   const [typeCommande, setTypeCommande] = useState('sur_place');
   const [adresse, setAdresse] = useState('');
   
-  // --- NOUVEAUX ÉTATS POUR LE CODE PROMO ---
+  // --- ÉTATS POUR LE CODE PROMO ---
   const [codePromo, setCodePromo] = useState(''); 
-  const [remiseAppliquee, setRemiseAppliquee] = useState(0); // Montant en DH
-  const [isPromoValidee, setIsPromoValidee] = useState(false); // Si le code est bon et vérifié
+  const [remiseAppliquee, setRemiseAppliquee] = useState(0); 
+  const [isPromoValidee, setIsPromoValidee] = useState(false); 
   
   const [distanceClient, setDistanceClient] = useState(null);
   const [clientCoords, setClientCoords] = useState(null);
@@ -139,10 +139,7 @@ function App() {
          setIsPromoValidee(false);
          setCodePromo('');
      } else if (isPromoValidee) {
-         // Recalculer la remise si on ajoute des trucs au panier après avoir mis le code
          const { sousTotal, fraisLivraison } = calculerTotalInterne();
-         const montantRemisable = (sousTotal + (typeCommande === 'livraison' && (sousTotal) < 45 ? 5 : 0)) - (typeCommande === 'livraison' && (sousTotal) < 45 ? 5 : 0);
-         // Simplification : 20% sur le sous-total hors livraison
          const newRemise = Math.round(sousTotal * POURCENTAGE_REMISE);
          setRemiseAppliquee(newRemise);
      }
@@ -227,7 +224,6 @@ function App() {
   };
 
   const handleCSVImport = (e) => {
-    // ... (Code import inchangé)
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
@@ -327,14 +323,14 @@ function App() {
 
   const { remisePromo, fraisLivraison, grandTotal } = calculerTotal();
 
-  // --- NOUVELLE FONCTION : Vérification du code AVANT validation ---
+  // --- FONCTION VÉRIFICATION CODE PROMO ---
   const verifierCodePromo = async () => {
     if (!codePromo.trim()) return alert("Veuillez entrer un code promo.");
     
     // 1. Vérif numéro de téléphone
     const telClean = clientTel.replace(/\s/g, ''); 
     if (!/^(06|07)\d{8}$/.test(telClean)) {
-        return alert("⚠️ Veuillez d'abord entrer un numéro de téléphone valide (06... ou 07...) dans la case ci-dessus pour que nous puissions vérifier votre éligibilité.");
+        return alert("⚠️ Veuillez d'abord entrer un numéro de téléphone valide (06... ou 07...) dans la case ci-dessus.");
     }
 
     if (codePromo.toUpperCase() !== PROMO_CODE_SECRET) {
@@ -348,16 +344,13 @@ function App() {
         const historySnapshot = await getDocs(qCheck);
 
         if (historySnapshot.empty) {
-            // SUCCÈS !
             const { sousTotal } = calculerTotalInterne();
             const montantRemise = Math.round(sousTotal * POURCENTAGE_REMISE);
-            
             setRemiseAppliquee(montantRemise);
             setIsPromoValidee(true);
-            alert(`BOOM ! 💥\n\nFoodji régale : -20% de bienvenue rien que pour vous !\n\nProfitez-en, c'est pas tous les jours fête ! 😉`);
+            alert(`BOOM ! 💥\n\nFoodji régale : -20% de bienvenue rien que pour vous !`);
         } else {
-            // ÉCHEC
-            alert("⚠️ Ce code est réservé aux nouveaux clients pour leur 1ère commande.\n\nVous avez déjà commandé chez nous. Merci de votre fidélité !");
+            alert("⚠️ Ce code est réservé aux nouveaux clients pour leur 1ère commande.");
             setRemiseAppliquee(0);
             setIsPromoValidee(false);
         }
@@ -387,7 +380,6 @@ function App() {
                   return; 
               }
 
-              // On utilise un seuil théorique de 300, ici le client n'a pas encore validé
               if (grandTotal >= 300) {
                   setView('panier');
                   return;
@@ -469,6 +461,10 @@ function App() {
         localStorage.setItem('derniereCommande', JSON.stringify(ticket));
         setDerniereCommande(ticket);
         
+        if(isPromoValidee) {
+            alert(`👏 COMMANDE VALIDÉE AVEC LA REMISE !\n\nBienvenue chez Foodji !`);
+        }
+
         // Reset total
         setPanier([]); setCommentaire(''); setCodePromo(''); setRemiseAppliquee(0); setIsPromoValidee(false);
         setView('ticket'); 
@@ -480,7 +476,6 @@ function App() {
     await updateDoc(doc(db, "produits", item.id), { available: !item.available });
   };
   
-  // ... (Fonctions handleCategoryChange, handleEdit, updateVariantPrice, saveProduit inchangées) ...
   const handleCategoryChange = (e) => {
       const cat = e.target.value;
       setCategorie(cat);
@@ -540,7 +535,6 @@ function App() {
     setNom(''); setDescription(''); setImage(''); setPrixBase(''); setVariantes([]); 
     setLoading(false);
   };
-  // ... (Fin fonctions produits) ...
 
   const supprimerProduit = async (id) => { 
       if (!checkManagerAuth()) return;
@@ -616,24 +610,108 @@ function App() {
           </div>
       )}
 
+      {/* --- CORRECTION CGV SCROLL MOBILE --- */}
       {showCGV && (
-        <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.85)', zIndex:3000, display:'flex', alignItems:'center', justifyContent:'center', padding:'20px'}}>
-            <div style={{background:'white', width:'100%', maxWidth:'600px', borderRadius:'15px', padding:'25px', maxHeight:'85vh', overflowY:'auto', boxShadow:'0 20px 50px rgba(0,0,0,0.5)'}}>
-                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'15px', borderBottom:'1px solid #eee', paddingBottom:'10px'}}>
+        <div style={{
+            position:'fixed', top:0, left:0, width:'100%', height:'100%', 
+            background:'rgba(0,0,0,0.85)', zIndex:3000, 
+            display:'flex', alignItems:'center', justifyContent:'center', padding:'20px'
+        }}>
+            <div style={{
+                background:'white', width:'100%', maxWidth:'600px', borderRadius:'15px', 
+                maxHeight:'85vh', boxShadow:'0 20px 50px rgba(0,0,0,0.5)',
+                display: 'flex', flexDirection: 'column', overflow: 'hidden' 
+            }}>
+                <div style={{
+                    display:'flex', justifyContent:'space-between', alignItems:'center', 
+                    padding:'20px 25px', borderBottom:'1px solid #eee', background:'white', zIndex:10
+                }}>
                     <h2 style={{margin:0, fontSize:'1.2rem'}}>Conditions Générales</h2>
-                    <button onClick={() => setShowCGV(false)} style={{border:'none', background:'transparent', fontSize:'1.5rem', fontWeight:'bold', cursor:'pointer'}}>×</button>
+                    <button onClick={() => setShowCGV(false)} style={{border:'none', background:'transparent', fontSize:'1.5rem', fontWeight:'bold', cursor:'pointer', padding:'0 10px'}}>×</button>
                 </div>
-                <div style={{fontSize:'0.9rem', lineHeight:'1.6', color:'#333', textAlign:'justify'}}>
-                    
-                    <h3 style={{fontSize:'1.1rem', fontWeight:'bold', marginTop:'0', textAlign:'center'}}>CONDITIONS GÉNÉRALES D'UTILISATION ET DE VENTE (CGUV) - FOODJI</h3>
-                    <p style={{textAlign:'center', fontStyle:'italic', marginBottom:'20px'}}>Dernière mise à jour : Janvier 2026</p>
-                    {/* Contenu CGV inchangé */}
-                    <p>L'accès, la consultation et l'utilisation de l'application mobile et web « Foodji » (ci-après désignée « l'Application ») impliquent l'acceptation intégrale et sans réserve des présentes Conditions Générales d'Utilisation et de Vente par tout utilisateur (ci-après désigné « le Client »). Le Client reconnaît avoir la capacité juridique de contracter et garantit la véracité des informations fournies.</p>
+
+                <div style={{
+                    padding:'0 25px', 
+                    overflowY:'auto', 
+                    flex: 1, 
+                    WebkitOverflowScrolling: 'touch' 
+                }}>
+                    <div style={{fontSize:'0.9rem', lineHeight:'1.6', color:'#333', textAlign:'justify', paddingBottom:'20px', paddingTop:'20px'}}>
+                        
+                        <h3 style={{fontSize:'1.1rem', fontWeight:'bold', marginTop:'0', textAlign:'center'}}>CONDITIONS GÉNÉRALES D'UTILISATION ET DE VENTE (CGUV) - FOODJI</h3>
+                        <p style={{textAlign:'center', fontStyle:'italic', marginBottom:'20px'}}>Dernière mise à jour : Janvier 2026</p>
+
+                        <h4 style={{fontWeight:'bold', marginTop:'15px'}}>PRÉAMBULE</h4>
+                        <p>L'accès, la consultation et l'utilisation de l'application mobile et web « Foodji » (ci-après désignée « l'Application ») impliquent l'acceptation intégrale et sans réserve des présentes Conditions Générales d'Utilisation et de Vente par tout utilisateur (ci-après désigné « le Client »). Le Client reconnaît avoir la capacité juridique de contracter et garantit la véracité des informations fournies.</p>
+
+                        <h4 style={{fontWeight:'bold', marginTop:'15px'}}>ARTICLE 1 : OBJET ET CHAMP D'APPLICATION</h4>
+                        <p>Les présentes conditions régissent exclusivement les relations contractuelles entre le restaurant Foodji, situé à Sala Al Jadida (ci-après « le Vendeur »), et toute personne passant commande via l'Application. Elles prévalent sur tout autre document ou condition non expressément agréé par le Vendeur. Foodji se réserve le droit de modifier ces conditions à tout moment ; les conditions applicables sont celles en vigueur à la date de validation de la commande.</p>
+
+                        <h4 style={{fontWeight:'bold', marginTop:'15px'}}>ARTICLE 2 : ACCÈS AU SERVICE ET GÉOLOCALISATION</h4>
+                        <p><strong>2.1.</strong> L'utilisation du service de commande en livraison nécessite impérativement l'activation de la fonction de géolocalisation (GPS) sur le terminal du Client.</p>
+                        <p><strong>2.2.</strong> Le Vendeur a mis en place un système de restriction géographique strict. Le Client reconnaît et accepte que :</p>
+                        <ul style={{paddingLeft:'20px', margin:'5px 0'}}>
+                            <li>Aucune commande en livraison ne pourra être validée si la position GPS du Client se situe au-delà d'un rayon de 10 kilomètres (distance à vol d'oiseau ou routière selon l'algorithme du Vendeur) du restaurant.</li>
+                            <li>Toute tentative de contournement des systèmes de géolocalisation (VPN, fausse localisation) entraînera l'annulation immédiate de la commande et le bannissement du compte utilisateur.</li>
+                        </ul>
+
+                        <h4 style={{fontWeight:'bold', marginTop:'15px'}}>ARTICLE 3 : PRODUITS ET DISPONIBILITÉ</h4>
+                        <p><strong>3.1.</strong> Les produits proposés sont ceux qui figurent dans le menu de l'Application au jour de la commande, dans la limite des stocks disponibles.</p>
+                        <p><strong>3.2.</strong> Photographies non contractuelles : Les photographies et illustrations présentées sur l'Application ont une valeur purement indicative et n'entrent pas dans le champ contractuel. La responsabilité de Foodji ne saurait être engagée si des différences visuelles existent entre le produit photographié et le produit livré.</p>
+                        <p><strong>3.3.</strong> En cas d'indisponibilité d'un produit après passation de la commande, le Client en sera informé par téléphone. Il lui sera proposé soit un produit de substitution de valeur équivalente, soit l'annulation de l'article concerné.</p>
+
+                        <h4 style={{fontWeight:'bold', marginTop:'15px'}}>ARTICLE 4 : COMMANDE ET VALIDATION</h4>
+                        <p><strong>4.1.</strong> La validation finale de la commande via le bouton « VALIDER » vaut preuve de l'intégralité de la commande et exigibilité des sommes dues.</p>
+                        <p><strong>4.2.</strong> Seuils de commande et Sécurité :</p>
+                        <ul style={{paddingLeft:'20px', margin:'5px 0'}}>
+                            <li>Pour toute commande dont le montant total excède 300,00 DH (Trois cents Dirhams), une procédure de validation manuelle est déclenchée. Le Client doit impérativement être joignable sur le numéro de téléphone renseigné. À défaut de réponse du Client lors de l'appel de vérification effectué par le Vendeur, la commande sera purement et simplement annulée et ne sera pas mise en préparation.</li>
+                        </ul>
+                        <p><strong>4.3.</strong> Le Vendeur se réserve le droit de refuser ou d'annuler toute commande d'un Client avec lequel il existerait un litige relatif au paiement d'une commande antérieure ou qui présenterait un comportement inapproprié envers le personnel.</p>
+
+                        <h4 style={{fontWeight:'bold', marginTop:'15px'}}>ARTICLE 5 : ZONES, FRAIS ET CONDITIONS DE LIVRAISON</h4>
+                        <p><strong>5.1.</strong> Les frais et conditions de livraison varient dynamiquement en fonction de la distance calculée par l'Application :</p>
+                        <ul style={{paddingLeft:'20px', margin:'5px 0'}}>
+                            <li><strong>Zone 1 (0 à 4 km) :</strong> Aucun minimum de commande n'est requis.</li>
+                            <li><strong>Zone 2 (4 à 10 km) :</strong> Un minimum de commande strict de 300,00 DH est exigé. En deçà de ce montant, la livraison est techniquement impossible.</li>
+                        </ul>
+                        <p><strong>5.2.</strong> Zones Spéciales (Surcharge) : Le Client est informé que certaines zones spécifiques, incluant sans s'y limiter le campus de l'UIR, Technopolis, et UM6P, font l'objet d'une tarification spéciale appliquée par les prestataires de livraison tiers. Un supplément (généralement compris entre 10 et 15 DH) pourra être réclamé directement par le livreur lors de la remise de la commande. Le Client accepte cette surcharge en validant sa commande à destination de ces lieux.</p>
+                        <p><strong>5.3.</strong> Les délais de livraison indiqués dans l'Application ou par téléphone sont donnés à titre indicatif et correspondent aux délais moyens de traitement et de livraison. Foodji ne pourra être tenu responsable des conséquences dues à un retard d'acheminement (intempéries, trafic, panne, force majeure). Un retard de livraison ne peut donner lieu à aucune indemnité ni annulation de la commande une fois celle-ci préparée.</p>
+
+                        <h4 style={{fontWeight:'bold', marginTop:'15px'}}>ARTICLE 6 : PRIX ET MODALITÉS DE PAIEMENT</h4>
+                        <p><strong>6.1.</strong> Les prix sont indiqués en Dirhams Marocains (MAD) toutes taxes comprises (TTC).</p>
+                        <p><strong>6.2.</strong> Le paiement s'effectue intégralement au moment de la réception de la commande (livraison ou emporter), soit en espèces, soit par tout autre moyen accepté par le livreur (virement instantané sous réserve d'acceptation).</p>
+                        <p><strong>6.3.</strong> Le Client s'engage à faire l'appoint en cas de paiement en espèces. Le livreur n'est pas tenu d'avoir la monnaie sur des coupures importantes si cela n'a pas été précisé en commentaire.</p>
+
+                        <h4 style={{fontWeight:'bold', marginTop:'15px'}}>ARTICLE 7 : ABSENCE DE DROIT DE RÉTRACTATION</h4>
+                        <p>Conformément à la législation en vigueur relative à la vente de denrées périssables et de produits confectionnés selon les spécifications du consommateur ou nettement personnalisés, le Client ne dispose d'aucun droit de rétractation. Toute commande validée et mise en préparation est due dans son intégralité. En cas de refus de la marchandise à la livraison sans motif légitime (erreur de commande imputable au Vendeur), le montant de la commande reste exigible.</p>
+
+                        <h4 style={{fontWeight:'bold', marginTop:'15px'}}>ARTICLE 8 : HORAIRES D'OUVERTURE ET AFFLUENCE (RUSH)</h4>
+                        <p><strong>8.1.</strong> Le service de commande est ouvert exclusivement durant les plages horaires définies par le Vendeur (par défaut 12h00 à 23h00). Toute tentative de commande hors de ces créneaux sera techniquement bloquée.</p>
+                        <p><strong>8.2.</strong> Périodes de forte affluence ("Rush") : Le Client reconnaît qu'en période de forte demande, le Vendeur peut être amené à suspendre temporairement les commandes ou à allonger les délais de livraison. En acceptant de commander durant une période signalée comme « Rush », le Client renonce expressément à toute réclamation liée à la durée d'attente.</p>
+
+                        <h4 style={{fontWeight:'bold', marginTop:'15px'}}>ARTICLE 9 : RESPONSABILITÉ ET ALLERGÈNES</h4>
+                        <p><strong>9.1.</strong> Les produits proposés sont conformes à la législation alimentaire marocaine en vigueur.</p>
+                        <p><strong>9.2.</strong> Allergies : Il relève de la responsabilité exclusive du Client de se renseigner sur la composition des plats et de signaler toute allergie ou intolérance alimentaire dans le champ « Commentaire » prévu à cet effet avant la validation. Foodji décline toute responsabilité en cas de réaction allergique si le Client n'a pas expressément signalé sa condition ou s'il a consommé un produit malgré la présence d'allergènes connus.</p>
+
+                        <h4 style={{fontWeight:'bold', marginTop:'15px'}}>ARTICLE 10 : DONNÉES PERSONNELLES ET COMPORTEMENT</h4>
+                        <p><strong>10.1.</strong> Les données collectées (nom, adresse, téléphone, géolocalisation) sont nécessaires au traitement de la commande.</p>
+                        <p><strong>10.2.</strong> Foodji se réserve le droit de bloquer définitivement l'adresse IP et le numéro de téléphone de tout utilisateur ayant passé une commande « fantôme » (client absent à la livraison, refus de paiement, fausse adresse) ou ayant tenu des propos injurieux envers le personnel ou les livreurs.</p>
+
+                        <h4 style={{fontWeight:'bold', marginTop:'15px'}}>ARTICLE 11 : DROIT APPLICABLE</h4>
+                        <p>Les présentes conditions sont soumises au droit marocain. En cas de litige, une solution amiable sera recherchée avant toute action judiciaire.</p>
+
+                    </div>
                 </div>
-                <button onClick={() => setShowCGV(false)} style={{marginTop:'20px', width:'100%', background:'black', color:'white', padding:'15px', borderRadius:'10px', fontWeight:'bold', border:'none', cursor:'pointer'}}>J'ai compris</button>
+
+                <div style={{
+                    padding:'20px 25px', borderTop:'1px solid #eee', background:'white', zIndex:10
+                }}>
+                    <button onClick={() => setShowCGV(false)} style={{width:'100%', background:'black', color:'white', padding:'15px', borderRadius:'10px', fontWeight:'bold', border:'none', cursor:'pointer'}}>J'ai compris</button>
+                </div>
             </div>
         </div>
       )}
+      {/* --- FIN CORRECTION --- */}
 
       {view === 'landing' && (
         <div style={{
@@ -918,7 +996,6 @@ function App() {
         </div>
       )}
 
-      {/* VUE TICKET - FIN DU FICHIER */}
       {view === 'ticket' && derniereCommande && (
           <div style={{padding: '20px', background: COLORS.bg, minHeight: '100vh', display:'flex', flexDirection:'column', alignItems:'center'}}>
               <div style={{background: 'white', padding: '30px 20px', borderRadius: '20px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', width: '100%', maxWidth: '400px', textAlign: 'center'}}>
@@ -1090,7 +1167,6 @@ function App() {
 
            <div style={{marginTop:'40px', borderTop:'2px solid #eee', paddingTop:'20px'}}>
              <h3 style={{marginBottom:'15px'}}>📦 Menu</h3>
-             {/* ... (Reste du menu Admin inchangé) ... */}
              <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '15px', display:'flex', gap:'10px' }}>
               {categoriesReelles.map(c => (
                 <button key={c} onClick={() => setAdminCategorie(c)} style={{
@@ -1166,7 +1242,6 @@ function App() {
   );
 }
 
-// ... (Fonctions formatOptions, PromoWizard, ProductModal inchangées - les garder comme dans ta version précédente) ...
 function formatOptions(list) {
     if(!list) return "";
     const counts = {};
