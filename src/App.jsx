@@ -8,6 +8,7 @@ import {
   doc, 
   deleteDoc, 
   updateDoc, 
+  setDoc,
   query, 
   writeBatch,
   getDocs, 
@@ -77,7 +78,9 @@ function App() {
   
   const [categorieActive, setCategorieActive] = useState(''); 
   const [adminCategorie, setAdminCategorie] = useState(''); 
-  const [rushMode, setRushMode] = useState(localStorage.getItem('rushMode') || 'standard');
+  
+  // CORRECTION RUSH MODE : On initialise à 'standard' par défaut
+  const [rushMode, setRushMode] = useState('standard');
 
   const [panier, setPanier] = useState([]);
   const [clientNom, setClientNom] = useState('');
@@ -153,9 +156,18 @@ function App() {
       }
   }, [clientTel]);
 
+  // CORRECTION RUSH MODE : Écouteur Firebase en temps réel au lieu de localStorage
   useEffect(() => {
-      localStorage.setItem('rushMode', rushMode);
-  }, [rushMode]);
+    const unsub = onSnapshot(doc(db, "parametres", "status"), (docSnap) => {
+      if (docSnap.exists()) {
+        setRushMode(docSnap.data().mode);
+      } else {
+        // Si le document n'existe pas encore, on le crée
+        setDoc(doc(db, "parametres", "status"), { mode: 'standard' });
+      }
+    });
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (u) => { setUser(u); });
@@ -1072,13 +1084,14 @@ function App() {
           <div style={{background: 'white', padding: '15px', borderRadius: '16px', marginBottom: '30px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)'}}>
               <h3 style={{marginTop:0, marginBottom:'15px', fontSize:'1rem'}}>Gestion du Rush (Message Client)</h3>
               <div style={{display:'flex', gap:'10px', flexWrap:'wrap'}}>
-                  <button onClick={() => setRushMode('standard')} style={{flex:1, padding:'12px', borderRadius:'10px', border: rushMode === 'standard' ? `2px solid ${COLORS.success}` : '1px solid #ddd', background: rushMode === 'standard' ? '#ECFDF5' : 'white', color: rushMode === 'standard' ? COLORS.success : 'black', fontWeight:'bold', cursor:'pointer'}}>
+                  {/* CORRECTION RUSH MODE : Utilisation de updateDoc au lieu de setRushMode local */}
+                  <button onClick={() => updateDoc(doc(db, "parametres", "status"), { mode: 'standard' })} style={{flex:1, padding:'12px', borderRadius:'10px', border: rushMode === 'standard' ? `2px solid ${COLORS.success}` : '1px solid #ddd', background: rushMode === 'standard' ? '#ECFDF5' : 'white', color: rushMode === 'standard' ? COLORS.success : 'black', fontWeight:'bold', cursor:'pointer'}}>
                       ✅ Standard
                   </button>
-                  <button onClick={() => setRushMode('rush')} style={{flex:1, padding:'12px', borderRadius:'10px', border: rushMode === 'rush' ? `2px solid ${COLORS.warning}` : '1px solid #ddd', background: rushMode === 'rush' ? '#FFFBEB' : 'white', color: rushMode === 'rush' ? COLORS.warning : 'black', fontWeight:'bold', cursor:'pointer'}}>
+                  <button onClick={() => updateDoc(doc(db, "parametres", "status"), { mode: 'rush' })} style={{flex:1, padding:'12px', borderRadius:'10px', border: rushMode === 'rush' ? `2px solid ${COLORS.warning}` : '1px solid #ddd', background: rushMode === 'rush' ? '#FFFBEB' : 'white', color: rushMode === 'rush' ? COLORS.warning : 'black', fontWeight:'bold', cursor:'pointer'}}>
                       ⚠️ Rush (45min)
                   </button>
-                  <button onClick={() => setRushMode('gros_rush')} style={{flex:1, padding:'12px', borderRadius:'10px', border: rushMode === 'gros_rush' ? `2px solid ${COLORS.danger}` : '1px solid #ddd', background: rushMode === 'gros_rush' ? '#FEF2F2' : 'white', color: rushMode === 'gros_rush' ? COLORS.danger : 'black', fontWeight:'bold', cursor:'pointer'}}>
+                  <button onClick={() => updateDoc(doc(db, "parametres", "status"), { mode: 'gros_rush' })} style={{flex:1, padding:'12px', borderRadius:'10px', border: rushMode === 'gros_rush' ? `2px solid ${COLORS.danger}` : '1px solid #ddd', background: rushMode === 'gros_rush' ? '#FEF2F2' : 'white', color: rushMode === 'gros_rush' ? COLORS.danger : 'black', fontWeight:'bold', cursor:'pointer'}}>
                       🔥 Gros Rush (1h+)
                   </button>
               </div>
@@ -1129,7 +1142,7 @@ function App() {
                           </span>
                           <strong style={{fontSize:'1.1rem'}}>{it.nom}</strong>
                       </div>
-                      <div style={{display:'flex', justifyContent:'space-between', color: COLORS.secondary}}>
+                      <div style={{display:'flex', justifyContent:'space-between', color: COLORS.secondary'}}>
                           <span>
                               {it.choixPates && <strong style={{color: COLORS.primary, marginRight:'5px'}}>{it.choixPates}</strong>}
                               {it.varianteNom && <strong style={{color: COLORS.secondary, fontSize:'0.95rem'}}>({it.varianteNom})</strong>}
