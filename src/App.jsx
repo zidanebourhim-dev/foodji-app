@@ -1,3 +1,4 @@
+// VERSION FINAL FIX - FORCE UPDATE
 import { useState, useEffect, useRef } from 'react';
 import { db, auth } from './firebase';
 import { signInWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
