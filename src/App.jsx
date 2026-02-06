@@ -1,4 +1,4 @@
-// VERSION FINAL FIX - FORCE UPDATE
+// VERSION ULTRA FINAL - FIXED ADMIN BUG
 import { useState, useEffect, useRef } from 'react';
 import { db, auth } from './firebase';
 import { signInWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
@@ -1271,7 +1271,7 @@ function App() {
                           </span>
                           <strong style={{fontSize:'1.1rem'}}>{it.nom}</strong>
                       </div>
-                      <div style={{display:'flex', justifyContent:'space-between', color: COLORS.secondary'}}>
+                      <div style={{display:'flex', justifyContent:'space-between', color: COLORS.secondary}}>
                           <span>
                               {it.choixPates && <strong style={{color: COLORS.primary, marginRight:'5px'}}>{it.choixPates}</strong>}
                               {it.varianteNom && <strong style={{color: COLORS.secondary, fontSize:'0.95rem'}}>({it.varianteNom})</strong>}
