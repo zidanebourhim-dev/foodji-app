@@ -14,15 +14,75 @@ import {
   getDocs, 
   where 
 } from 'firebase/firestore';
+import { Helmet, HelmetProvider } from 'react-helmet-async';
 import './App.css';
 
-const CODE_MANAGER = "1234"; 
 const PHONE_NUMBER = "0537536689"; 
 const RESTO_COORDS = { lat: 33.997484, lng: -6.735644 }; 
 
-// --- CONFIGURATION DU CODE PROMO ---
-const PROMO_CODE_SECRET = "abracadabra69"; 
-const POURCENTAGE_REMISE = 0.20;     // 20% de réduction
+const COLORS = {
+  primary: '#A84438',    
+  secondary: '#1A1E29',  
+  bg: '#F3F4F6',        
+  card: '#FFFFFF',        
+  success: '#10B981',
+  danger: '#EF4444',
+  warning: '#F59E0B',
+  promo: '#D97706',    
+  textLight: '#6B7280',
+  pending: '#F97316' 
+};
+
+const seoConfig = {
+  title: "Foodji - Le Fait Maison à Sala Al Jadida | Burgers & Tacos (Jusqu'à 2h)",
+  description: "Arrêtez de payer cher pour du surgelé. Chez Foodji, découvrez le vrai goût du Fait Maison : Burgers et Tacos haute qualité à prix accessible. Livraison sur Sala Al Jadida jusqu'à 2h du matin !",
+  keywords: "restaurant sala al jadida, livraison burger, tacos technopolis, cuisine minute, uir, pizza nuit, fait maison",
+  image: "https://foodji.ma/promo.jpg",
+  url: "https://foodji.ma"
+};
+
+const structuredData = {
+  "@context": "https://schema.org",
+  "@type": "Restaurant",
+  "name": "Foodji",
+  "image": seoConfig.image,
+  "description": "Foodji propose une cuisine minute à Sala Al Jadida avec une promesse simple : du Fait Maison et de la haute qualité à prix moyen. Burgers gourmets, Tacos gratinés et Pizzas préparés à la commande.",
+  "address": {
+    "@type": "PostalAddress",
+    "addressLocality": "Sala Al Jadida",
+    "addressRegion": "Rabat-Salé-Kénitra",
+    "addressCountry": "MA"
+  },
+  "geo": {
+    "@type": "GeoCoordinates",
+    "latitude": 33.997484,
+    "longitude": -6.735644
+  },
+  "url": seoConfig.url,
+  "telephone": "+212537536689",
+  "priceRange": "$$",
+  "servesCuisine": ["Burger", "Tacos", "Pizza", "Cuisine Minute"],
+  "openingHoursSpecification": [
+    {
+      "@type": "OpeningHoursSpecification",
+      "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday"],
+      "opens": "12:00",
+      "closes": "01:00"
+    },
+    {
+      "@type": "OpeningHoursSpecification",
+      "dayOfWeek": ["Friday"],
+      "opens": "12:00",
+      "closes": "02:00"
+    },
+    {
+      "@type": "OpeningHoursSpecification",
+      "dayOfWeek": ["Saturday", "Sunday"],
+      "opens": "18:00",
+      "closes": "02:00"
+    }
+  ]
+};
 
 const LISTE_VIANDES = ["Poulet", "Viande Hachée", "Cordon Bleu", "Nuggets", "Poulet Crispy"];
 const LISTE_GARNITURES_PIZZA = ["Viande Hachée", "Poulet", "4 Fromages", "Cannibale", "Pepperoni", "Thon", "Charcuterie", "Végétarienne", "Fruits de Mer"];
@@ -46,18 +106,8 @@ const logoImg = "/logo.png";
 const iconImg = "/icon.png";
 const promoImg = "/promo.jpg"; 
 
-const COLORS = {
-  primary: '#A84438',    
-  secondary: '#1A1E29',  
-  bg: '#F3F4F6',        
-  card: '#FFFFFF',        
-  success: '#10B981',
-  danger: '#EF4444',
-  warning: '#F59E0B',
-  promo: '#D97706',    
-  textLight: '#6B7280',
-  pending: '#F97316' 
-};
+const WELCOME_TOKEN_REF = "START2026"; 
+const POURCENTAGE_REMISE = 0.20;
 
 function App() {
   const [user, setUser] = useState(null);
@@ -79,7 +129,6 @@ function App() {
   const [categorieActive, setCategorieActive] = useState(''); 
   const [adminCategorie, setAdminCategorie] = useState(''); 
   
-  // CORRECTION RUSH MODE : On initialise à 'standard' par défaut
   const [rushMode, setRushMode] = useState('standard');
 
   const [panier, setPanier] = useState([]);
@@ -89,7 +138,6 @@ function App() {
   const [typeCommande, setTypeCommande] = useState('sur_place');
   const [adresse, setAdresse] = useState('');
   
-  // --- ÉTATS POUR LE CODE PROMO ---
   const [codePromo, setCodePromo] = useState(''); 
   const [remiseAppliquee, setRemiseAppliquee] = useState(0); 
   const [isPromoValidee, setIsPromoValidee] = useState(false); 
@@ -111,6 +159,11 @@ function App() {
   const [categorie, setCategorie] = useState('Burgers');
   const [prixBase, setPrixBase] = useState('');
   const [variantes, setVariantes] = useState([]); 
+  
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [showIosInstall, setShowIosInstall] = useState(false);
+
+  const SYNC_ID_VERSION = "053700";
 
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
       const R = 6371; 
@@ -135,20 +188,18 @@ function App() {
       if (savedTicket) setDerniereCommande(JSON.parse(savedTicket));
   }, []);
 
-  // Reset de la promo si le panier change ou si on vide
   useEffect(() => {
      if (panier.length === 0) {
          setRemiseAppliquee(0);
          setIsPromoValidee(false);
          setCodePromo('');
      } else if (isPromoValidee) {
-         const { sousTotal, fraisLivraison } = calculerTotalInterne();
+         const { sousTotal } = calculerTotalInterne();
          const newRemise = Math.round(sousTotal * POURCENTAGE_REMISE);
          setRemiseAppliquee(newRemise);
      }
   }, [panier, typeCommande]);
 
-  // Si l'utilisateur change son numéro, on annule la promo par sécurité
   useEffect(() => {
       if (isPromoValidee) {
           setIsPromoValidee(false);
@@ -156,13 +207,11 @@ function App() {
       }
   }, [clientTel]);
 
-  // CORRECTION RUSH MODE : Écouteur Firebase en temps réel
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "parametres", "status"), (docSnap) => {
       if (docSnap.exists()) {
         setRushMode(docSnap.data().mode);
       } else {
-        // Si le document n'existe pas encore, on le crée
         setDoc(doc(db, "parametres", "status"), { mode: 'standard' });
       }
     });
@@ -195,6 +244,38 @@ function App() {
     return () => { unsubscribeAuth(); unsubscribeMenu(); unsubscribeCmd(); };
   }, [user]);
 
+  useEffect(() => {
+    const handler = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+
+    const isIos = /iPhone|iPad|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isStandalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
+    const hasRefused = localStorage.getItem('iosInstallRefused');
+
+    if (isIos && !isStandalone && !hasRefused) {
+        setShowIosInstall(true);
+    }
+
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
+    }
+  };
+
+  const closeIosInstall = () => {
+      setShowIosInstall(false);
+      localStorage.setItem('iosInstallRefused', 'true');
+  };
+
   const categoriesReelles = [...new Set(menu.map(p => p.categorie))];
   const categoriesSelectAdmin = [...new Set([...TOUTES_CATEGORIES, ...categoriesReelles])];
 
@@ -226,7 +307,7 @@ function App() {
 
   const checkManagerAuth = () => {
       const code = prompt("🔒 Code Manager requis :");
-      if (code === CODE_MANAGER) return true;
+      if (code === SYNC_ID_VERSION) return true;
       alert("❌ Code incorrect !");
       return false;
   };
@@ -307,7 +388,6 @@ function App() {
       return prix;
   };
 
-  // Fonction utilitaire pour éviter duplication
   const calculerTotalInterne = () => {
       let sousTotal = 0, pizzas = [];
       panier.forEach(item => {
@@ -326,7 +406,6 @@ function App() {
 
   const calculerTotal = () => {
       const { sousTotal, remisePromoSysteme, fraisLivraison } = calculerTotalInterne();
-      // On déduit la remise Code Promo si elle existe
       const totalAvantRemiseCode = (sousTotal - remisePromoSysteme) + fraisLivraison;
       const totalFinal = Math.max(0, totalAvantRemiseCode - remiseAppliquee);
       
@@ -335,23 +414,20 @@ function App() {
 
   const { remisePromo, fraisLivraison, grandTotal } = calculerTotal();
 
-  // --- FONCTION VÉRIFICATION CODE PROMO ---
   const verifierCodePromo = async () => {
     if (!codePromo.trim()) return alert("Veuillez entrer un code promo.");
     
-    // 1. Vérif numéro de téléphone
     const telClean = clientTel.replace(/\s/g, ''); 
     if (!/^(06|07)\d{8}$/.test(telClean)) {
         return alert("⚠️ Veuillez d'abord entrer un numéro de téléphone valide (06... ou 07...) dans la case ci-dessus.");
     }
 
-    if (codePromo.toUpperCase() !== PROMO_CODE_SECRET) {
+    if (codePromo.toUpperCase() !== WELCOME_TOKEN_REF) {
         return alert("❌ Code promo invalide ou expiré.");
     }
 
     setLoading(true);
     try {
-        // 2. Vérif historique
         const qCheck = query(collection(db, "commandes"), where("tel", "==", telClean));
         const historySnapshot = await getDocs(qCheck);
 
@@ -404,8 +480,11 @@ function App() {
 
           }, (error) => {
               setGpsLoading(false);
-              if (grandTotal >= 300) setView('panier'); 
-              else alert("⚠️ La géolocalisation est OBLIGATOIRE.");
+              if (error.code === 1) {
+                  alert("⚠️ Localisation bloquée.\n\nPour vérifier que vous êtes à Sala Al Jadida, veuillez l'activer dans vos Réglages > Confidentialité > Services de localisation.");
+              } else {
+                  alert("⚠️ Impossible de vérifier votre position. Veuillez réessayer.");
+              }
           });
       } else {
           setGpsLoading(false);
@@ -453,7 +532,6 @@ function App() {
     let status = 'En attente';
     if (grandTotal >= 300) status = 'En cours de validation';
 
-    // On prépare le commentaire avec l'info promo
     let commentaireFinal = commentaire;
     if (isPromoValidee) {
         commentaireFinal = commentaireFinal + ` [🎁 CODE PROMO: -${remiseAppliquee} DH]`;
@@ -477,7 +555,6 @@ function App() {
             alert(`👏 COMMANDE VALIDÉE AVEC LA REMISE !\n\nBienvenue chez Foodji !`);
         }
 
-        // Reset total
         setPanier([]); setCommentaire(''); setCodePromo(''); setRemiseAppliquee(0); setIsPromoValidee(false);
         setView('ticket'); 
     } catch (e) { alert("Erreur réseau"); }
@@ -607,8 +684,23 @@ function App() {
   };
 
   return (
+    <HelmetProvider>
     <div style={{ background: COLORS.bg, minHeight: '100vh', paddingBottom: '100px', color: COLORS.secondary }}>
       
+      <Helmet>
+        <title>{seoConfig.title}</title>
+        <meta name="description" content={seoConfig.description} />
+        <meta name="keywords" content={seoConfig.keywords} />
+        <meta property="og:title" content="Foodji - La Faim n'attend pas !" />
+        <meta property="og:description" content={seoConfig.description} />
+        <meta property="og:image" content={seoConfig.image} />
+        <meta property="og:url" content={seoConfig.url} />
+        <meta property="og:type" content="restaurant.menu" />
+        <script type="application/ld+json">
+          {JSON.stringify(structuredData)}
+        </script>
+      </Helmet>
+
       {showDistanceBlocker && (
           <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.95)', zIndex:9999, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'30px', color:'white', textAlign:'center'}}>
               <div style={{fontSize:'4rem', marginBottom:'20px'}}>⛔</div>
@@ -622,7 +714,35 @@ function App() {
           </div>
       )}
 
-      {/* --- CORRECTION CGV SCROLL MOBILE --- */}
+      {showIosInstall && (
+        <div style={{
+            position: 'fixed', bottom: 0, left: 0, width: '100%',
+            background: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(10px)',
+            borderTopLeftRadius: '20px', borderTopRightRadius: '20px',
+            boxShadow: '0 -5px 20px rgba(0,0,0,0.1)', padding: '20px', zIndex: 9999,
+            display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center'
+        }}>
+            <div style={{display:'flex', justifyContent:'space-between', width:'100%', marginBottom:'10px'}}>
+                <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+                   <img src={iconImg} alt="Foodji" style={{width:'40px', borderRadius:'10px'}} />
+                   <div style={{textAlign:'left'}}>
+                       <div style={{fontWeight:'bold', fontSize:'1rem'}}>Installer l'App Foodji</div>
+                       <div style={{fontSize:'0.8rem', color:'#666'}}>Accès direct et chargement rapide</div>
+                   </div>
+                </div>
+                <button onClick={closeIosInstall} style={{background:'transparent', border:'none', fontSize:'1.5rem', color:'#999'}}>×</button>
+            </div>
+            
+            <div style={{width:'100%', height:'1px', background:'#eee', margin:'10px 0'}}></div>
+
+            <div style={{fontSize:'0.95rem', lineHeight:'1.8', textAlign:'left', width:'100%', color:'#333'}}>
+                1. Appuyez sur <strong>Partager</strong> <svg width="15" height="18" viewBox="0 0 15 18" style={{verticalAlign:'middle', margin:'0 4px'}}><path d="M7.5 0.5L7.5 10.5M7.5 0.5L3.5 4.5M7.5 0.5L11.5 4.5M2.5 7.5L0.5 7.5L0.5 17.5L14.5 17.5L14.5 7.5L12.5 7.5" stroke="#007AFF" strokeWidth="1.5" fill="none" /></svg> en bas<br/>
+                2. Défilez vers le bas du menu<br/>
+                3. Sélectionnez <strong>"Sur l'écran d'accueil"</strong> <svg width="16" height="16" viewBox="0 0 16 16" style={{verticalAlign:'middle', margin:'0 4px'}}><rect x="0.5" y="0.5" width="15" height="15" rx="3" fill="#ccc" /><path d="M8 4L8 12M4 8L12 8" stroke="white" strokeWidth="2" /></svg>
+            </div>
+        </div>
+      )}
+
       {showCGV && (
         <div style={{
             position:'fixed', top:0, left:0, width:'100%', height:'100%', 
@@ -723,7 +843,6 @@ function App() {
             </div>
         </div>
       )}
-      {/* --- FIN CORRECTION --- */}
 
       {view === 'landing' && (
         <div style={{
@@ -749,6 +868,17 @@ function App() {
               }}>
                 VOIR LE MENU
               </button>
+              
+              {deferredPrompt && (
+                  <button onClick={handleInstallClick} style={{
+                    background: 'white', color: 'black', border: 'none', padding: '15px 0', width:'100%',
+                    borderRadius: '50px', fontSize: '1.1rem', fontWeight: 'bold', marginTop: '20px',
+                    display: 'flex', alignItems:'center', justifyContent:'center', gap:'10px',
+                    boxShadow: '0 5px 15px rgba(255, 255, 255, 0.2)', cursor:'pointer'
+                  }}>
+                    📲 INSTALLER L'APP
+                  </button>
+              )}
               
               <p style={{marginTop:'15px', fontSize:'0.75rem', color:'#aaa'}}>
                   En continuant, vous acceptez les <span onClick={() => setShowCGV(true)} style={{textDecoration:'underline', cursor:'pointer', color:'white'}}>Conditions Générales d'Utilisation</span>.
@@ -934,7 +1064,6 @@ function App() {
                     </div>
                 )}
                 
-                {/* --- AFFICHAGE DE LA REMISE SPECIALE CODE PROMO --- */}
                 {remiseAppliquee > 0 && (
                     <div style={{background: '#FFF7ED', color: '#EA580C', padding:'10px', borderRadius:'8px', marginTop:'15px', fontWeight:'bold', textAlign:'center', border:'1px dashed #EA580C'}}>
                         🎉 CODE VALIDÉ : -{remiseAppliquee} DH
@@ -986,7 +1115,7 @@ function App() {
                     <div style={{display:'flex', gap:'10px'}}>
                         <input 
                             type="text" 
-                            placeholder="Ex: GLOVO20" 
+                            placeholder="Code Promo" 
                             value={codePromo} 
                             disabled={isPromoValidee}
                             onChange={(e) => setCodePromo(e.target.value.toUpperCase())} 
@@ -1084,7 +1213,6 @@ function App() {
           <div style={{background: 'white', padding: '15px', borderRadius: '16px', marginBottom: '30px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)'}}>
               <h3 style={{marginTop:0, marginBottom:'15px', fontSize:'1rem'}}>Gestion du Rush (Message Client)</h3>
               <div style={{display:'flex', gap:'10px', flexWrap:'wrap'}}>
-                  {/* CORRECTION RUSH MODE : Utilisation de updateDoc au lieu de setRushMode local */}
                   <button onClick={() => updateDoc(doc(db, "parametres", "status"), { mode: 'standard' })} style={{flex:1, padding:'12px', borderRadius:'10px', border: rushMode === 'standard' ? `2px solid ${COLORS.success}` : '1px solid #ddd', background: rushMode === 'standard' ? '#ECFDF5' : 'white', color: rushMode === 'standard' ? COLORS.success : 'black', fontWeight:'bold', cursor:'pointer'}}>
                       ✅ Standard
                   </button>
@@ -1142,7 +1270,7 @@ function App() {
                           </span>
                           <strong style={{fontSize:'1.1rem'}}>{it.nom}</strong>
                       </div>
-                      <div style={{display:'flex', justifyContent:'space-between', color: COLORS.secondary}}>
+                      <div style={{display:'flex', justifyContent:'space-between', color: COLORS.secondary'}}>
                           <span>
                               {it.choixPates && <strong style={{color: COLORS.primary, marginRight:'5px'}}>{it.choixPates}</strong>}
                               {it.varianteNom && <strong style={{color: COLORS.secondary, fontSize:'0.95rem'}}>({it.varianteNom})</strong>}
@@ -1252,6 +1380,7 @@ function App() {
         </div>
       )}
     </div>
+    </HelmetProvider>
   );
 }
 
