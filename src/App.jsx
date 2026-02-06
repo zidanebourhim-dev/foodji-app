@@ -1501,108 +1501,12 @@ function ProductModal({ product, onClose, onAdd }) {
         </div>
         <p style={{color: COLORS.textLight, marginTop:'5px'}}>{product.description}</p>
         
-        {product.variantes && product.variantes.length > 0 && (
-            <div style={{marginTop:'20px'}}>
-                <div style={{fontWeight:'bold', marginBottom:'10px'}}>Taille</div>
-                <div style={{display:'flex', gap:'10px', flexWrap:'wrap'}}>
-                    {product.variantes.map(v => (
-                        <button key={v.nom} onClick={() => { setSelectedVar(v); setOptionsChoisies([]); }} style={{padding:'10px 20px', borderRadius:'8px', border: selectedVar?.nom === v.nom ? `2px solid ${COLORS.primary}` : '1px solid #ddd', background: selectedVar?.nom === v.nom ? '#FFF5F5' : 'white', fontWeight:'bold'}}>
-                            {v.nom} - {v.prix} DH
-                        </button>
-                    ))}
-                </div>
-            </div>
-        )}
-
-        {isPates && (
-            <div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}>
-                <div style={{fontWeight:'bold', marginBottom:'10px'}}>Type de Pâtes (Obligatoire)</div>
-                <div style={{display:'flex', gap:'10px'}}>
-                    {TYPES_PATES.map(type => (
-                        <button key={type} onClick={() => setTypePates(type)} style={{flex:1, padding:'12px', borderRadius:'12px', border: typePates === type ? `2px solid ${COLORS.primary}` : '1px solid #ddd', background: typePates === type ? '#FFF5F5' : 'white', fontWeight: 'bold', color: typePates === type ? COLORS.primary : 'black'}}>
-                            {type}
-                        </button>
-                    ))}
-                </div>
-            </div>
-        )}
-
-        {isPizza && (
-            <div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}>
-                <div style={{fontWeight:'bold', marginBottom:'10px'}}>Suppléments</div>
-                <div onClick={() => setIsCheesyCrust(!isCheesyCrust)} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'15px', borderRadius:'10px', border: isCheesyCrust ? `2px solid ${COLORS.promo}` : '1px solid #ddd', background: isCheesyCrust ? '#FFFBF0' : 'white', cursor:'pointer', marginBottom:'15px'}}>
-                    <span style={{fontWeight:'bold'}}>🧀 Cheesy Crust (Bords Fourrés)</span>
-                    <span style={{color: COLORS.primary, fontWeight:'bold'}}>+{selectedVar?.nom === 'M' || selectedVar?.nom === 'Standard' || !selectedVar ? '15' : '25'} DH</span>
-                </div>
-                <div style={{display:'flex', flexWrap:'wrap', gap:'10px'}}>
-                    {EXTRAS_PIZZA.map(ex => { 
-                        const isSelected = extrasPizza.some(e => e.nom === ex.nom); 
-                        return (
-                            <button key={ex.nom} onClick={() => toggleExtraPizza(ex)} style={{padding:'8px 12px', borderRadius:'20px', border: isSelected ? `1px solid ${COLORS.primary}` : '1px solid #ddd', background: isSelected ? '#FFF5F5' : 'white', color: isSelected ? COLORS.primary : 'black', fontWeight:'bold', fontSize:'0.9rem'}}>
-                                {isSelected ? '✓ ' : '+ '}{ex.nom} ({ex.prix} DH)
-                            </button>
-                        ) 
-                    })}
-                </div>
-            </div>
-        )}
-
-        {isBurger && (
-            <div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}>
-                <div style={{fontWeight:'bold', marginBottom:'10px', color: COLORS.danger}}>Je ne veux pas de...</div>
-                <div style={{display:'flex', flexWrap:'wrap', gap:'10px'}}>
-                    {RETRAIT_INGREDIENTS.map(ing => (
-                        <button key={ing} onClick={() => toggleSans(ing)} style={{padding:'8px 12px', borderRadius:'20px', border: '1px solid #FCA5A5', background: sansIngredients.includes(ing) ? '#FEF2F2' : 'white', color: COLORS.danger, fontWeight:'bold', fontSize:'0.9rem', opacity: sansIngredients.includes(ing) ? 1 : 0.6}}>
-                            {sansIngredients.includes(ing) ? '🚫 ' : ''}{ing}
-                        </button>
-                    ))}
-                </div>
-            </div>
-        )}
-
-        {isTacos && (
-            <div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}>
-                <div style={{fontWeight:'bold', marginBottom:'10px'}}>Sauces <small style={{color: COLORS.danger}}>(Minimum 1, Max 2)</small></div>
-                <div style={{display:'flex', flexDirection:'column', gap:'10px'}}>
-                    {LISTE_SAUCES.map(s => { 
-                        const count = getCount(s, sauces); 
-                        return (
-                            <div key={s} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'1px dashed #eee'}}>
-                                <span>{s}</span>
-                                <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
-                                    {count > 0 && <button onClick={() => decrementOption(s, sauces, setSauces)} style={{width:'30px', height:'30px', borderRadius:'50%', border:'1px solid #ddd', background:'white', fontWeight:'bold'}}>-</button>}
-                                    {count > 0 && <span style={{fontWeight:'bold'}}>{count}</span>}
-                                    <button onClick={() => incrementOption(s, sauces, setSauces, 2)} style={{width:'30px', height:'30px', borderRadius:'50%', border:'none', background:COLORS.secondary, color:'white', fontWeight:'bold'}}>+</button>
-                                </div>
-                            </div>
-                        ); 
-                    })}
-                </div>
-            </div>
-        )}
-
-        {maxChoix > 0 && (
-            <div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}>
-                <div style={{fontWeight:'bold', marginBottom:'10px'}}>
-                    {titreOptions} <small style={{color: optionsChoisies.length < minChoix ? COLORS.danger : COLORS.success}}>({optionsChoisies.length}/{maxChoix}) {minChoix > 0 ? `- Min ${minChoix}` : ''}</small>
-                </div>
-                <div style={{display:'flex', flexDirection:'column', gap:'10px'}}>
-                    {listeOptions.map(opt => { 
-                        const count = getCount(opt, optionsChoisies); 
-                        return (
-                            <div key={opt} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'1px dashed #eee'}}>
-                                <span>{opt}</span>
-                                <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
-                                    {count > 0 && <button onClick={() => decrementOption(opt, optionsChoisies, setOptionsChoisies)} style={{width:'30px', height:'30px', borderRadius:'50%', border:'1px solid #ddd', background:'white', fontWeight:'bold'}}>-</button>}
-                                    {count > 0 && <span style={{fontWeight:'bold'}}>{count}</span>}
-                                    <button onClick={() => incrementOption(opt, optionsChoisies, setOptionsChoisies, maxChoix)} style={{width:'30px', height:'30px', borderRadius:'50%', border:'none', background:COLORS.primary, color:'white', fontWeight:'bold'}}>+</button>
-                                </div>
-                            </div>
-                        ); 
-                    })}
-                </div>
-            </div>
-        )}
+        {product.variantes && product.variantes.length > 0 && (<div style={{marginTop:'20px'}}><div style={{fontWeight:'bold', marginBottom:'10px'}}>Taille</div><div style={{display:'flex', gap:'10px', flexWrap:'wrap'}}>{product.variantes.map(v => (<button key={v.nom} onClick={() => { setSelectedVar(v); setOptionsChoisies([]); }} style={{padding:'10px 20px', borderRadius:'8px', border: selectedVar?.nom === v.nom ? `2px solid ${COLORS.primary}` : '1px solid #ddd', background: selectedVar?.nom === v.nom ? '#FFF5F5' : 'white', fontWeight:'bold'}}>{v.nom} - {v.prix} DH</button>))}</div></div>)}
+        {isPates && (<div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}><div style={{fontWeight:'bold', marginBottom:'10px'}}>Type de Pâtes (Obligatoire)</div><div style={{display:'flex', gap:'10px'}}>{TYPES_PATES.map(type => (<button key={type} onClick={() => setTypePates(type)} style={{flex:1, padding:'12px', borderRadius:'12px', border: typePates === type ? `2px solid ${COLORS.primary}` : '1px solid #ddd', background: typePates === type ? '#FFF5F5' : 'white', fontWeight: 'bold', color: typePates === type ? COLORS.primary : 'black'}}>{type}</button>))}</div></div>)}
+        {isPizza && (<div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}><div style={{fontWeight:'bold', marginBottom:'10px'}}>Suppléments</div><div onClick={() => setIsCheesyCrust(!isCheesyCrust)} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'15px', borderRadius:'10px', border: isCheesyCrust ? `2px solid ${COLORS.promo}` : '1px solid #ddd', background: isCheesyCrust ? '#FFFBF0' : 'white', cursor:'pointer', marginBottom:'15px'}}><span style={{fontWeight:'bold'}}>🧀 Cheesy Crust (Bords Fourrés)</span><span style={{color: COLORS.primary, fontWeight:'bold'}}>+{selectedVar?.nom === 'M' || selectedVar?.nom === 'Standard' || !selectedVar ? '15' : '25'} DH</span></div><div style={{display:'flex', flexWrap:'wrap', gap:'10px'}}>{EXTRAS_PIZZA.map(ex => { const isSelected = extrasPizza.some(e => e.nom === ex.nom); return (<button key={ex.nom} onClick={() => toggleExtraPizza(ex)} style={{padding:'8px 12px', borderRadius:'20px', border: isSelected ? `1px solid ${COLORS.primary}` : '1px solid #ddd', background: isSelected ? '#FFF5F5' : 'white', color: isSelected ? COLORS.primary : 'black', fontWeight:'bold', fontSize:'0.9rem'}}>{isSelected ? '✓ ' : '+ '}{ex.nom} ({ex.prix} DH)</button>) })}</div></div>)}
+        {isBurger && (<div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}><div style={{fontWeight:'bold', marginBottom:'10px', color: COLORS.danger}}>Je ne veux pas de...</div><div style={{display:'flex', flexWrap:'wrap', gap:'10px'}}>{RETRAIT_INGREDIENTS.map(ing => (<button key={ing} onClick={() => toggleSans(ing)} style={{padding:'8px 12px', borderRadius:'20px', border: '1px solid #FCA5A5', background: sansIngredients.includes(ing) ? '#FEF2F2' : 'white', color: COLORS.danger, fontWeight:'bold', fontSize:'0.9rem', opacity: sansIngredients.includes(ing) ? 1 : 0.6}}>{sansIngredients.includes(ing) ? '🚫 ' : ''}{ing}</button>))}</div></div>)}
+        {isTacos && (<div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}><div style={{fontWeight:'bold', marginBottom:'10px'}}>Sauces <small style={{color: COLORS.danger}}>(Minimum 1, Max 2)</small></div><div style={{display:'flex', flexDirection:'column', gap:'10px'}}>{LISTE_SAUCES.map(s => { const count = getCount(s, sauces); return (<div key={s} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'1px dashed #eee'}}><span>{s}</span><div style={{display:'flex', alignItems:'center', gap:'10px'}}>{count > 0 && <button onClick={() => decrementOption(s, sauces, setSauces)} style={{width:'30px', height:'30px', borderRadius:'50%', border:'1px solid #ddd', background:'white', fontWeight:'bold'}}>-</button>}{count > 0 && <span style={{fontWeight:'bold'}}>{count}</span>}<button onClick={() => incrementOption(s, sauces, setSauces, 2)} style={{width:'30px', height:'30px', borderRadius:'50%', border:'none', background:COLORS.secondary, color:'white', fontWeight:'bold'}}>+</button></div></div>); })}</div></div>)}
+        {maxChoix > 0 && (<div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}><div style={{fontWeight:'bold', marginBottom:'10px'}}>{titreOptions} <small style={{color: optionsChoisies.length < minChoix ? COLORS.danger : COLORS.success}}>({optionsChoisies.length}/{maxChoix}) {minChoix > 0 ? `- Min ${minChoix}` : ''}</small></div><div style={{display:'flex', flexDirection:'column', gap:'10px'}}>{listeOptions.map(opt => { const count = getCount(opt, optionsChoisies); return (<div key={opt} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'1px dashed #eee'}}><span>{opt}</span><div style={{display:'flex', alignItems:'center', gap:'10px'}}>{count > 0 && <button onClick={() => decrementOption(opt, optionsChoisies, setOptionsChoisies)} style={{width:'30px', height:'30px', borderRadius:'50%', border:'1px solid #ddd', background:'white', fontWeight:'bold'}}>-</button>}{count > 0 && <span style={{fontWeight:'bold'}}>{count}</span>}<button onClick={() => incrementOption(opt, optionsChoisies, setOptionsChoisies, maxChoix)} style={{width:'30px', height:'30px', borderRadius:'50%', border:'none', background:COLORS.primary, color:'white', fontWeight:'bold'}}>+</button></div></div>); })}</div></div>)}
 
         <button onClick={() => {
             if (isPates && !typePates) return alert("Veuillez choisir le type de pâtes !");
