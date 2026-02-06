@@ -1,4 +1,3 @@
-// VERSION CORRECTIVE 3.0 - CHECK 1274
 import { useState, useEffect, useRef } from 'react';
 import { db, auth } from './firebase';
 import { signInWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
@@ -33,6 +32,60 @@ const COLORS = {
   textLight: '#6B7280',
   pending: '#F97316' 
 };
+
+// --- LISTES PAR DÉFAUT (Pour l'initialisation Firebase si vide) ---
+const INIT_VIANDES = [
+    { nom: "Poulet", available: true }, { nom: "Viande Hachée", available: true }, 
+    { nom: "Cordon Bleu", available: true }, { nom: "Nuggets", available: true }, 
+    { nom: "Poulet Crispy", available: true }
+];
+const INIT_GARNITURES_PIZZA = [
+    { nom: "Viande Hachée", available: true }, { nom: "Poulet", available: true }, 
+    { nom: "4 Fromages", available: true }, { nom: "Cannibale", available: true }, 
+    { nom: "Pepperoni", available: true }, { nom: "Thon", available: true }, 
+    { nom: "Charcuterie", available: true }, { nom: "Végétarienne", available: true }, 
+    { nom: "Fruits de Mer", available: true }
+];
+const INIT_SAUCES = [
+    { nom: "Algérienne Fait Maison", available: true }, { nom: "Biggy Fait Maison", available: true }, 
+    { nom: "Barbecue Fait Maison", available: true }, { nom: "Pas de sauce", available: true }
+];
+const INIT_PATES = [
+    { nom: "Penne", available: true }, { nom: "Tagliatelle", available: true }, 
+    { nom: "Spaghetti", available: true }
+];
+const INIT_TAILLES_PIZZA = [
+    { nom: "M", available: true }, { nom: "L", available: true }
+];
+
+const EXTRAS_PIZZA = [
+    { nom: "Extra Champignons", prix: 10 },
+    { nom: "Extra Mozzarella", prix: 10 },
+    { nom: "Extra Parmesan", prix: 15 },
+    { nom: "Extra Cheddar", prix: 15 }
+];
+
+const RETRAIT_INGREDIENTS = ["Sans Tomate", "Sans Salade", "Sans Oignons", "Sans Cornichons", "Sans Sauce"];
+const PIZZAS_EXCLUES_PROMO = ["4 saisons", "fruits de mer", "cannibale", "2 saisons"];
+const TOUTES_CATEGORIES = ["Tacos", "Pizzas", "Burgers", "Pâtes", "Sides", "Les Burritos", "Koniks", "Plats", "Salades", "Boissons", "Desserts"];
+
+// Configuration des Onglets Stocks Admin
+const STOCK_TABS = [
+    { id: 'viandes', label: '🌮 Viandes' },
+    { id: 'garnitures', label: '🍕 Garnitures' },
+    { id: 'tailles_pizza', label: '📏 Tailles' },
+    { id: 'pates', label: '🍝 Pâtes' },
+    { id: 'sauces', label: '🥣 Sauces' }
+];
+
+const NOTIF_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
+
+const logoImg = "/logo.png";
+const iconImg = "/icon.png";
+const promoImg = "/promo.jpg"; 
+
+const WELCOME_TOKEN_REF = "START2026"; 
+const POURCENTAGE_REMISE = 0.20;
 
 const seoConfig = {
   title: "Foodji - Le Fait Maison à Sala Al Jadida | Burgers & Tacos (Jusqu'à 2h)",
@@ -85,31 +138,6 @@ const structuredData = {
   ]
 };
 
-const LISTE_VIANDES = ["Poulet", "Viande Hachée", "Cordon Bleu", "Nuggets", "Poulet Crispy"];
-const LISTE_GARNITURES_PIZZA = ["Viande Hachée", "Poulet", "4 Fromages", "Cannibale", "Pepperoni", "Thon", "Charcuterie", "Végétarienne", "Fruits de Mer"];
-const LISTE_SAUCES = ["Algérienne Fait Maison", "Biggy Fait Maison", "Barbecue Fait Maison", "Pas de sauce"]; 
-const TYPES_PATES = ["Penne", "Tagliatelle", "Spaghetti"];
-
-const EXTRAS_PIZZA = [
-    { nom: "Extra Champignons", prix: 10 },
-    { nom: "Extra Mozzarella", prix: 10 },
-    { nom: "Extra Parmesan", prix: 15 },
-    { nom: "Extra Cheddar", prix: 15 }
-];
-
-const RETRAIT_INGREDIENTS = ["Sans Tomate", "Sans Salade", "Sans Oignons", "Sans Cornichons", "Sans Sauce"];
-const PIZZAS_EXCLUES_PROMO = ["4 saisons", "fruits de mer", "cannibale", "2 saisons"];
-const TOUTES_CATEGORIES = ["Tacos", "Pizzas", "Burgers", "Pâtes", "Sides", "Les Burritos", "Koniks", "Plats", "Salades", "Boissons", "Desserts"];
-
-const NOTIF_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
-
-const logoImg = "/logo.png";
-const iconImg = "/icon.png";
-const promoImg = "/promo.jpg"; 
-
-const WELCOME_TOKEN_REF = "START2026"; 
-const POURCENTAGE_REMISE = 0.20;
-
 function App() {
   const [user, setUser] = useState(null);
   const [view, setView] = useState('landing'); 
@@ -131,6 +159,17 @@ function App() {
   const [adminCategorie, setAdminCategorie] = useState(''); 
   
   const [rushMode, setRushMode] = useState('standard');
+
+  // --- ÉTATS POUR LES STOCKS GLOBAUX ---
+  const [stocks, setStocks] = useState({
+      viandes: INIT_VIANDES,
+      garnitures: INIT_GARNITURES_PIZZA,
+      sauces: INIT_SAUCES,
+      pates: INIT_PATES,
+      tailles_pizza: INIT_TAILLES_PIZZA
+  });
+  const [activeStockTab, setActiveStockTab] = useState('viandes');
+  const [newItemName, setNewItemName] = useState('');
 
   const [panier, setPanier] = useState([]);
   const [clientNom, setClientNom] = useState('');
@@ -208,15 +247,40 @@ function App() {
       }
   }, [clientTel]);
 
+  // Écouteur Firebase : Rush Mode + Stocks
   useEffect(() => {
-    const unsub = onSnapshot(doc(db, "parametres", "status"), (docSnap) => {
+    const unsubStatus = onSnapshot(doc(db, "parametres", "status"), (docSnap) => {
       if (docSnap.exists()) {
         setRushMode(docSnap.data().mode);
       } else {
         setDoc(doc(db, "parametres", "status"), { mode: 'standard' });
       }
     });
-    return () => unsub();
+
+    const unsubStocks = onSnapshot(doc(db, "parametres", "stocks"), (docSnap) => {
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            setStocks({
+                viandes: data.viandes || INIT_VIANDES,
+                garnitures: data.garnitures || INIT_GARNITURES_PIZZA,
+                sauces: data.sauces || INIT_SAUCES,
+                pates: data.pates || INIT_PATES,
+                tailles_pizza: data.tailles_pizza || INIT_TAILLES_PIZZA
+            });
+        } else {
+            const initData = {
+                viandes: INIT_VIANDES,
+                garnitures: INIT_GARNITURES_PIZZA,
+                sauces: INIT_SAUCES,
+                pates: INIT_PATES,
+                tailles_pizza: INIT_TAILLES_PIZZA
+            };
+            setDoc(doc(db, "parametres", "stocks"), initData);
+            setStocks(initData);
+        }
+    });
+
+    return () => { unsubStatus(); unsubStocks(); };
   }, []);
 
   useEffect(() => {
@@ -340,9 +404,9 @@ function App() {
                 let n1="Standard", n2="Moyen", n3="Grand";
                 if (cat.toLowerCase().includes('tacos')) { n1="L"; n2="XL"; n3="XXL"; }
                 else if (cat.toLowerCase().includes('pizza')) { n1="M"; n2="L"; n3="XL"; }
-                if(p1>0) vars.push({nom:n1, prix:p1});
-                if(p2>0) vars.push({nom:n2, prix:p2});
-                if(p3>0) vars.push({nom:n3, prix:p3});
+                if(p1>0) vars.push({nom:n1, prix:p1, available: true});
+                if(p2>0) vars.push({nom:n2, prix:p2, available: true});
+                if(p3>0) vars.push({nom:n3, prix:p3, available: true});
              }
              if(name && cat) await addDoc(collection(db, "produits"), { categorie: cat, nom: name, description: tokens.slice(2, len - 3).join(', ').replace(/"/g, ''), prix: vars.length>0?0:p1, image: '', variantes: vars, date: new Date(), available: true });
           }
@@ -571,10 +635,10 @@ function App() {
       setCategorie(cat);
       if (!editId) {
           if (cat === 'Tacos') {
-              setVariantes([{nom: 'L', prix: ''}, {nom: 'XL', prix: ''}, {nom: 'XXL', prix: ''}]);
+              setVariantes([{nom: 'L', prix: '', available: true}, {nom: 'XL', prix: '', available: true}, {nom: 'XXL', prix: '', available: true}]);
               setPrixBase('');
           } else if (cat === 'Pizzas') {
-              setVariantes([{nom: 'M', prix: ''}, {nom: 'L', prix: ''}]);
+              setVariantes([{nom: 'M', prix: '', available: true}, {nom: 'L', prix: '', available: true}]);
               setPrixBase('');
           } else {
               setVariantes([]);
@@ -588,7 +652,7 @@ function App() {
       setDescription(p.description || ''); 
       setCategorie(p.categorie);
       if (p.variantes && p.variantes.length > 0) {
-          setVariantes(p.variantes);
+          setVariantes(p.variantes.map(v => ({...v, available: v.available !== false})));
           setPrixBase(''); 
       } else {
           setVariantes([]);
@@ -597,9 +661,10 @@ function App() {
       window.scrollTo(0,0);
   };
 
-  const updateVariantPrice = (index, newVal) => {
+  const updateVariantPrice = (index, field, newVal) => {
       const newVars = [...variantes];
-      newVars[index].prix = Number(newVal);
+      if(field === 'available') newVars[index].available = newVal;
+      else newVars[index].prix = Number(newVal);
       setVariantes(newVars);
   };
 
@@ -631,6 +696,25 @@ function App() {
       if(confirm("Confirmer la suppression définitive ?")) {
           await deleteDoc(doc(db, "produits", id)); 
       }
+  };
+
+  // --- LOGIQUE GESTION STOCKS (ON/OFF) ---
+  const toggleStockItem = async (listName, index) => {
+      const newList = [...stocks[listName]];
+      newList[index].available = !newList[index].available;
+      
+      const newData = { ...stocks, [listName]: newList };
+      await updateDoc(doc(db, "parametres", "stocks"), newData);
+  };
+
+  const addNewStockItem = async () => {
+      if(!checkManagerAuth()) return;
+
+      if(!newItemName.trim()) return;
+      const newList = [...stocks[activeStockTab], { nom: newItemName.trim(), available: true }];
+      const newData = { ...stocks, [activeStockTab]: newList };
+      await updateDoc(doc(db, "parametres", "stocks"), newData);
+      setNewItemName('');
   };
   
   const copierOdoo = (cmd) => {
@@ -925,7 +1009,7 @@ function App() {
       )}
 
       {showPromoWizard && <PromoWizard menu={menu} onClose={()=>setShowPromoWizard(false)} onValidate={ajouterLotAuPanier} />}
-      {selectedProduct && <ProductModal product={selectedProduct} onClose={()=>setSelectedProduct(null)} onAdd={ajouterAuPanier} />}
+      {selectedProduct && <ProductModal product={selectedProduct} stocks={stocks} onClose={()=>setSelectedProduct(null)} onAdd={ajouterAuPanier} />}
 
       {view === 'client' && (
         <div style={{ padding: '20px' }}>
@@ -959,7 +1043,7 @@ function App() {
                         menuClient.map((plat) => {
                           const displayPrice = plat.prix > 0 
                               ? plat.prix 
-                              : (plat.variantes?.length > 0 ? Math.min(...plat.variantes.map(v=>v.prix)) : 0);
+                              : (plat.variantes?.length > 0 ? Math.min(...plat.variantes.filter(v => v.available !== false).map(v=>v.prix)) : 0);
 
                           return (
                           <div key={plat.id} onClick={() => setSelectedProduct(plat)} style={{ ...cardStyle, padding: 0, overflow: 'hidden', display:'flex', flexDirection:'column', cursor: 'pointer', position: 'relative' }}>
@@ -1355,9 +1439,15 @@ function App() {
                    {variantes.length > 0 ? (
                        <div style={{width:'50%', display:'flex', gap:'5px', flexWrap:'wrap'}}>
                            {variantes.map((v, index) => (
-                               <div key={index} style={{flex:1, minWidth:'80px'}}>
-                                   <label style={{fontSize:'0.7rem', fontWeight:'bold', color: COLORS.textLight}}>{v.nom}</label>
-                                   <input type="number" value={v.prix} onChange={(e) => updateVariantPrice(index, e.target.value)} style={{...inputStyle, marginBottom:0}} />
+                               <div key={index} style={{flex:1, minWidth:'120px', display:'flex', alignItems:'center', gap:'5px', background:'#F9FAFB', padding:'5px', borderRadius:'8px', border:'1px solid #eee'}}>
+                                   <div style={{flex:1}}>
+                                       <label style={{fontSize:'0.7rem', fontWeight:'bold', color: COLORS.textLight, display:'block'}}>{v.nom}</label>
+                                       <input type="number" value={v.prix} onChange={(e) => updateVariantPrice(index, 'prix', e.target.value)} style={{...inputStyle, marginBottom:0, padding:'5px', fontSize:'0.9rem'}} />
+                                   </div>
+                                   <div style={{display:'flex', flexDirection:'column', alignItems:'center'}}>
+                                       <label style={{fontSize:'0.6rem', color: COLORS.textLight}}>Dispo</label>
+                                       <input type="checkbox" checked={v.available !== false} onChange={(e) => updateVariantPrice(index, 'available', e.target.checked)} style={{width:'20px', height:'20px'}} />
+                                   </div>
                                </div>
                            ))}
                        </div>
@@ -1368,6 +1458,54 @@ function App() {
                  <button onClick={saveProduit} style={{...btnStyle, width:'auto', marginTop:'15px'}}>{editId ? 'Mettre à jour' : 'Ajouter'}</button>
                  {editId && <button onClick={() => {setEditId(null); setNom(''); setPrixBase(''); setVariantes([]); setDescription('');}} style={{...btnStyle, background:'gray', width:'auto', marginLeft:'10px'}}>Annuler</button>}
              </div>
+           </details>
+
+           <details style={{marginTop:'30px', background:'#FFF7ED', padding:'15px', borderRadius:'10px', border:`1px solid ${COLORS.promo}`}}>
+                <summary style={{fontWeight:'bold', color: '#C2410C', cursor:'pointer'}}>🥕 GESTION DES STOCKS (ON/OFF)</summary>
+                <div style={{marginTop:'20px'}}>
+                    
+                    {/* ONGLETS DE STOCKS (TABS) */}
+                    <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '20px', scrollbarWidth: 'none', display:'flex', gap:'10px' }}>
+                        {STOCK_TABS.map(tab => (
+                            <button key={tab.id} onClick={() => setActiveStockTab(tab.id)} style={{
+                                border: 'none', display:'inline-block', padding:'10px 20px', borderRadius:'25px', 
+                                background: activeStockTab === tab.id ? COLORS.secondary : 'white', 
+                                color: activeStockTab === tab.id ? 'white' : COLORS.secondary,
+                                fontWeight:'600', fontSize:'0.9rem', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', 
+                                cursor: 'pointer', transition: '0.2s', border: activeStockTab === tab.id ? 'none' : '1px solid #ddd'
+                            }}>
+                                {tab.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div style={{background:'white', padding:'15px', borderRadius:'15px', marginTop:'10px'}}>
+                        <div style={{display:'flex', gap:'10px', marginBottom:'20px'}}>
+                            {activeStockTab !== 'tailles_pizza' && (
+                                 <>
+                                    <input type="text" placeholder={`Ajouter dans ${STOCK_TABS.find(t=>t.id===activeStockTab).label}...`} value={newItemName} onChange={(e) => setNewItemName(e.target.value)} style={{...inputStyle, marginBottom:0}} />
+                                    <button onClick={addNewStockItem} style={{...btnStyle, width:'auto'}}>Ajouter</button>
+                                 </>
+                            )}
+                        </div>
+
+                        <div style={{display:'flex', flexWrap:'wrap', gap:'10px'}}>
+                            {stocks[activeStockTab]?.map((item, index) => (
+                                <div key={item.nom} onClick={() => toggleStockItem(activeStockTab, index)} style={{
+                                    padding:'12px 18px', borderRadius:'25px', cursor:'pointer', fontWeight:'bold', transition:'0.2s',
+                                    background: item.available ? COLORS.success : '#E5E7EB',
+                                    color: item.available ? 'white' : '#9CA3AF',
+                                    border: item.available ? `1px solid ${COLORS.success}` : '1px solid #D1D5DB',
+                                    display:'flex', alignItems:'center', gap:'8px', fontSize:'0.95rem'
+                                }}>
+                                    <div style={{width:'12px', height:'12px', borderRadius:'50%', background: item.available ? 'white' : '#9CA3AF'}}></div>
+                                    {item.nom}
+                                </div>
+                            ))}
+                        </div>
+                        {stocks[activeStockTab]?.length === 0 && <p style={{color:'#aaa', fontStyle:'italic'}}>Aucun élément dans cette catégorie.</p>}
+                    </div>
+                </div>
            </details>
 
            <details style={{marginTop:'50px', background:'#FEE2E2', padding:'15px', borderRadius:'10px', border:`1px solid ${COLORS.danger}`}}>
@@ -1404,10 +1542,13 @@ function PromoWizard({ menu, onClose, onValidate }) {
 
     const handleSelect = (pizza) => {
         if (choix.length >= 3) return;
-        let varianteM = pizza.variantes?.find(v => v.nom === 'M' || v.nom === 'Standard');
-        if (!varianteM && pizza.variantes?.length > 0) varianteM = pizza.variantes[0];
-        const prixFinal = varianteM ? varianteM.prix : pizza.prix;
-        const varianteNom = varianteM ? varianteM.nom : null;
+        let varianteM = pizza.variantes?.find(v => (v.nom === 'M' || v.nom === 'Standard') && v.available !== false);
+        if (!varianteM && pizza.variantes?.length > 0) varianteM = pizza.variantes.find(v => v.available !== false);
+        
+        if (!varianteM) return alert("Ce produit n'est pas disponible actuellement.");
+
+        const prixFinal = varianteM.prix;
+        const varianteNom = varianteM.nom;
         setChoix([...choix, { 
             ...pizza, prixFinal: Number(prixFinal), originalPrice: Number(prixFinal), varianteNom: varianteNom, isPromoEligible: true 
         }]);
@@ -1450,8 +1591,19 @@ function PromoWizard({ menu, onClose, onValidate }) {
     );
 }
 
-function ProductModal({ product, onClose, onAdd }) {
-  const [selectedVar, setSelectedVar] = useState(product.variantes && product.variantes.length > 0 ? product.variantes[0] : null);
+function ProductModal({ product, stocks, onClose, onAdd }) {
+  // Filtre Global des Tailles (Cartons)
+  const taillesGlobalesDispo = stocks.tailles_pizza ? stocks.tailles_pizza.filter(t => t.available).map(t => t.nom) : [];
+  
+  // On filtre les variantes du produit
+  const isPizza = product.categorie.toLowerCase().includes('pizza');
+  const variantesDispo = product.variantes ? product.variantes.filter(v => {
+      const isProductAvailable = v.available !== false;
+      const isGlobalSizeAvailable = isPizza ? taillesGlobalesDispo.includes(v.nom) : true;
+      return isProductAvailable && isGlobalSizeAvailable;
+  }) : [];
+  
+  const [selectedVar, setSelectedVar] = useState(variantesDispo.length > 0 ? variantesDispo[0] : null);
   const [optionsChoisies, setOptionsChoisies] = useState([]); 
   const [sauces, setSauces] = useState([]); 
   const [typePates, setTypePates] = useState(null); 
@@ -1464,12 +1616,18 @@ function ProductModal({ product, onClose, onAdd }) {
   const catLower = product.categorie.toLowerCase();
   const isPates = catLower.includes('pâtes') || catLower.includes('pates');
   const isTacos = catLower.includes('tacos');
-  const isPizza = catLower.includes('pizza');
+  const isPizzaProduct = catLower.includes('pizza');
   const isBurger = catLower.includes('burger');
   const isMixte = isTacos && nomLower.includes('mixte');
 
+  // Listes dynamiques filtrées (Seuls les Available = true)
+  const viandesDispo = stocks.viandes.filter(v => v.available).map(v => v.nom);
+  const garnituresDispo = stocks.garnitures.filter(g => g.available).map(g => g.nom);
+  const patesDispo = stocks.pates.filter(p => p.available).map(p => p.nom);
+  const saucesDispo = stocks.sauces.filter(s => s.available).map(s => s.nom);
+
   if (isMixte) {
-      listeOptions = LISTE_VIANDES;
+      listeOptions = viandesDispo;
       titreOptions = "Choisissez vos viandes";
       minChoix = 2; 
       if (selectedVar?.nom === 'L' || selectedVar?.nom === 'Standard') maxChoix = 2;
@@ -1477,9 +1635,9 @@ function ProductModal({ product, onClose, onAdd }) {
       else if (selectedVar?.nom === 'XXL') maxChoix = 4;
       else maxChoix = 2;
   }
-  else if (isPizza) {
-      if (nomLower.includes('2 saisons')) { maxChoix = 2; minChoix = 2; listeOptions = LISTE_GARNITURES_PIZZA; titreOptions = "2 Garnitures"; }
-      if (nomLower.includes('4 saisons')) { maxChoix = 4; minChoix = 4; listeOptions = LISTE_GARNITURES_PIZZA; titreOptions = "4 Garnitures"; }
+  else if (isPizzaProduct) {
+      if (nomLower.includes('2 saisons')) { maxChoix = 2; minChoix = 2; listeOptions = garnituresDispo; titreOptions = "2 Garnitures"; }
+      if (nomLower.includes('4 saisons')) { maxChoix = 4; minChoix = 4; listeOptions = garnituresDispo; titreOptions = "4 Garnitures"; }
   }
 
   const incrementOption = (opt, currentList, setList, max) => { if (currentList.length < max) setList([...currentList, opt]); };
@@ -1502,11 +1660,43 @@ function ProductModal({ product, onClose, onAdd }) {
         </div>
         <p style={{color: COLORS.textLight, marginTop:'5px'}}>{product.description}</p>
         
-        {product.variantes && product.variantes.length > 0 && (<div style={{marginTop:'20px'}}><div style={{fontWeight:'bold', marginBottom:'10px'}}>Taille</div><div style={{display:'flex', gap:'10px', flexWrap:'wrap'}}>{product.variantes.map(v => (<button key={v.nom} onClick={() => { setSelectedVar(v); setOptionsChoisies([]); }} style={{padding:'10px 20px', borderRadius:'8px', border: selectedVar?.nom === v.nom ? `2px solid ${COLORS.primary}` : '1px solid #ddd', background: selectedVar?.nom === v.nom ? '#FFF5F5' : 'white', fontWeight:'bold'}}>{v.nom} - {v.prix} DH</button>))}</div></div>)}
-        {isPates && (<div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}><div style={{fontWeight:'bold', marginBottom:'10px'}}>Type de Pâtes (Obligatoire)</div><div style={{display:'flex', gap:'10px'}}>{TYPES_PATES.map(type => (<button key={type} onClick={() => setTypePates(type)} style={{flex:1, padding:'12px', borderRadius:'12px', border: typePates === type ? `2px solid ${COLORS.primary}` : '1px solid #ddd', background: typePates === type ? '#FFF5F5' : 'white', fontWeight: 'bold', color: typePates === type ? COLORS.primary : 'black'}}>{type}</button>))}</div></div>)}
-        {isPizza && (<div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}><div style={{fontWeight:'bold', marginBottom:'10px'}}>Suppléments</div><div onClick={() => setIsCheesyCrust(!isCheesyCrust)} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'15px', borderRadius:'10px', border: isCheesyCrust ? `2px solid ${COLORS.promo}` : '1px solid #ddd', background: isCheesyCrust ? '#FFFBF0' : 'white', cursor:'pointer', marginBottom:'15px'}}><span style={{fontWeight:'bold'}}>🧀 Cheesy Crust (Bords Fourrés)</span><span style={{color: COLORS.primary, fontWeight:'bold'}}>+{selectedVar?.nom === 'M' || selectedVar?.nom === 'Standard' || !selectedVar ? '15' : '25'} DH</span></div><div style={{display:'flex', flexWrap:'wrap', gap:'10px'}}>{EXTRAS_PIZZA.map(ex => { const isSelected = extrasPizza.some(e => e.nom === ex.nom); return (<button key={ex.nom} onClick={() => toggleExtraPizza(ex)} style={{padding:'8px 12px', borderRadius:'20px', border: isSelected ? `1px solid ${COLORS.primary}` : '1px solid #ddd', background: isSelected ? '#FFF5F5' : 'white', color: isSelected ? COLORS.primary : 'black', fontWeight:'bold', fontSize:'0.9rem'}}>{isSelected ? '✓ ' : '+ '}{ex.nom} ({ex.prix} DH)</button>) })}</div></div>)}
+        {variantesDispo.length > 0 && (
+            <div style={{marginTop:'20px'}}>
+                <div style={{fontWeight:'bold', marginBottom:'10px'}}>Taille</div>
+                <div style={{display:'flex', gap:'10px', flexWrap:'wrap'}}>
+                    {variantesDispo.map(v => (
+                        <button key={v.nom} onClick={() => { setSelectedVar(v); setOptionsChoisies([]); }} style={{padding:'10px 20px', borderRadius:'8px', border: selectedVar?.nom === v.nom ? `2px solid ${COLORS.primary}` : '1px solid #ddd', background: selectedVar?.nom === v.nom ? '#FFF5F5' : 'white', fontWeight:'bold'}}>{v.nom} - {v.prix} DH</button>
+                    ))}
+                </div>
+            </div>
+        )}
+        
+        {isPates && (
+            <div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}>
+                <div style={{fontWeight:'bold', marginBottom:'10px'}}>Type de Pâtes (Obligatoire)</div>
+                <div style={{display:'flex', gap:'10px'}}>
+                    {patesDispo.map(type => (
+                        <button key={type} onClick={() => setTypePates(type)} style={{flex:1, padding:'12px', borderRadius:'12px', border: typePates === type ? `2px solid ${COLORS.primary}` : '1px solid #ddd', background: typePates === type ? '#FFF5F5' : 'white', fontWeight:'bold', color: typePates === type ? COLORS.primary : 'black'}}>{type}</button>
+                    ))}
+                </div>
+            </div>
+        )}
+        
+        {isPizzaProduct && (<div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}><div style={{fontWeight:'bold', marginBottom:'10px'}}>Suppléments</div><div onClick={() => setIsCheesyCrust(!isCheesyCrust)} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'15px', borderRadius:'10px', border: isCheesyCrust ? `2px solid ${COLORS.promo}` : '1px solid #ddd', background: isCheesyCrust ? '#FFFBF0' : 'white', cursor:'pointer', marginBottom:'15px'}}><span style={{fontWeight:'bold'}}>🧀 Cheesy Crust (Bords Fourrés)</span><span style={{color: COLORS.primary, fontWeight:'bold'}}>+{selectedVar?.nom === 'M' || selectedVar?.nom === 'Standard' || !selectedVar ? '15' : '25'} DH</span></div><div style={{display:'flex', flexWrap:'wrap', gap:'10px'}}>{EXTRAS_PIZZA.map(ex => { const isSelected = extrasPizza.some(e => e.nom === ex.nom); return (<button key={ex.nom} onClick={() => toggleExtraPizza(ex)} style={{padding:'8px 12px', borderRadius:'20px', border: isSelected ? `1px solid ${COLORS.primary}` : '1px solid #ddd', background: isSelected ? '#FFF5F5' : 'white', color: isSelected ? COLORS.primary : 'black', fontWeight:'bold', fontSize:'0.9rem'}}>{isSelected ? '✓ ' : '+ '}{ex.nom} ({ex.prix} DH)</button>) })}</div></div>)}
         {isBurger && (<div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}><div style={{fontWeight:'bold', marginBottom:'10px', color: COLORS.danger}}>Je ne veux pas de...</div><div style={{display:'flex', flexWrap:'wrap', gap:'10px'}}>{RETRAIT_INGREDIENTS.map(ing => (<button key={ing} onClick={() => toggleSans(ing)} style={{padding:'8px 12px', borderRadius:'20px', border: '1px solid #FCA5A5', background: sansIngredients.includes(ing) ? '#FEF2F2' : 'white', color: COLORS.danger, fontWeight:'bold', fontSize:'0.9rem', opacity: sansIngredients.includes(ing) ? 1 : 0.6}}>{sansIngredients.includes(ing) ? '🚫 ' : ''}{ing}</button>))}</div></div>)}
-        {isTacos && (<div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}><div style={{fontWeight:'bold', marginBottom:'10px'}}>Sauces <small style={{color: COLORS.danger}}>(Minimum 1, Max 2)</small></div><div style={{display:'flex', flexDirection:'column', gap:'10px'}}>{LISTE_SAUCES.map(s => { const count = getCount(s, sauces); return (<div key={s} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'1px dashed #eee'}}><span>{s}</span><div style={{display:'flex', alignItems:'center', gap:'10px'}}>{count > 0 && <button onClick={() => decrementOption(s, sauces, setSauces)} style={{width:'30px', height:'30px', borderRadius:'50%', border:'1px solid #ddd', background:'white', fontWeight:'bold'}}>-</button>}{count > 0 && <span style={{fontWeight:'bold'}}>{count}</span>}<button onClick={() => incrementOption(s, sauces, setSauces, 2)} style={{width:'30px', height:'30px', borderRadius:'50%', border:'none', background:COLORS.secondary, color:'white', fontWeight:'bold'}}>+</button></div></div>); })}</div></div>)}
+        
+        {isTacos && (
+            <div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}>
+                <div style={{fontWeight:'bold', marginBottom:'10px'}}>Sauces <small style={{color: COLORS.danger}}>(Minimum 1, Max 2)</small></div>
+                <div style={{display:'flex', flexDirection:'column', gap:'10px'}}>
+                    {saucesDispo.map(s => { 
+                        const count = getCount(s, sauces); 
+                        return (<div key={s} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'1px dashed #eee'}}><span>{s}</span><div style={{display:'flex', alignItems:'center', gap:'10px'}}>{count > 0 && <button onClick={() => decrementOption(s, sauces, setSauces)} style={{width:'30px', height:'30px', borderRadius:'50%', border:'1px solid #ddd', background:'white', fontWeight:'bold'}}>-</button>}{count > 0 && <span style={{fontWeight:'bold'}}>{count}</span>}<button onClick={() => incrementOption(s, sauces, setSauces, 2)} style={{width:'30px', height:'30px', borderRadius:'50%', border:'none', background:COLORS.secondary, color:'white', fontWeight:'bold'}}>+</button></div></div>); 
+                    })}
+                </div>
+            </div>
+        )}
+        
         {maxChoix > 0 && (<div style={{marginTop:'25px', borderTop:'1px solid #eee', paddingTop:'15px'}}><div style={{fontWeight:'bold', marginBottom:'10px'}}>{titreOptions} <small style={{color: optionsChoisies.length < minChoix ? COLORS.danger : COLORS.success}}>({optionsChoisies.length}/{maxChoix}) {minChoix > 0 ? `- Min ${minChoix}` : ''}</small></div><div style={{display:'flex', flexDirection:'column', gap:'10px'}}>{listeOptions.map(opt => { const count = getCount(opt, optionsChoisies); return (<div key={opt} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'1px dashed #eee'}}><span>{opt}</span><div style={{display:'flex', alignItems:'center', gap:'10px'}}>{count > 0 && <button onClick={() => decrementOption(opt, optionsChoisies, setOptionsChoisies)} style={{width:'30px', height:'30px', borderRadius:'50%', border:'1px solid #ddd', background:'white', fontWeight:'bold'}}>-</button>}{count > 0 && <span style={{fontWeight:'bold'}}>{count}</span>}<button onClick={() => incrementOption(opt, optionsChoisies, setOptionsChoisies, maxChoix)} style={{width:'30px', height:'30px', borderRadius:'50%', border:'none', background:COLORS.primary, color:'white', fontWeight:'bold'}}>+</button></div></div>); })}</div></div>)}
 
         <button onClick={() => {
