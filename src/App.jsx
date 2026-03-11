@@ -1486,7 +1486,7 @@ function App() {
                     <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '20px', scrollbarWidth: 'none', display:'flex', gap:'10px' }}>
                         {STOCK_TABS.map(tab => (
                             <button key={tab.id} onClick={() => setActiveStockTab(tab.id)} style={{
-                                border: 'none', display:'inline-block', padding:'10px 20px', borderRadius:'25px', 
+                                display:'inline-block', padding:'10px 20px', borderRadius:'25px', 
                                 background: activeStockTab === tab.id ? COLORS.secondary : 'white', 
                                 color: activeStockTab === tab.id ? 'white' : COLORS.secondary,
                                 fontWeight:'600', fontSize:'0.9rem', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', 
