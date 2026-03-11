@@ -159,6 +159,7 @@ function App() {
   const [adminCategorie, setAdminCategorie] = useState(''); 
   
   const [rushMode, setRushMode] = useState('standard');
+  const [isStoreOpen, setIsStoreOpen] = useState(true); // NOUVEAU STATUT OUVERTURE
 
   // --- ÉTATS POUR LES STOCKS GLOBAUX ---
   const [stocks, setStocks] = useState({
@@ -247,7 +248,7 @@ function App() {
       }
   }, [clientTel]);
 
-  // Écouteur Firebase : Rush Mode + Stocks
+  // Écouteurs Firebase : Horaires, Rush Mode + Stocks
   useEffect(() => {
     const unsubStatus = onSnapshot(doc(db, "parametres", "status"), (docSnap) => {
       if (docSnap.exists()) {
@@ -255,6 +256,14 @@ function App() {
       } else {
         setDoc(doc(db, "parametres", "status"), { mode: 'standard' });
       }
+    });
+
+    const unsubHoraires = onSnapshot(doc(db, "parametres", "horaires"), (docSnap) => {
+        if (docSnap.exists()) {
+          setIsStoreOpen(docSnap.data().isOuvert);
+        } else {
+          setDoc(doc(db, "parametres", "horaires"), { isOuvert: true });
+        }
     });
 
     const unsubStocks = onSnapshot(doc(db, "parametres", "stocks"), (docSnap) => {
@@ -280,7 +289,7 @@ function App() {
         }
     });
 
-    return () => { unsubStatus(); unsubStocks(); };
+    return () => { unsubStatus(); unsubStocks(); unsubHoraires(); };
   }, []);
 
   useEffect(() => {
@@ -558,22 +567,9 @@ function App() {
   };
 
   const envoyerCommande = async () => {
-    const now = new Date();
-    const day = now.getDay();
-    const hour = now.getHours();
-    let isOpen = false;
-
-    if (hour < 2) {
-        const yesterday = day === 0 ? 6 : day - 1;
-        if ([5, 6, 0].includes(yesterday)) isOpen = true;
-        else if (hour < 1) isOpen = true;
-    } else {
-        if (day >= 1 && day <= 5 && hour >= 12) isOpen = true;
-        if ((day === 6 || day === 0) && hour >= 18) isOpen = true;
-    }
-
-    if (!isOpen) {
-        return alert("😴 Le restaurant est fermé.\n\nLun-Jeu: 12h-01h\nVen: 12h-02h\nSam-Dim: 18h-02h");
+    // SUPPRESSION DE LA VÉRIFICATION DES HEURES EN DUR ICI
+    if (!isStoreOpen) {
+        return alert("😴 Le restaurant est actuellement fermé. Les commandes sont suspendues.");
     }
 
     if (panier.length === 0) return alert("Panier vide !");
@@ -903,7 +899,7 @@ function App() {
                         <p>Conformément à la législation en vigueur relative à la vente de denrées périssables et de produits confectionnés selon les spécifications du consommateur ou nettement personnalisés, le Client ne dispose d'aucun droit de rétractation. Toute commande validée et mise en préparation est due dans son intégralité. En cas de refus de la marchandise à la livraison sans motif légitime (erreur de commande imputable au Vendeur), le montant de la commande reste exigible.</p>
 
                         <h4 style={{fontWeight:'bold', marginTop:'15px'}}>ARTICLE 8 : HORAIRES D'OUVERTURE ET AFFLUENCE (RUSH)</h4>
-                        <p><strong>8.1.</strong> Le service de commande est ouvert exclusivement durant les plages horaires définies par le Vendeur (par défaut 12h00 à 23h00). Toute tentative de commande hors de ces créneaux sera techniquement bloquée.</p>
+                        <p><strong>8.1.</strong> Le service de commande est ouvert exclusivement durant les plages horaires définies par le Vendeur. Toute tentative de commande hors de ces créneaux sera techniquement bloquée.</p>
                         <p><strong>8.2.</strong> Périodes de forte affluence ("Rush") : Le Client reconnaît qu'en période de forte demande, le Vendeur peut être amené à suspendre temporairement les commandes ou à allonger les délais de livraison. En acceptant de commander durant une période signalée comme « Rush », le Client renonce expressément à toute réclamation liée à la durée d'attente.</p>
 
                         <h4 style={{fontWeight:'bold', marginTop:'15px'}}>ARTICLE 9 : RESPONSABILITÉ ET ALLERGÈNES</h4>
@@ -1002,9 +998,17 @@ function App() {
         </div>
       )}
 
+      {/* BANNIÈRE RUSH */}
       {rushMode !== 'standard' && view === 'client' && (
           <div style={{background: rushMode === 'gros_rush' ? COLORS.danger : COLORS.warning, color:'white', textAlign:'center', padding:'10px', fontWeight:'bold', fontSize:'0.9rem'}}>
               {rushMode === 'gros_rush' ? '⚠️ Très forte affluence : Attente > 1h' : '⚠️ Forte affluence : Attente estimée 30 min+'}
+          </div>
+      )}
+
+      {/* BANNIÈRE FERMETURE */}
+      {!isStoreOpen && view === 'client' && (
+          <div style={{background: COLORS.danger, color:'white', textAlign:'center', padding:'10px', fontWeight:'bold', fontSize:'0.9rem'}}>
+              ⛔ RESTAURANT ACTUELLEMENT FERMÉ ⛔
           </div>
       )}
 
@@ -1214,7 +1218,8 @@ function App() {
                     </div>
                 </div>
 
-                <button onClick={envoyerCommande} disabled={loading} style={{...btnStyle, marginTop:'10px', background: COLORS.success}}>{loading ? '...' : 'VALIDER LA COMMANDE'}</button>
+                {/* BOUTON SÉCURISÉ */}
+                <button onClick={envoyerCommande} disabled={loading || !isStoreOpen} style={{...btnStyle, marginTop:'10px', background: !isStoreOpen ? 'gray' : COLORS.success}}>{loading ? '...' : (!isStoreOpen ? 'FERMÉ' : 'VALIDER LA COMMANDE')}</button>
               </div>
             </>
           )}
@@ -1292,6 +1297,19 @@ function App() {
               <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
                 <h2 style={{margin:0}}>⚙️ Admin</h2>
                 <div style={{fontSize:'0.8rem', color: COLORS.success, background:'#ECFDF5', padding:'5px 10px', borderRadius:'10px'}}>🔊 Son Actif</div>
+              </div>
+          </div>
+
+          {/* NOUVEAU : GESTION OUVERTURE / FERMETURE */}
+          <div style={{background: 'white', padding: '15px', borderRadius: '16px', marginBottom: '20px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)'}}>
+              <h3 style={{marginTop:0, marginBottom:'15px', fontSize:'1rem'}}>Ouverture / Fermeture du Restaurant</h3>
+              <div style={{display:'flex', gap:'10px'}}>
+                  <button onClick={() => updateDoc(doc(db, "parametres", "horaires"), { isOuvert: true })} style={{flex:1, padding:'12px', borderRadius:'10px', border: isStoreOpen ? `2px solid ${COLORS.success}` : '1px solid #ddd', background: isStoreOpen ? '#ECFDF5' : 'white', color: isStoreOpen ? COLORS.success : 'black', fontWeight:'bold', cursor:'pointer'}}>
+                      🟢 OUVERT
+                  </button>
+                  <button onClick={() => updateDoc(doc(db, "parametres", "horaires"), { isOuvert: false })} style={{flex:1, padding:'12px', borderRadius:'10px', border: !isStoreOpen ? `2px solid ${COLORS.danger}` : '1px solid #ddd', background: !isStoreOpen ? '#FEF2F2' : 'white', color: !isStoreOpen ? COLORS.danger : 'black', fontWeight:'bold', cursor:'pointer'}}>
+                      🔴 FERMÉ
+                  </button>
               </div>
           </div>
 
