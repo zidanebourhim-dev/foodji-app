@@ -1,16 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { db, auth } from './firebase';
-import { signInWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
+import { db } from './firebase';
 import { 
   collection, 
   addDoc, 
   onSnapshot, 
   doc, 
-  deleteDoc, 
-  updateDoc, 
   setDoc,
   query, 
-  writeBatch,
   getDocs, 
   where 
 } from 'firebase/firestore';
@@ -33,7 +29,7 @@ const COLORS = {
   pending: '#F97316' 
 };
 
-// --- LISTES PAR DÉFAUT (Pour l'initialisation Firebase si vide) ---
+// --- LISTES PAR DÉFAUT ---
 const INIT_VIANDES = [
     { nom: "Poulet", available: true }, { nom: "Viande Hachée", available: true }, 
     { nom: "Cordon Bleu", available: true }, { nom: "Nuggets", available: true }, 
@@ -67,25 +63,13 @@ const EXTRAS_PIZZA = [
 
 const RETRAIT_INGREDIENTS = ["Sans Tomate", "Sans Salade", "Sans Oignons", "Sans Cornichons", "Sans Sauce"];
 const PIZZAS_EXCLUES_PROMO = ["4 saisons", "fruits de mer", "cannibale", "2 saisons"];
-const TOUTES_CATEGORIES = ["Tacos", "Pizzas", "Burgers", "Pâtes", "Sides", "Les Burritos", "Koniks", "Plats", "Salades", "Boissons", "Desserts"];
 
-// Configuration des Onglets Stocks Admin
-const STOCK_TABS = [
-    { id: 'viandes', label: '🌮 Viandes' },
-    { id: 'garnitures', label: '🍕 Garnitures' },
-    { id: 'tailles_pizza', label: '📏 Tailles' },
-    { id: 'pates', label: '🍝 Pâtes' },
-    { id: 'sauces', label: '🥣 Sauces' }
-];
-
-const NOTIF_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
+const WELCOME_TOKEN_REF = "START2026"; 
+const POURCENTAGE_REMISE = 0.20;
 
 const logoImg = "/logo.png";
 const iconImg = "/icon.png";
 const promoImg = "/promo.jpg"; 
-
-const WELCOME_TOKEN_REF = "START2026"; 
-const POURCENTAGE_REMISE = 0.20;
 
 const seoConfig = {
   title: "Foodji - Le Fait Maison à Sala Al Jadida | Burgers & Tacos (Jusqu'à 2h)",
@@ -100,7 +84,7 @@ const structuredData = {
   "@type": "Restaurant",
   "name": "Foodji",
   "image": seoConfig.image,
-  "description": "Foodji propose une cuisine minute à Sala Al Jadida avec une promesse simple : du Fait Maison et de la haute qualité à prix moyen. Burgers gourmets, Tacos gratinés et Pizzas préparés à la commande.",
+  "description": "Foodji propose une cuisine minute à Sala Al Jadida avec une promesse simple : du Fait Maison et de la haute qualité à prix moyen.",
   "address": {
     "@type": "PostalAddress",
     "addressLocality": "Sala Al Jadida",
@@ -117,38 +101,16 @@ const structuredData = {
   "priceRange": "$$",
   "servesCuisine": ["Burger", "Tacos", "Pizza", "Cuisine Minute"],
   "openingHoursSpecification": [
-    {
-      "@type": "OpeningHoursSpecification",
-      "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday"],
-      "opens": "12:00",
-      "closes": "01:00"
-    },
-    {
-      "@type": "OpeningHoursSpecification",
-      "dayOfWeek": ["Friday"],
-      "opens": "12:00",
-      "closes": "02:00"
-    },
-    {
-      "@type": "OpeningHoursSpecification",
-      "dayOfWeek": ["Saturday", "Sunday"],
-      "opens": "18:00",
-      "closes": "02:00"
-    }
+    { "@type": "OpeningHoursSpecification", "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday"], "opens": "12:00", "closes": "01:00" },
+    { "@type": "OpeningHoursSpecification", "dayOfWeek": ["Friday"], "opens": "12:00", "closes": "02:00" },
+    { "@type": "OpeningHoursSpecification", "dayOfWeek": ["Saturday", "Sunday"], "opens": "18:00", "closes": "02:00" }
   ]
 };
 
 function App() {
-  const [user, setUser] = useState(null);
   const [view, setView] = useState('landing'); 
-  
   const [menu, setMenu] = useState([]);
-  const [commandes, setCommandes] = useState([]);
   
-  const prevCommandesLength = useRef(0);
-  const audioRef = useRef(null);
-  const fileInputRef = useRef(null); 
-
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [showPromoWizard, setShowPromoWizard] = useState(false); 
   const [showCGV, setShowCGV] = useState(false);
@@ -156,12 +118,9 @@ function App() {
   const [isMenuLoading, setIsMenuLoading] = useState(true); 
   
   const [categorieActive, setCategorieActive] = useState(''); 
-  const [adminCategorie, setAdminCategorie] = useState(''); 
-  
   const [rushMode, setRushMode] = useState('standard');
-  const [isStoreOpen, setIsStoreOpen] = useState(true); // NOUVEAU STATUT OUVERTURE
+  const [isStoreOpen, setIsStoreOpen] = useState(true);
 
-  // --- ÉTATS POUR LES STOCKS GLOBAUX ---
   const [stocks, setStocks] = useState({
       viandes: INIT_VIANDES,
       garnitures: INIT_GARNITURES_PIZZA,
@@ -169,8 +128,6 @@ function App() {
       pates: INIT_PATES,
       tailles_pizza: INIT_TAILLES_PIZZA
   });
-  const [activeStockTab, setActiveStockTab] = useState('viandes');
-  const [newItemName, setNewItemName] = useState('');
 
   const [panier, setPanier] = useState([]);
   const [clientNom, setClientNom] = useState('');
@@ -188,23 +145,10 @@ function App() {
   const [showDistanceBlocker, setShowDistanceBlocker] = useState(false);
   
   const [derniereCommande, setDerniereCommande] = useState(null);
-
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  
-  const [editId, setEditId] = useState(null); 
-  const [nom, setNom] = useState('');
-  const [description, setDescription] = useState(''); 
-  const [image, setImage] = useState('');
-  const [categorie, setCategorie] = useState('Burgers');
-  const [prixBase, setPrixBase] = useState('');
-  const [variantes, setVariantes] = useState([]); 
   
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showIosInstall, setShowIosInstall] = useState(false);
-
-  const SYNC_ID_VERSION = "053700";
 
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
       const R = 6371; 
@@ -248,7 +192,6 @@ function App() {
       }
   }, [clientTel]);
 
-  // Écouteurs Firebase : Horaires, Rush Mode + Stocks
   useEffect(() => {
     const unsubStatus = onSnapshot(doc(db, "parametres", "status"), (docSnap) => {
       if (docSnap.exists()) {
@@ -289,34 +232,13 @@ function App() {
         }
     });
 
-    return () => { unsubStatus(); unsubStocks(); unsubHoraires(); };
-  }, []);
-
-  useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (u) => { setUser(u); });
-    
     const unsubscribeMenu = onSnapshot(collection(db, "produits"), (snap) => {
       setMenu(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       setIsMenuLoading(false); 
     });
 
-    const q = query(collection(db, "commandes"));
-    const unsubscribeCmd = onSnapshot(q, (snap) => {
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      list.sort((a, b) => b.date.seconds - a.date.seconds);
-      
-      if (list.length > prevCommandesLength.current && user) {
-          if (!audioRef.current) {
-             audioRef.current = new Audio(NOTIF_SOUND);
-          }
-          audioRef.current.play().catch(e => console.log("Son bloqué"));
-      }
-      prevCommandesLength.current = list.length;
-      setCommandes(list);
-    });
-
-    return () => { unsubscribeAuth(); unsubscribeMenu(); unsubscribeCmd(); };
-  }, [user]);
+    return () => { unsubStatus(); unsubStocks(); unsubHoraires(); unsubscribeMenu(); };
+  }, []);
 
   useEffect(() => {
     const handler = (e) => {
@@ -351,12 +273,6 @@ function App() {
   };
 
   const categoriesReelles = [...new Set(menu.map(p => p.categorie))];
-  const categoriesSelectAdmin = [...new Set([...TOUTES_CATEGORIES, ...categoriesReelles])];
-
-  useEffect(() => {
-      if (categoriesReelles.length > 0 && !adminCategorie) setAdminCategorie(categoriesReelles[0]);
-  }, [menu, adminCategorie]);
-
   const isDimanche = new Date().getDay() === 0;
   let categoriesClient = [...categoriesReelles];
   if (isDimanche) categoriesClient = ['🔥 PROMOTIONS', ...categoriesReelles];
@@ -374,73 +290,6 @@ function App() {
   } else {
       menuClient = menu.filter(p => p.categorie === categorieActive && p.available !== false);
   }
-
-  let menuAdmin = [];
-  if (adminCategorie === 'RUPTURE') menuAdmin = menu.filter(p => p.available === false);
-  else menuAdmin = menu.filter(p => p.categorie === adminCategorie);
-
-  const checkManagerAuth = () => {
-      const code = prompt("🔒 Code Manager requis :");
-      if (code === SYNC_ID_VERSION) return true;
-      alert("❌ Code incorrect !");
-      return false;
-  };
-
-  const triggerImport = () => {
-      if (checkManagerAuth()) fileInputRef.current.click();
-  };
-
-  const handleCSVImport = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
-      const text = evt.target.result;
-      const rows = text.split('\n').filter(r => r.trim() !== '');
-      if(confirm(`Importer ${rows.length} lignes ?`)) {
-        setLoading(true);
-        for (let i = 1; i < rows.length; i++) { 
-          const row = rows[i];
-          const tokens = row.split(','); 
-          if (tokens.length >= 5) {
-             const cat = tokens[0].trim(); const name = tokens[1].trim();
-             const len = tokens.length;
-             const p1Raw = tokens[len - 3]; const p2Raw = tokens[len - 2]; const p3Raw = tokens[len - 1];
-             const clean = (val) => val ? Number(val.toString().replace(/[^0-9.]/g, '')) : 0;
-             const p1 = clean(p1Raw.replace(',','.')); const p2 = clean(p2Raw.replace(',','.')); const p3 = clean(p3Raw.replace(',','.'));
-             let vars = [];
-             if (p2 > 0 || p3 > 0) {
-                let n1="Standard", n2="Moyen", n3="Grand";
-                if (cat.toLowerCase().includes('tacos')) { n1="L"; n2="XL"; n3="XXL"; }
-                else if (cat.toLowerCase().includes('pizza')) { n1="M"; n2="L"; n3="XL"; }
-                if(p1>0) vars.push({nom:n1, prix:p1, available: true});
-                if(p2>0) vars.push({nom:n2, prix:p2, available: true});
-                if(p3>0) vars.push({nom:n3, prix:p3, available: true});
-             }
-             if(name && cat) await addDoc(collection(db, "produits"), { categorie: cat, nom: name, description: tokens.slice(2, len - 3).join(', ').replace(/"/g, ''), prix: vars.length>0?0:p1, image: '', variantes: vars, date: new Date(), available: true });
-          }
-        }
-        setLoading(false); alert("Import terminé !"); e.target.value = null; 
-      }
-    };
-    reader.readAsText(file);
-  };
-
-  const viderMenu = async () => {
-      if (!checkManagerAuth()) return;
-      if(confirm("⚠️ SUPPRIMER TOUT LE MENU ?")) {
-          setLoading(true);
-          const batch = writeBatch(db);
-          menu.forEach(p => { batch.delete(doc(db, "produits", p.id)); });
-          await batch.commit();
-          setLoading(false); alert("Menu vidé !");
-      }
-  };
-
-  const handleStaffAccess = () => {
-      if (user) setView('admin'); 
-      else setView('login'); 
-  };
 
   const ajouterAuPanier = (itemMerged) => {
     if (itemMerged.isPromoTrigger) { setShowPromoWizard(true); return; }
@@ -567,7 +416,6 @@ function App() {
   };
 
   const envoyerCommande = async () => {
-    // SUPPRESSION DE LA VÉRIFICATION DES HEURES EN DUR ICI
     if (!isStoreOpen) {
         return alert("😴 Le restaurant est actuellement fermé. Les commandes sont suspendues.");
     }
@@ -620,133 +468,6 @@ function App() {
         setView('ticket'); 
     } catch (e) { alert("Erreur réseau"); }
     setLoading(false);
-  };
-
-  const toggleAvailability = async (item) => {
-    await updateDoc(doc(db, "produits", item.id), { available: !item.available });
-  };
-  
-  const handleCategoryChange = (e) => {
-      const cat = e.target.value;
-      setCategorie(cat);
-      if (!editId) {
-          if (cat === 'Tacos') {
-              setVariantes([{nom: 'L', prix: '', available: true}, {nom: 'XL', prix: '', available: true}, {nom: 'XXL', prix: '', available: true}]);
-              setPrixBase('');
-          } else if (cat === 'Pizzas') {
-              setVariantes([{nom: 'M', prix: '', available: true}, {nom: 'L', prix: '', available: true}]);
-              setPrixBase('');
-          } else {
-              setVariantes([]);
-          }
-      }
-  };
-
-  const handleEdit = (p) => {
-      setEditId(p.id);
-      setNom(p.nom);
-      setDescription(p.description || ''); 
-      setCategorie(p.categorie);
-      if (p.variantes && p.variantes.length > 0) {
-          setVariantes(p.variantes.map(v => ({...v, available: v.available !== false})));
-          setPrixBase(''); 
-      } else {
-          setVariantes([]);
-          setPrixBase(p.prix);
-      }
-      window.scrollTo(0,0);
-  };
-
-  const updateVariantPrice = (index, field, newVal) => {
-      const newVars = [...variantes];
-      if(field === 'available') newVars[index].available = newVal;
-      else newVars[index].prix = Number(newVal);
-      setVariantes(newVars);
-  };
-
-  const saveProduit = async () => {
-    if(!nom) return; 
-    setLoading(true);
-    const data = { 
-        nom, description, categorie, 
-        prix: variantes.length > 0 ? 0 : Number(prixBase), 
-        variantes, 
-        available: true,
-        date: new Date()
-    };
-    if(image) data.image = image;
-    if (editId) {
-        await updateDoc(doc(db, "produits", editId), data);
-        alert("Modifié !");
-        setEditId(null);
-    } else {
-        await addDoc(collection(db, "produits"), data);
-        alert("Ajouté !");
-    }
-    setNom(''); setDescription(''); setImage(''); setPrixBase(''); setVariantes([]); 
-    setLoading(false);
-  };
-
-  const supprimerProduit = async (id) => { 
-      if (!checkManagerAuth()) return;
-      if(confirm("Confirmer la suppression définitive ?")) {
-          await deleteDoc(doc(db, "produits", id)); 
-      }
-  };
-
-  // --- LOGIQUE GESTION STOCKS (ON/OFF) ---
-  const toggleStockItem = async (listName, index) => {
-      const newList = [...stocks[listName]];
-      newList[index].available = !newList[index].available;
-      
-      const newData = { ...stocks, [listName]: newList };
-      await updateDoc(doc(db, "parametres", "stocks"), newData);
-  };
-
-  const addNewStockItem = async () => {
-      if(!checkManagerAuth()) return;
-
-      if(!newItemName.trim()) return;
-      const newList = [...stocks[activeStockTab], { nom: newItemName.trim(), available: true }];
-      const newData = { ...stocks, [activeStockTab]: newList };
-      await updateDoc(doc(db, "parametres", "stocks"), newData);
-      setNewItemName('');
-  };
-  
-  const copierOdoo = (cmd) => {
-    let t = `Nom : ${cmd.client}\nTél : ${cmd.tel}\n`;
-    if (cmd.type === 'livraison') t += `Adresse : ${cmd.adresse}`;
-    else t += `Mode : ${cmd.type === 'sur_place' ? 'Sur Place' : 'Emporter'}`;
-    if (cmd.commentaire) t += `\nNote : ${cmd.commentaire}`;
-    navigator.clipboard.writeText(t).then(() => alert("Copié !"));
-  };
-  
-  const changerStatus = async (id, st) => {
-      await updateDoc(doc(db, "commandes", id), { status: st });
-  };
-  
-  const supprimerCmd = async (id) => { 
-      if(confirm("Supprimer cette commande ?")) await deleteDoc(doc(db, "commandes", id)); 
-  };
-  
-  const updateProductImage = async (id, file) => {
-    if(!file) return;
-    const reader = new FileReader(); 
-    reader.readAsDataURL(file);
-    reader.onload = (e) => {
-      const img = document.createElement("img"); 
-      img.src = e.target.result;
-      img.onload = async () => {
-         const c = document.createElement("canvas"); 
-         const ctx = c.getContext("2d");
-         const s = 800/img.width; 
-         c.width = 800; 
-         c.height = img.height*s;
-         ctx.drawImage(img,0,0,c.width,c.height); 
-         await updateDoc(doc(db, "produits", id), { image: c.toDataURL("image/jpeg", 0.7) });
-         alert("Image mise à jour !");
-      }
-    };
   };
 
   const btnStyle = { 
@@ -850,69 +571,34 @@ function App() {
                     WebkitOverflowScrolling: 'touch' 
                 }}>
                     <div style={{fontSize:'0.9rem', lineHeight:'1.6', color:'#333', textAlign:'justify', paddingBottom:'20px', paddingTop:'20px'}}>
-                        
                         <h3 style={{fontSize:'1.1rem', fontWeight:'bold', marginTop:'0', textAlign:'center'}}>CONDITIONS GÉNÉRALES D'UTILISATION ET DE VENTE (CGUV) - FOODJI</h3>
                         <p style={{textAlign:'center', fontStyle:'italic', marginBottom:'20px'}}>Dernière mise à jour : Janvier 2026</p>
 
                         <h4 style={{fontWeight:'bold', marginTop:'15px'}}>PRÉAMBULE</h4>
-                        <p>L'accès, la consultation et l'utilisation de l'application mobile et web « Foodji » (ci-après désignée « l'Application ») impliquent l'acceptation intégrale et sans réserve des présentes Conditions Générales d'Utilisation et de Vente par tout utilisateur (ci-après désigné « le Client »). Le Client reconnaît avoir la capacité juridique de contracter et garantit la véracité des informations fournies.</p>
-
-                        <h4 style={{fontWeight:'bold', marginTop:'15px'}}>ARTICLE 1 : OBJET ET CHAMP D'APPLICATION</h4>
-                        <p>Les présentes conditions régissent exclusivement les relations contractuelles entre le restaurant Foodji, situé à Sala Al Jadida (ci-après « le Vendeur »), et toute personne passant commande via l'Application. Elles prévalent sur tout autre document ou condition non expressément agréé par le Vendeur. Foodji se réserve le droit de modifier ces conditions à tout moment ; les conditions applicables sont celles en vigueur à la date de validation de la commande.</p>
+                        <p>L'accès, la consultation et l'utilisation de l'application mobile et web « Foodji » impliquent l'acceptation intégrale et sans réserve des présentes Conditions Générales d'Utilisation et de Vente par tout utilisateur.</p>
 
                         <h4 style={{fontWeight:'bold', marginTop:'15px'}}>ARTICLE 2 : ACCÈS AU SERVICE ET GÉOLOCALISATION</h4>
                         <p><strong>2.1.</strong> L'utilisation du service de commande en livraison nécessite impérativement l'activation de la fonction de géolocalisation (GPS) sur le terminal du Client.</p>
                         <p><strong>2.2.</strong> Le Vendeur a mis en place un système de restriction géographique strict. Le Client reconnaît et accepte que :</p>
                         <ul style={{paddingLeft:'20px', margin:'5px 0'}}>
-                            <li>Aucune commande en livraison ne pourra être validée si la position GPS du Client se situe au-delà d'un rayon de 10 kilomètres (distance à vol d'oiseau ou routière selon l'algorithme du Vendeur) du restaurant.</li>
-                            <li>Toute tentative de contournement des systèmes de géolocalisation (VPN, fausse localisation) entraînera l'annulation immédiate de la commande et le bannissement du compte utilisateur.</li>
+                            <li>Aucune commande en livraison ne pourra être validée si la position GPS du Client se situe au-delà d'un rayon de 10 kilomètres.</li>
+                            <li>Toute tentative de contournement des systèmes de géolocalisation (VPN, fausse localisation) entraînera l'annulation immédiate de la commande.</li>
                         </ul>
-
-                        <h4 style={{fontWeight:'bold', marginTop:'15px'}}>ARTICLE 3 : PRODUITS ET DISPONIBILITÉ</h4>
-                        <p><strong>3.1.</strong> Les produits proposés sont ceux qui figurent dans le menu de l'Application au jour de la commande, dans la limite des stocks disponibles.</p>
-                        <p><strong>3.2.</strong> Photographies non contractuelles : Les photographies et illustrations présentées sur l'Application ont une valeur purement indicative et n'entrent pas dans le champ contractuel. La responsabilité de Foodji ne saurait être engagée si des différences visuelles existent entre le produit photographié et le produit livré.</p>
-                        <p><strong>3.3.</strong> En cas d'indisponibilité d'un produit après passation de la commande, le Client en sera informé par téléphone. Il lui sera proposé soit un produit de substitution de valeur équivalente, soit l'annulation de l'article concerné.</p>
 
                         <h4 style={{fontWeight:'bold', marginTop:'15px'}}>ARTICLE 4 : COMMANDE ET VALIDATION</h4>
-                        <p><strong>4.1.</strong> La validation finale de la commande via le bouton « VALIDER » vaut preuve de l'intégralité de la commande et exigibilité des sommes dues.</p>
-                        <p><strong>4.2.</strong> Seuils de commande et Sécurité :</p>
                         <ul style={{paddingLeft:'20px', margin:'5px 0'}}>
-                            <li>Pour toute commande dont le montant total excède 300,00 DH (Trois cents Dirhams), une procédure de validation manuelle est déclenchée. Le Client doit impérativement être joignable sur le numéro de téléphone renseigné. À défaut de réponse du Client lors de l'appel de vérification effectué par le Vendeur, la commande sera purement et simplement annulée et ne sera pas mise en préparation.</li>
+                            <li>Pour toute commande dont le montant total excède 300,00 DH, une procédure de validation manuelle est déclenchée. Le Client doit impérativement être joignable sur le numéro de téléphone renseigné. À défaut de réponse, la commande sera annulée.</li>
                         </ul>
-                        <p><strong>4.3.</strong> Le Vendeur se réserve le droit de refuser ou d'annuler toute commande d'un Client avec lequel il existerait un litige relatif au paiement d'une commande antérieure ou qui présenterait un comportement inapproprié envers le personnel.</p>
 
                         <h4 style={{fontWeight:'bold', marginTop:'15px'}}>ARTICLE 5 : ZONES, FRAIS ET CONDITIONS DE LIVRAISON</h4>
-                        <p><strong>5.1.</strong> Les frais et conditions de livraison varient dynamiquement en fonction de la distance calculée par l'Application :</p>
                         <ul style={{paddingLeft:'20px', margin:'5px 0'}}>
                             <li><strong>Zone 1 (0 à 4 km) :</strong> Aucun minimum de commande n'est requis.</li>
-                            <li><strong>Zone 2 (4 à 10 km) :</strong> Un minimum de commande strict de 300,00 DH est exigé. En deçà de ce montant, la livraison est techniquement impossible.</li>
+                            <li><strong>Zone 2 (4 à 10 km) :</strong> Un minimum de commande strict de 300,00 DH est exigé.</li>
                         </ul>
-                        <p><strong>5.2.</strong> Zones Spéciales (Surcharge) : Le Client est informé que certaines zones spécifiques, incluant sans s'y limiter le campus de l'UIR, Technopolis, et UM6P, font l'objet d'une tarification spéciale appliquée par les prestataires de livraison tiers. Un supplément (généralement compris entre 10 et 15 DH) pourra être réclamé directement par le livreur lors de la remise de la commande. Le Client accepte cette surcharge en validant sa commande à destination de ces lieux.</p>
-                        <p><strong>5.3.</strong> Les délais de livraison indiqués dans l'Application ou par téléphone sont donnés à titre indicatif et correspondent aux délais moyens de traitement et de livraison. Foodji ne pourra être tenu responsable des conséquences dues à un retard d'acheminement (intempéries, trafic, panne, force majeure). Un retard de livraison ne peut donner lieu à aucune indemnité ni annulation de la commande une fois celle-ci préparée.</p>
-
-                        <h4 style={{fontWeight:'bold', marginTop:'15px'}}>ARTICLE 6 : PRIX ET MODALITÉS DE PAIEMENT</h4>
-                        <p><strong>6.1.</strong> Les prix sont indiqués en Dirhams Marocains (MAD) toutes taxes comprises (TTC).</p>
-                        <p><strong>6.2.</strong> Le paiement s'effectue intégralement au moment de la réception de la commande (livraison ou emporter), soit en espèces, soit par tout autre moyen accepté par le livreur (virement instantané sous réserve d'acceptation).</p>
-                        <p><strong>6.3.</strong> Le Client s'engage à faire l'appoint en cas de paiement en espèces. Le livreur n'est pas tenu d'avoir la monnaie sur des coupures importantes si cela n'a pas été précisé en commentaire.</p>
+                        <p><strong>5.2.</strong> Zones Spéciales (Surcharge) : Le Client est informé que certaines zones spécifiques, incluant sans s'y limiter le campus de l'UIR, Technopolis, et UM6P, font l'objet d'une tarification spéciale (supplément de 10 à 15 DH réclamé par le livreur).</p>
 
                         <h4 style={{fontWeight:'bold', marginTop:'15px'}}>ARTICLE 7 : ABSENCE DE DROIT DE RÉTRACTATION</h4>
-                        <p>Conformément à la législation en vigueur relative à la vente de denrées périssables et de produits confectionnés selon les spécifications du consommateur ou nettement personnalisés, le Client ne dispose d'aucun droit de rétractation. Toute commande validée et mise en préparation est due dans son intégralité. En cas de refus de la marchandise à la livraison sans motif légitime (erreur de commande imputable au Vendeur), le montant de la commande reste exigible.</p>
-
-                        <h4 style={{fontWeight:'bold', marginTop:'15px'}}>ARTICLE 8 : HORAIRES D'OUVERTURE ET AFFLUENCE (RUSH)</h4>
-                        <p><strong>8.1.</strong> Le service de commande est ouvert exclusivement durant les plages horaires définies par le Vendeur. Toute tentative de commande hors de ces créneaux sera techniquement bloquée.</p>
-                        <p><strong>8.2.</strong> Périodes de forte affluence ("Rush") : Le Client reconnaît qu'en période de forte demande, le Vendeur peut être amené à suspendre temporairement les commandes ou à allonger les délais de livraison. En acceptant de commander durant une période signalée comme « Rush », le Client renonce expressément à toute réclamation liée à la durée d'attente.</p>
-
-                        <h4 style={{fontWeight:'bold', marginTop:'15px'}}>ARTICLE 9 : RESPONSABILITÉ ET ALLERGÈNES</h4>
-                        <p><strong>9.1.</strong> Les produits proposés sont conformes à la législation alimentaire marocaine en vigueur.</p>
-                        <p><strong>9.2.</strong> Allergies : Il relève de la responsabilité exclusive du Client de se renseigner sur la composition des plats et de signaler toute allergie ou intolérance alimentaire dans le champ « Commentaire » prévu à cet effet avant la validation. Foodji décline toute responsabilité en cas de réaction allergique si le Client n'a pas expressément signalé sa condition ou s'il a consommé un produit malgré la présence d'allergènes connus.</p>
-
-                        <h4 style={{fontWeight:'bold', marginTop:'15px'}}>ARTICLE 10 : DONNÉES PERSONNELLES ET COMPORTEMENT</h4>
-                        <p><strong>10.1.</strong> Les données collectées (nom, adresse, téléphone, géolocalisation) sont nécessaires au traitement de la commande.</p>
-                        <p><strong>10.2.</strong> Foodji se réserve le droit de bloquer définitivement l'adresse IP et le numéro de téléphone de tout utilisateur ayant passé une commande « fantôme » (client absent à la livraison, refus de paiement, fausse adresse) ou ayant tenu des propos injurieux envers le personnel ou les livreurs.</p>
-
-                        <h4 style={{fontWeight:'bold', marginTop:'15px'}}>ARTICLE 11 : DROIT APPLICABLE</h4>
-                        <p>Les présentes conditions sont soumises au droit marocain. En cas de litige, une solution amiable sera recherchée avant toute action judiciaire.</p>
-
+                        <p>Conformément à la législation en vigueur relative à la vente de denrées périssables, le Client ne dispose d'aucun droit de rétractation. Toute commande validée et mise en préparation est due dans son intégralité.</p>
                     </div>
                 </div>
 
@@ -974,12 +660,6 @@ function App() {
                       📄 Ma dernière commande
                   </button>
               )}
-
-              <button onClick={handleStaffAccess} style={{
-                  marginTop:'60px', background: 'transparent', border: 'none', fontSize: '1.5rem', cursor:'pointer', opacity:0.5
-              }}>
-                  🔒
-              </button>
           </div>
         </div>
       )}
@@ -990,11 +670,6 @@ function App() {
             <img src={iconImg} style={{height:'35px', objectFit:'contain'}} alt="Accueil" />
             <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '800', letterSpacing: '-0.5px', color: COLORS.secondary }}>Foodji</h1>
           </div>
-          {user ? (
-            <button onClick={() => setView(view === 'admin' ? 'client' : 'admin')} style={{background: COLORS.secondary, color: 'white', border: 'none', padding: '8px 15px', borderRadius: '20px', fontSize:'0.8rem', fontWeight:'600'}}>{view === 'admin' ? 'App' : 'Admin'}</button>
-          ) : (
-             <div style={{width:'30px'}}></div>
-          )}
         </div>
       )}
 
@@ -1218,7 +893,6 @@ function App() {
                     </div>
                 </div>
 
-                {/* BOUTON SÉCURISÉ */}
                 <button onClick={envoyerCommande} disabled={loading || !isStoreOpen} style={{...btnStyle, marginTop:'10px', background: !isStoreOpen ? 'gray' : COLORS.success}}>{loading ? '...' : (!isStoreOpen ? 'FERMÉ' : 'VALIDER LA COMMANDE')}</button>
               </div>
             </>
@@ -1280,262 +954,6 @@ function App() {
           </div>
       )}
 
-      {view === 'login' && !user && (
-        <div style={{ padding: '40px 20px', maxWidth: '400px', margin: '0 auto', textAlign: 'center' }}>
-          <h2 style={{marginBottom: '20px'}}>Staff Access</h2>
-          <input type="email" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} style={inputStyle}/>
-          <input type="password" placeholder="Mot de passe" value={password} onChange={e=>setPassword(e.target.value)} style={inputStyle}/>
-          <button onClick={async (e)=>{e.preventDefault(); try{await signInWithEmailAndPassword(auth,email,password); setView('admin');}catch(e){alert('Erreur')}}} style={btnStyle}>Connexion</button>
-          <button onClick={() => setView('landing')} style={{marginTop:'20px', background:'transparent', border:'none', color: COLORS.textLight}}>Retour</button>
-        </div>
-      )}
-
-      {view === 'admin' && user && (
-        <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
-          
-          <div style={{marginBottom:'20px', display:'flex', gap:'10px', alignItems:'center', justifyContent:'space-between'}}>
-              <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
-                <h2 style={{margin:0}}>⚙️ Admin</h2>
-                <div style={{fontSize:'0.8rem', color: COLORS.success, background:'#ECFDF5', padding:'5px 10px', borderRadius:'10px'}}>🔊 Son Actif</div>
-              </div>
-          </div>
-
-          {/* NOUVEAU : GESTION OUVERTURE / FERMETURE */}
-          <div style={{background: 'white', padding: '15px', borderRadius: '16px', marginBottom: '20px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)'}}>
-              <h3 style={{marginTop:0, marginBottom:'15px', fontSize:'1rem'}}>Ouverture / Fermeture du Restaurant</h3>
-              <div style={{display:'flex', gap:'10px'}}>
-                  <button onClick={() => updateDoc(doc(db, "parametres", "horaires"), { isOuvert: true })} style={{flex:1, padding:'12px', borderRadius:'10px', border: isStoreOpen ? `2px solid ${COLORS.success}` : '1px solid #ddd', background: isStoreOpen ? '#ECFDF5' : 'white', color: isStoreOpen ? COLORS.success : 'black', fontWeight:'bold', cursor:'pointer'}}>
-                      🟢 OUVERT
-                  </button>
-                  <button onClick={() => updateDoc(doc(db, "parametres", "horaires"), { isOuvert: false })} style={{flex:1, padding:'12px', borderRadius:'10px', border: !isStoreOpen ? `2px solid ${COLORS.danger}` : '1px solid #ddd', background: !isStoreOpen ? '#FEF2F2' : 'white', color: !isStoreOpen ? COLORS.danger : 'black', fontWeight:'bold', cursor:'pointer'}}>
-                      🔴 FERMÉ
-                  </button>
-              </div>
-          </div>
-
-          <div style={{background: 'white', padding: '15px', borderRadius: '16px', marginBottom: '30px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)'}}>
-              <h3 style={{marginTop:0, marginBottom:'15px', fontSize:'1rem'}}>Gestion du Rush (Message Client)</h3>
-              <div style={{display:'flex', gap:'10px', flexWrap:'wrap'}}>
-                  <button onClick={() => updateDoc(doc(db, "parametres", "status"), { mode: 'standard' })} style={{flex:1, padding:'12px', borderRadius:'10px', border: rushMode === 'standard' ? `2px solid ${COLORS.success}` : '1px solid #ddd', background: rushMode === 'standard' ? '#ECFDF5' : 'white', color: rushMode === 'standard' ? COLORS.success : 'black', fontWeight:'bold', cursor:'pointer'}}>
-                      ✅ Standard
-                  </button>
-                  <button onClick={() => updateDoc(doc(db, "parametres", "status"), { mode: 'rush' })} style={{flex:1, padding:'12px', borderRadius:'10px', border: rushMode === 'rush' ? `2px solid ${COLORS.warning}` : '1px solid #ddd', background: rushMode === 'rush' ? '#FFFBEB' : 'white', color: rushMode === 'rush' ? COLORS.warning : 'black', fontWeight:'bold', cursor:'pointer'}}>
-                      ⚠️ Rush (30min+)
-                  </button>
-                  <button onClick={() => updateDoc(doc(db, "parametres", "status"), { mode: 'gros_rush' })} style={{flex:1, padding:'12px', borderRadius:'10px', border: rushMode === 'gros_rush' ? `2px solid ${COLORS.danger}` : '1px solid #ddd', background: rushMode === 'gros_rush' ? '#FEF2F2' : 'white', color: rushMode === 'gros_rush' ? COLORS.danger : 'black', fontWeight:'bold', cursor:'pointer'}}>
-                      🔥 Gros Rush (1h+)
-                  </button>
-              </div>
-          </div>
-
-          <h3 style={{marginTop:'30px'}}>Commandes ({commandes.filter(c => c.status !== 'Terminé').length})</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '20px', marginBottom:'40px' }}>
-            {commandes.map(cmd => (
-              <div key={cmd.id} style={{ 
-                  ...cardStyle, 
-                  borderLeft: cmd.status === 'Terminé' ? '5px solid #ccc' : (cmd.status === 'En cours de validation' ? `5px solid ${COLORS.pending}` : `5px solid ${COLORS.success}`) 
-              }}>
-                <div style={{display:'flex', justifyContent:'space-between', alignItems:'start', marginBottom:'15px', paddingBottom:'15px', borderBottom:'1px solid #f0f0f0'}}>
-                  <div>
-                      <strong style={{fontSize:'1.2rem', display:'block'}}>{cmd.client}</strong>
-                      <div style={{color: COLORS.textLight, marginTop:'4px'}}>📞 {cmd.tel}</div>
-                      
-                      <div style={{marginTop:'5px', fontSize:'0.8rem', fontWeight:'bold', color: COLORS.secondary, display:'flex', gap:'10px', alignItems:'center'}}>
-                          <span>📍 {cmd.distance} km</span>
-                          {cmd.lat && cmd.lng && (
-                             <a href={`https://www.google.com/maps/search/?api=1&query=${cmd.lat},${cmd.lng}`} target="_blank" rel="noreferrer" style={{color: COLORS.primary, textDecoration:'underline'}}>Voir Map</a>
-                          )}
-                      </div>
-                  </div>
-                  <div style={{textAlign:'right'}}>
-                    <div style={{fontSize:'1.3rem', fontWeight:'bold', color: COLORS.primary}}>{cmd.total} DH</div>
-                    <button onClick={() => copierOdoo(cmd)} style={{marginTop:'5px', background: COLORS.secondary, color:'white', border:'none', padding:'6px 12px', borderRadius:'6px', fontSize:'0.75rem', cursor:'pointer'}}>📋 COPIER</button>
-                  </div>
-                </div>
-                
-                <div style={{marginBottom:'10px'}}>
-                    {cmd.status === 'En cours de validation' && (
-                        <div style={{background: '#FFF7ED', color: '#C2410C', padding:'8px', borderRadius:'8px', fontSize:'0.9rem', fontWeight:'bold', marginBottom:'10px', border:'1px solid #FED7AA'}}>
-                            ⚠️ GROS PANIER - À VALIDER TEL
-                        </div>
-                    )}
-                    {cmd.type === 'livraison' && <div style={{background:'#FEF3C7', color:'#D97706', padding:'8px', borderRadius:'8px', fontSize:'0.9rem', marginBottom:'5px'}}>🛵 <strong>{cmd.adresse}</strong></div>}
-                    {cmd.commentaire && <div style={{background: COLORS.warning, color:'white', padding:'8px', borderRadius:'8px', fontSize:'0.9rem', fontWeight:'bold'}}>📝 Note: {cmd.commentaire}</div>}
-                    {cmd.remisePromo > 0 && <div style={{color: COLORS.danger, fontSize:'0.9rem', fontWeight:'bold', border:'1px solid red', padding:'5px', borderRadius:'5px', display:'inline-block'}}>🎁 REMISE PROMO: -{cmd.remisePromo} DH</div>}
-                </div>
-                
-                <ul style={{listStyle:'none', marginBottom:'15px'}}>
-                  {cmd.items && cmd.items.map((it, i) => (
-                    <li key={i} style={{padding:'8px 0', borderBottom:'1px dashed #eee', lineHeight:'1.4'}}>
-                      <div style={{display:'flex', alignItems:'center', gap:'10px', marginBottom:'2px'}}>
-                          <span style={{fontSize:'0.75rem', fontWeight:'bold', color: COLORS.primary, background:'#FEE2E2', padding:'2px 6px', borderRadius:'4px'}}>
-                              [{it.categorie ? it.categorie.toUpperCase() : 'PLAT'}]
-                          </span>
-                          <strong style={{fontSize:'1.1rem'}}>{it.nom}</strong>
-                      </div>
-                      <div style={{display:'flex', justifyContent:'space-between', color: COLORS.secondary}}>
-                          <span>
-                              {it.choixPates && <strong style={{color: COLORS.primary, marginRight:'5px'}}>{it.choixPates}</strong>}
-                              {it.varianteNom && <strong style={{color: COLORS.secondary, fontSize:'0.95rem'}}>({it.varianteNom})</strong>}
-                          </span>
-                          <strong style={{color: COLORS.textLight}}>{it.prixFinal} DH</strong>
-                      </div>
-                      
-                      <div style={{fontSize:'0.85rem', color:'#444', marginLeft:'10px', marginTop:'2px'}}>
-                          {it.isCheesyCrust && <div style={{fontWeight:'bold', color: COLORS.promo}}>★ CHEESY CRUST</div>}
-                          {it.extras && it.extras.length > 0 && <div>+ {it.extras.map(e => e.nom).join(', ')}</div>}
-                          {it.sauces && it.sauces.length > 0 && <div>Sauces: {formatOptions(it.sauces)}</div>}
-                          {it.optionsChoisies && it.optionsChoisies.length > 0 && <div>+ {formatOptions(it.optionsChoisies)}</div>}
-                          {it.sans && it.sans.length > 0 && <div style={{color: COLORS.danger, fontWeight:'bold'}}>🚫 {it.sans.join(', ')}</div>}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-
-                <div style={{display:'flex', gap:'10px', flexWrap:'wrap'}}>
-                  {cmd.status === 'En cours de validation' ? (
-                      <>
-                        <button onClick={()=>changerStatus(cmd.id, 'En attente')} style={{...btnStyle, background: COLORS.success, padding:'10px', flex:1}}>☎️ CLIENT OK</button>
-                        <button onClick={()=>changerStatus(cmd.id, 'Refusé')} style={{...btnStyle, background: COLORS.danger, padding:'10px', flex:1}}>REFUSER</button>
-                      </>
-                  ) : (
-                      <>
-                          {cmd.status !== 'Terminé' && cmd.status !== 'Refusé' && <button onClick={()=>changerStatus(cmd.id, 'Terminé')} style={{...btnStyle, background: COLORS.success, padding:'10px'}}>✅ SERVI</button>}
-                          <button onClick={()=>supprimerCmd(cmd.id)} style={{...btnStyle, background:'white', color:'red', border:'1px solid #eee', padding:'10px'}}>🗑️</button>
-                      </>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-
-           <div style={{marginTop:'40px', borderTop:'2px solid #eee', paddingTop:'20px'}}>
-             <h3 style={{marginBottom:'15px'}}>📦 Menu</h3>
-             <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '15px', display:'flex', gap:'10px' }}>
-              {categoriesReelles.map(c => (
-                <button key={c} onClick={() => setAdminCategorie(c)} style={{
-                    padding:'8px 15px', borderRadius:'20px', border:'none', 
-                    background: adminCategorie===c?COLORS.secondary:'#eee', 
-                    color:adminCategorie===c?'white':'black', cursor:'pointer'
-                }}>{c}</button>
-              ))}
-              <button onClick={() => setAdminCategorie('RUPTURE')} style={{padding:'8px 15px', borderRadius:'20px', border:'none', background: adminCategorie==='RUPTURE'?COLORS.danger:'#FEE2E2', color: adminCategorie==='RUPTURE'?'white':COLORS.danger, fontWeight:'bold', cursor:'pointer'}}>🚫 RUPTURE</button>
-             </div>
-
-             {menuAdmin.map(p => (
-              <div key={p.id} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px', borderBottom:'1px solid #f0f0f0', background: p.available === false ? '#FFF5F5' : 'white', opacity: p.available === false ? 0.7 : 1}}>
-                <div style={{display:'flex', alignItems:'center', gap:'15px'}}>
-                  <div onClick={() => toggleAvailability(p)} style={{width:'50px', height:'26px', background: p.available !== false ? COLORS.success : '#ccc', borderRadius:'20px', position:'relative', cursor:'pointer', transition:'0.3s'}}>
-                    <div style={{width:'20px', height:'20px', background:'white', borderRadius:'50%', position:'absolute', top:'3px', left: p.available !== false ? '27px' : '3px', transition:'0.3s'}}></div>
-                  </div>
-                  <div style={{width:'40px', height:'40px', background:'#eee', borderRadius:'5px', overflow:'hidden', position:'relative'}}>
-                    {p.image && <img src={p.image} style={{width:'100%', height:'100%', objectFit:'cover'}} />}
-                    <input type="file" onChange={(e)=>updateProductImage(p.id, e.target.files[0])} style={{position:'absolute', top:0, left:0, width:'100%', height:'100%', opacity:0, cursor:'pointer'}} />
-                  </div>
-                  <div>
-                    <div style={{fontWeight:'bold', textDecoration: p.available === false ? 'line-through' : 'none'}}>{p.nom}</div>
-                    <div style={{fontSize:'0.8rem', color: COLORS.textLight}}>{p.categorie} • {p.variantes?.length > 0 ? 'Multi-tailles' : p.prix + ' DH'}</div>
-                  </div>
-                </div>
-                <div style={{display:'flex', gap:'10px'}}>
-                    <button onClick={() => handleEdit(p)} style={{border:'none', background:'transparent', fontSize:'1.2rem', cursor:'pointer'}}>✏️</button>
-                    <button onClick={()=>supprimerProduit(p.id)} style={{color:'red', border:'none', background:'transparent', cursor:'pointer'}}>X</button>
-                </div>
-              </div>
-            ))}
-          </div>
-          
-           <details style={{marginTop:'30px', background:'white', padding:'15px', borderRadius:'10px'}}>
-             <summary>{editId ? '✏️ Modifier Produit' : 'Ajout Manuel'}</summary>
-             <div style={{marginTop:'10px'}}>
-                 <input placeholder="Nom" value={nom} onChange={e=>setNom(e.target.value)} style={inputStyle} />
-                 <textarea placeholder="Description" value={description} onChange={e=>setDescription(e.target.value)} style={{...inputStyle, height:'60px', fontFamily:'inherit', resize:'vertical'}} />
-                 <div style={{display:'flex', gap:'10px', alignItems:'start'}}>
-                   <select value={categorie} onChange={handleCategoryChange} style={{...inputStyle, width:'50%'}}>
-                       {categoriesSelectAdmin.map(cat => <option key={cat}>{cat}</option>)}
-                   </select>
-                   {variantes.length > 0 ? (
-                       <div style={{width:'50%', display:'flex', gap:'5px', flexWrap:'wrap'}}>
-                           {variantes.map((v, index) => (
-                               <div key={index} style={{flex:1, minWidth:'120px', display:'flex', alignItems:'center', gap:'5px', background:'#F9FAFB', padding:'5px', borderRadius:'8px', border:'1px solid #eee'}}>
-                                   <div style={{flex:1}}>
-                                       <label style={{fontSize:'0.7rem', fontWeight:'bold', color: COLORS.textLight, display:'block'}}>{v.nom}</label>
-                                       <input type="number" value={v.prix} onChange={(e) => updateVariantPrice(index, 'prix', e.target.value)} style={{...inputStyle, marginBottom:0, padding:'5px', fontSize:'0.9rem'}} />
-                                   </div>
-                                   <div style={{display:'flex', flexDirection:'column', alignItems:'center'}}>
-                                       <label style={{fontSize:'0.6rem', color: COLORS.textLight}}>Dispo</label>
-                                       <input type="checkbox" checked={v.available !== false} onChange={(e) => updateVariantPrice(index, 'available', e.target.checked)} style={{width:'20px', height:'20px'}} />
-                                   </div>
-                               </div>
-                           ))}
-                       </div>
-                   ) : (
-                       <input type="number" placeholder="Prix" value={prixBase} onChange={e=>setPrixBase(e.target.value)} style={{...inputStyle, width:'50%'}} />
-                   )}
-                 </div>
-                 <button onClick={saveProduit} style={{...btnStyle, width:'auto', marginTop:'15px'}}>{editId ? 'Mettre à jour' : 'Ajouter'}</button>
-                 {editId && <button onClick={() => {setEditId(null); setNom(''); setPrixBase(''); setVariantes([]); setDescription('');}} style={{...btnStyle, background:'gray', width:'auto', marginLeft:'10px'}}>Annuler</button>}
-             </div>
-           </details>
-
-           <details style={{marginTop:'30px', background:'#FFF7ED', padding:'15px', borderRadius:'10px', border:`1px solid ${COLORS.promo}`}}>
-                <summary style={{fontWeight:'bold', color: '#C2410C', cursor:'pointer'}}>🥕 GESTION DES STOCKS (ON/OFF)</summary>
-                <div style={{marginTop:'20px'}}>
-                    
-                    {/* ONGLETS DE STOCKS (TABS) */}
-                    <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '20px', scrollbarWidth: 'none', display:'flex', gap:'10px' }}>
-                        {STOCK_TABS.map(tab => (
-                            <button key={tab.id} onClick={() => setActiveStockTab(tab.id)} style={{
-                                display:'inline-block', padding:'10px 20px', borderRadius:'25px', 
-                                background: activeStockTab === tab.id ? COLORS.secondary : 'white', 
-                                color: activeStockTab === tab.id ? 'white' : COLORS.secondary,
-                                fontWeight:'600', fontSize:'0.9rem', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', 
-                                cursor: 'pointer', transition: '0.2s', border: activeStockTab === tab.id ? 'none' : '1px solid #ddd'
-                            }}>
-                                {tab.label}
-                            </button>
-                        ))}
-                    </div>
-
-                    <div style={{background:'white', padding:'15px', borderRadius:'15px', marginTop:'10px'}}>
-                        <div style={{display:'flex', gap:'10px', marginBottom:'20px'}}>
-                            {activeStockTab !== 'tailles_pizza' && (
-                                 <>
-                                    <input type="text" placeholder={`Ajouter dans ${STOCK_TABS.find(t=>t.id===activeStockTab).label}...`} value={newItemName} onChange={(e) => setNewItemName(e.target.value)} style={{...inputStyle, marginBottom:0}} />
-                                    <button onClick={addNewStockItem} style={{...btnStyle, width:'auto'}}>Ajouter</button>
-                                 </>
-                            )}
-                        </div>
-
-                        <div style={{display:'flex', flexWrap:'wrap', gap:'10px'}}>
-                            {stocks[activeStockTab]?.map((item, index) => (
-                                <div key={item.nom} onClick={() => toggleStockItem(activeStockTab, index)} style={{
-                                    padding:'12px 18px', borderRadius:'25px', cursor:'pointer', fontWeight:'bold', transition:'0.2s',
-                                    background: item.available ? COLORS.success : '#E5E7EB',
-                                    color: item.available ? 'white' : '#9CA3AF',
-                                    border: item.available ? `1px solid ${COLORS.success}` : '1px solid #D1D5DB',
-                                    display:'flex', alignItems:'center', gap:'8px', fontSize:'0.95rem'
-                                }}>
-                                    <div style={{width:'12px', height:'12px', borderRadius:'50%', background: item.available ? 'white' : '#9CA3AF'}}></div>
-                                    {item.nom}
-                                </div>
-                            ))}
-                        </div>
-                        {stocks[activeStockTab]?.length === 0 && <p style={{color:'#aaa', fontStyle:'italic'}}>Aucun élément dans cette catégorie.</p>}
-                    </div>
-                </div>
-           </details>
-
-           <details style={{marginTop:'50px', background:'#FEE2E2', padding:'15px', borderRadius:'10px', border:`1px solid ${COLORS.danger}`}}>
-             <summary style={{fontWeight:'bold', color: COLORS.danger, cursor:'pointer'}}>💀 ZONE DANGEREUSE (Import / Reset)</summary>
-             <input type="file" accept=".csv" ref={fileInputRef} onChange={handleCSVImport} style={{display:'none'}} />
-             <div style={{marginTop:'20px', display:'flex', gap:'10px', flexDirection:'column'}}>
-                <button onClick={triggerImport} style={{...btnStyle, background: 'white', color: COLORS.secondary, border:'1px solid #ccc'}}>📂 IMPORTER UN MENU (CSV)</button>
-                <button onClick={viderMenu} style={{...btnStyle, background: COLORS.danger, color:'white'}}>🗑️ TOUT SUPPRIMER (RESET)</button>
-             </div>
-           </details>
-        </div>
-      )}
     </div>
     </HelmetProvider>
   );
@@ -1610,10 +1028,8 @@ function PromoWizard({ menu, onClose, onValidate }) {
 }
 
 function ProductModal({ product, stocks, onClose, onAdd }) {
-  // Filtre Global des Tailles (Cartons)
   const taillesGlobalesDispo = stocks.tailles_pizza ? stocks.tailles_pizza.filter(t => t.available).map(t => t.nom) : [];
   
-  // On filtre les variantes du produit
   const isPizza = product.categorie.toLowerCase().includes('pizza');
   const variantesDispo = product.variantes ? product.variantes.filter(v => {
       const isProductAvailable = v.available !== false;
@@ -1638,7 +1054,6 @@ function ProductModal({ product, stocks, onClose, onAdd }) {
   const isBurger = catLower.includes('burger');
   const isMixte = isTacos && nomLower.includes('mixte');
 
-  // Listes dynamiques filtrées (Seuls les Available = true)
   const viandesDispo = stocks.viandes.filter(v => v.available).map(v => v.nom);
   const garnituresDispo = stocks.garnitures.filter(g => g.available).map(g => g.nom);
   const patesDispo = stocks.pates.filter(p => p.available).map(p => p.nom);
