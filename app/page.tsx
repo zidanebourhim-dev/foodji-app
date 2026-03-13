@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { db, auth } from './firebase';
-import { signInWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
+import { signInWithEmailAndPassword, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { 
   collection, 
   addDoc, 
@@ -147,7 +147,6 @@ function App() {
   }, []);
 
   useEffect(() => {
-    // CORRECTION ICI : Redirection automatique selon l'état de la session
     const unsubscribeAuth = onAuthStateChanged(auth, (u) => { 
         setUser(u);
         if (u) {
@@ -163,17 +162,27 @@ function App() {
 
     const q = query(collection(db, "commandes"));
     const unsubscribeCmd = onSnapshot(q, (snap) => {
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      list.sort((a, b) => b.date.seconds - a.date.seconds);
-      
-      if (list.length > prevCommandesLength.current && user) {
-          if (!audioRef.current) {
-             audioRef.current = new Audio(NOTIF_SOUND);
+      try {
+          const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          
+          // BOUCLIER ANTI-CRASH : Sécurisation du tri des dates
+          list.sort((a, b) => {
+              const timeA = a.date?.seconds || (a.date ? new Date(a.date).getTime() / 1000 : 0);
+              const timeB = b.date?.seconds || (b.date ? new Date(b.date).getTime() / 1000 : 0);
+              return timeB - timeA;
+          });
+          
+          if (list.length > prevCommandesLength.current && user) {
+              if (!audioRef.current) {
+                 audioRef.current = new Audio(NOTIF_SOUND);
+              }
+              audioRef.current.play().catch(e => console.log("Son bloqué"));
           }
-          audioRef.current.play().catch(e => console.log("Son bloqué"));
+          prevCommandesLength.current = list.length;
+          setCommandes(list);
+      } catch (error) {
+          console.error("Erreur critique évitée sur les commandes:", error);
       }
-      prevCommandesLength.current = list.length;
-      setCommandes(list);
     });
 
     return () => { unsubscribeAuth(); unsubscribeMenu(); unsubscribeCmd(); };
@@ -397,7 +406,18 @@ function App() {
           <h2 style={{marginBottom: '20px'}}>⚙️ Foodji Admin</h2>
           <input type="email" placeholder="Email Manager" value={email} onChange={e=>setEmail(e.target.value)} style={inputStyle}/>
           <input type="password" placeholder="Mot de passe" value={password} onChange={e=>setPassword(e.target.value)} style={inputStyle}/>
-          <button onClick={async (e)=>{e.preventDefault(); try{await signInWithEmailAndPassword(auth,email,password); setView('admin');}catch(e){alert('Erreur de connexion')}}} style={btnStyle}>Connexion</button>
+          
+          {/* FORÇAGE DE LA PERSISTANCE LOCALE ICI */}
+          <button onClick={async (e)=>{
+              e.preventDefault(); 
+              try{
+                  await setPersistence(auth, browserLocalPersistence);
+                  await signInWithEmailAndPassword(auth, email, password); 
+                  setView('admin');
+              } catch(error) {
+                  alert('Erreur de connexion : ' + error.message);
+              }
+          }} style={btnStyle}>Connexion</button>
         </div>
       )}
 
