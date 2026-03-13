@@ -64,7 +64,7 @@ const STOCK_TABS = [
 const NOTIF_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
 
 function App() {
-  const [isAuthLoading, setIsAuthLoading] = useState(true); // LE SAS DE SÉCURITÉ
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [view, setView] = useState('login'); 
   
@@ -99,19 +99,37 @@ function App() {
 
   const SYNC_ID_VERSION = "053700";
 
-  // ASSASSIN DE SERVICE WORKER (Détruit les caches fantômes persistants)
+  // 1. DÉTRUCTEUR DE CACHE (Exécuté une seule fois)
   useEffect(() => {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
         for(let registration of registrations) {
           registration.unregister();
-          console.log("Service Worker fantôme détruit.");
         }
       });
     }
   }, []);
 
+  // 2. FORÇAGE DE LA PERSISTANCE (Exécuté une seule fois)
   useEffect(() => {
+    setPersistence(auth, browserLocalPersistence).catch(() => {});
+  }, []);
+
+  // 3. ÉCOUTEUR D'AUTHENTIFICATION (Indépendant)
+  useEffect(() => {
+    const unsubscribeAuth = onAuthStateChanged(auth, (u) => { 
+        setUser(u);
+        if (u) setView('admin');
+        else setView('login');
+        setIsAuthLoading(false); // Le sas de sécurité s'ouvre
+    });
+    return () => { unsubscribeAuth(); };
+  }, []);
+
+  // 4. ÉCOUTEURS DE DONNÉES SÉCURISÉS (Se déclenchent UNIQUEMENT si connecté)
+  useEffect(() => {
+    if (!user) return; // Barrière de sécurité : empêche les erreurs "Permission Denied"
+
     const unsubStatus = onSnapshot(doc(db, "parametres", "status"), (docSnap) => {
       if (docSnap.exists()) setRushMode(docSnap.data().mode);
       else setDoc(doc(db, "parametres", "status"), { mode: 'standard' });
@@ -136,33 +154,22 @@ function App() {
         }
     });
 
-    return () => { unsubStatus(); unsubStocks(); unsubHoraires(); };
-  }, []);
-
-  useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (u) => { 
-        setUser(u);
-        if (u) setView('admin');
-        else setView('login');
-        setIsAuthLoading(false); // Firebase a fini de réfléchir, on lève la barrière
-    });
-    
-    const unsubscribeMenu = onSnapshot(collection(db, "produits"), (snap) => {
+    const unsubMenu = onSnapshot(collection(db, "produits"), (snap) => {
       setMenu(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
     const q = query(collection(db, "commandes"));
-    const unsubscribeCmd = onSnapshot(q, (snap) => {
+    const unsubCmd = onSnapshot(q, (snap) => {
       try {
           const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-          
+          // BOUCLIER ANTI-CRASH SUR LE TRI DES DATES
           list.sort((a, b) => {
               const timeA = a.date?.seconds || (a.date ? new Date(a.date).getTime() / 1000 : 0);
               const timeB = b.date?.seconds || (b.date ? new Date(b.date).getTime() / 1000 : 0);
               return timeB - timeA;
           });
           
-          if (list.length > prevCommandesLength.current && user) {
+          if (list.length > prevCommandesLength.current) {
               if (!audioRef.current) audioRef.current = new Audio(NOTIF_SOUND);
               audioRef.current.play().catch(() => {});
           }
@@ -173,7 +180,10 @@ function App() {
       }
     });
 
-    return () => { unsubscribeAuth(); unsubscribeMenu(); unsubscribeCmd(); };
+    // Nettoyage de tous les écouteurs si l'utilisateur se déconnecte
+    return () => { 
+        unsubStatus(); unsubHoraires(); unsubStocks(); unsubMenu(); unsubCmd(); 
+    };
   }, [user]);
 
   const categoriesReelles = [...new Set(menu.map(p => p.categorie))];
@@ -340,11 +350,11 @@ function App() {
       boxShadow: '0 2px 10px rgba(0,0,0,0.03)', border: '1px solid #F3F4F6' 
   };
 
-  // ÉCRAN D'ATTENTE SÉCURISÉ
+  // ÉCRAN DE CHARGEMENT SÉCURISÉ
   if (isAuthLoading) {
       return (
           <div style={{ background: COLORS.secondary, minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
-              <div style={{fontSize:'3rem', marginBottom:'20px', animation: 'spin 2s linear infinite'}}>⚙️</div>
+              <div style={{fontSize:'3rem', marginBottom:'20px'}}>⚙️</div>
               <h3 style={{margin:0}}>Démarrage Admin...</h3>
           </div>
       );
@@ -361,14 +371,15 @@ function App() {
           
           <button onClick={async (e)=>{
               e.preventDefault(); 
+              setLoading(true);
               try{
-                  await setPersistence(auth, browserLocalPersistence);
                   await signInWithEmailAndPassword(auth, email, password); 
                   setView('admin');
               } catch(error) {
                   alert('Erreur de connexion');
               }
-          }} style={btnStyle}>Connexion</button>
+              setLoading(false);
+          }} style={btnStyle}>{loading ? '...' : 'Connexion'}</button>
         </div>
       )}
 
@@ -409,7 +420,7 @@ function App() {
                       <div style={{color: COLORS.textLight, marginTop:'4px'}}>📞 {cmd.tel || 'N/A'}</div>
                       <div style={{marginTop:'5px', fontSize:'0.8rem', fontWeight:'bold', color: COLORS.secondary, display:'flex', gap:'10px', alignItems:'center'}}>
                           <span>📍 {cmd.distance ? cmd.distance : 'N/A'} km</span>
-                          {cmd.lat && cmd.lng && (<a href={`https://www.google.com/maps/search/?api=1&query=$$${cmd.lat},${cmd.lng}`} target="_blank" rel="noreferrer" style={{color: COLORS.primary, textDecoration:'underline'}}>Voir Map</a>)}
+                          {cmd.lat && cmd.lng && (<a href={`http://googleusercontent.com/maps.google.com/3{cmd.lat},${cmd.lng}`} target="_blank" rel="noreferrer" style={{color: COLORS.primary, textDecoration:'underline'}}>Voir Map</a>)}
                       </div>
                   </div>
                   <div style={{textAlign:'right'}}>
