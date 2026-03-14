@@ -99,8 +99,11 @@ function App() {
 
   const SYNC_ID_VERSION = "053700";
 
-  // 1. DÉTRUCTEUR DE CACHE (Exécuté une seule fois)
+  // 1. DESTRUCTEUR DE CACHE ET NETTOYAGE LOCAL STORAGE
   useEffect(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then((registrations) => {
         for(let registration of registrations) {
