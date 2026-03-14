@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { db, auth } from './firebase';
-import { signInWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
+import { signInWithEmailAndPassword, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { 
   collection, 
   addDoc, 
@@ -99,7 +99,23 @@ function App() {
 
   const SYNC_ID_VERSION = "053700";
 
-  // 1. GESTION STRICTE DE LA CONNEXION
+  // 1. DÉTRUCTEUR DE CACHE (Exécuté une seule fois)
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        for(let registration of registrations) {
+          registration.unregister();
+        }
+      });
+    }
+  }, []);
+
+  // 2. FORÇAGE DE LA PERSISTANCE (Exécuté une seule fois)
+  useEffect(() => {
+    setPersistence(auth, browserLocalPersistence).catch(() => {});
+  }, []);
+
+  // 3. ÉCOUTEUR D'AUTHENTIFICATION (Indépendant)
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (u) => { 
         setUser(u);
@@ -110,28 +126,21 @@ function App() {
     return () => { unsubscribeAuth(); };
   }, []);
 
-  // 2. ÉCOUTEURS DE DONNÉES BLINDÉS CONTRE LES CRASHS (S'exécutent uniquement si connecté)
+  // 4. ÉCOUTEURS DE DONNÉES SÉCURISÉS (Se déclenchent UNIQUEMENT si connecté)
   useEffect(() => {
-    if (!user) return; 
+    if (!user) return;
 
-    const unsubStatus = onSnapshot(doc(db, "parametres", "status"), 
-      (docSnap) => {
-        if (docSnap.exists()) setRushMode(docSnap.data().mode);
-        else setDoc(doc(db, "parametres", "status"), { mode: 'standard' }).catch(()=>{});
-      },
-      (error) => console.error("Erreur bloquée (Status):", error) // LE BOUCLIER EST ICI
-    );
+    const unsubStatus = onSnapshot(doc(db, "parametres", "status"), (docSnap) => {
+      if (docSnap.exists()) setRushMode(docSnap.data().mode);
+      else setDoc(doc(db, "parametres", "status"), { mode: 'standard' });
+    });
 
-    const unsubHoraires = onSnapshot(doc(db, "parametres", "horaires"), 
-      (docSnap) => {
+    const unsubHoraires = onSnapshot(doc(db, "parametres", "horaires"), (docSnap) => {
         if (docSnap.exists()) setIsStoreOpen(docSnap.data().isOuvert);
-        else setDoc(doc(db, "parametres", "horaires"), { isOuvert: true }).catch(()=>{});
-      },
-      (error) => console.error("Erreur bloquée (Horaires):", error)
-    );
+        else setDoc(doc(db, "parametres", "horaires"), { isOuvert: true });
+    });
 
-    const unsubStocks = onSnapshot(doc(db, "parametres", "stocks"), 
-      (docSnap) => {
+    const unsubStocks = onSnapshot(doc(db, "parametres", "stocks"), (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
             setStocks({
@@ -140,61 +149,51 @@ function App() {
             });
         } else {
             const initData = { viandes: INIT_VIANDES, garnitures: INIT_GARNITURES_PIZZA, sauces: INIT_SAUCES, pates: INIT_PATES, tailles_pizza: INIT_TAILLES_PIZZA };
-            setDoc(doc(db, "parametres", "stocks"), initData).catch(()=>{});
+            setDoc(doc(db, "parametres", "stocks"), initData);
             setStocks(initData);
         }
-      },
-      (error) => console.error("Erreur bloquée (Stocks):", error)
-    );
+    });
 
-    const unsubMenu = onSnapshot(collection(db, "produits"), 
-      (snap) => {
-        setMenu(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      },
-      (error) => console.error("Erreur bloquée (Menu):", error)
-    );
+    const unsubMenu = onSnapshot(collection(db, "produits"), (snap) => {
+      setMenu(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
 
     const q = query(collection(db, "commandes"));
-    const unsubCmd = onSnapshot(q, 
-      (snap) => {
-        try {
-            const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            list.sort((a, b) => {
-                const timeA = a.date?.seconds || (a.date ? new Date(a.date).getTime() / 1000 : 0);
-                const timeB = b.date?.seconds || (b.date ? new Date(b.date).getTime() / 1000 : 0);
-                return timeB - timeA;
-            });
-            
-            if (list.length > prevCommandesLength.current) {
-                if (!audioRef.current) audioRef.current = new Audio(NOTIF_SOUND);
-                audioRef.current.play().catch(() => {});
-            }
-            prevCommandesLength.current = list.length;
-            setCommandes(list);
-        } catch (err) {
-            console.error("Erreur de formatage de commande évitée", err);
-        }
-      },
-      (error) => console.error("Erreur bloquée (Commandes):", error)
-    );
+    const unsubCmd = onSnapshot(q, (snap) => {
+      try {
+          const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          list.sort((a, b) => {
+              const timeA = a.date?.seconds || (a.date ? new Date(a.date).getTime() / 1000 : 0);
+              const timeB = b.date?.seconds || (b.date ? new Date(b.date).getTime() / 1000 : 0);
+              return timeB - timeA;
+          });
+          
+          if (list.length > prevCommandesLength.current) {
+              if (!audioRef.current) audioRef.current = new Audio(NOTIF_SOUND);
+              audioRef.current.play().catch(() => {});
+          }
+          prevCommandesLength.current = list.length;
+          setCommandes(list);
+      } catch (error) {
+          console.error("Erreur de tri évitée");
+      }
+    });
 
     return () => { 
         unsubStatus(); unsubHoraires(); unsubStocks(); unsubMenu(); unsubCmd(); 
     };
   }, [user]);
 
-  const categoriesReelles = Array.isArray(menu) ? [...new Set(menu.map(p => p.categorie))] : [];
+  const categoriesReelles = [...new Set(menu.map(p => p.categorie))];
   const categoriesSelectAdmin = [...new Set([...TOUTES_CATEGORIES, ...categoriesReelles])];
 
   useEffect(() => {
       if (categoriesReelles.length > 0 && !adminCategorie) setAdminCategorie(categoriesReelles[0]);
-  }, [menu, adminCategorie]);
+  }, [menu]);
 
   let menuAdmin = [];
-  if (Array.isArray(menu)) {
-      if (adminCategorie === 'RUPTURE') menuAdmin = menu.filter(p => p.available === false);
-      else menuAdmin = menu.filter(p => p.categorie === adminCategorie);
-  }
+  if (adminCategorie === 'RUPTURE') menuAdmin = menu.filter(p => p.available === false);
+  else menuAdmin = menu.filter(p => p.categorie === adminCategorie);
 
   const checkManagerAuth = () => {
       const code = prompt("🔒 Code Manager requis :");
@@ -353,7 +352,7 @@ function App() {
       return (
           <div style={{ background: COLORS.secondary, minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
               <div style={{fontSize:'3rem', marginBottom:'20px'}}>⚙️</div>
-              <h3 style={{margin:0}}>Connexion sécurisée...</h3>
+              <h3 style={{margin:0}}>Démarrage Admin...</h3>
           </div>
       );
   }
@@ -408,9 +407,9 @@ function App() {
               </div>
           </div>
 
-          <h3 style={{marginTop:'30px'}}>Commandes ({Array.isArray(commandes) ? commandes.filter(c => c && c.status !== 'Terminé').length : 0})</h3>
+          <h3 style={{marginTop:'30px'}}>Commandes ({commandes.filter(c => c.status !== 'Terminé').length})</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '20px', marginBottom:'40px' }}>
-            {Array.isArray(commandes) && commandes.map(cmd => (
+            {commandes.map(cmd => (
               <div key={cmd.id} style={{ ...cardStyle, borderLeft: cmd.status === 'Terminé' ? '5px solid #ccc' : (cmd.status === 'En cours de validation' ? `5px solid ${COLORS.pending}` : `5px solid ${COLORS.success}`) }}>
                 <div style={{display:'flex', justifyContent:'space-between', alignItems:'start', marginBottom:'15px', paddingBottom:'15px', borderBottom:'1px solid #f0f0f0'}}>
                   <div>
@@ -418,7 +417,7 @@ function App() {
                       <div style={{color: COLORS.textLight, marginTop:'4px'}}>📞 {cmd.tel || 'N/A'}</div>
                       <div style={{marginTop:'5px', fontSize:'0.8rem', fontWeight:'bold', color: COLORS.secondary, display:'flex', gap:'10px', alignItems:'center'}}>
                           <span>📍 {cmd.distance ? cmd.distance : 'N/A'} km</span>
-                          {cmd.lat && cmd.lng && (<a href={`http://googleusercontent.com/maps.google.com/4{cmd.lat},${cmd.lng}`} target="_blank" rel="noreferrer" style={{color: COLORS.primary, textDecoration:'underline'}}>Voir Map</a>)}
+                          {cmd.lat && cmd.lng && (<a href={`https://www.google.com/maps/search/?api=1&query=${cmd.lat},${cmd.lng}`} target="_blank" rel="noreferrer" style={{color: COLORS.primary, textDecoration:'underline'}}>Voir Map</a>)}
                       </div>
                   </div>
                   <div style={{textAlign:'right'}}>
@@ -481,13 +480,13 @@ function App() {
            <div style={{marginTop:'40px', borderTop:'2px solid #eee', paddingTop:'20px'}}>
              <h3 style={{marginBottom:'15px'}}>📦 Menu</h3>
              <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '15px', display:'flex', gap:'10px' }}>
-              {Array.isArray(categoriesReelles) && categoriesReelles.map(c => (
+              {categoriesReelles.map(c => (
                 <button key={c} onClick={() => setAdminCategorie(c)} style={{padding:'8px 15px', borderRadius:'20px', border:'none', background: adminCategorie===c?COLORS.secondary:'#eee', color:adminCategorie===c?'white':'black', cursor:'pointer'}}>{c}</button>
               ))}
               <button onClick={() => setAdminCategorie('RUPTURE')} style={{padding:'8px 15px', borderRadius:'20px', border:'none', background: adminCategorie==='RUPTURE'?COLORS.danger:'#FEE2E2', color: adminCategorie==='RUPTURE'?'white':COLORS.danger, fontWeight:'bold', cursor:'pointer'}}>🚫 RUPTURE</button>
              </div>
 
-             {Array.isArray(menuAdmin) && menuAdmin.map(p => (
+             {menuAdmin.map(p => (
               <div key={p.id} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px', borderBottom:'1px solid #f0f0f0', background: p.available === false ? '#FFF5F5' : 'white', opacity: p.available === false ? 0.7 : 1}}>
                 <div style={{display:'flex', alignItems:'center', gap:'15px'}}>
                   <div onClick={() => toggleAvailability(p)} style={{width:'50px', height:'26px', background: p.available !== false ? COLORS.success : '#ccc', borderRadius:'20px', position:'relative', cursor:'pointer', transition:'0.3s'}}>
@@ -499,7 +498,7 @@ function App() {
                   </div>
                   <div>
                     <div style={{fontWeight:'bold', textDecoration: p.available === false ? 'line-through' : 'none'}}>{p.nom}</div>
-                    <div style={{fontSize:'0.8rem', color: COLORS.textLight}}>{p.categorie} • {Array.isArray(p.variantes) && p.variantes.length > 0 ? 'Multi-tailles' : p.prix + ' DH'}</div>
+                    <div style={{fontSize:'0.8rem', color: COLORS.textLight}}>{p.categorie} • {p.variantes?.length > 0 ? 'Multi-tailles' : p.prix + ' DH'}</div>
                   </div>
                 </div>
                 <div style={{display:'flex', gap:'10px'}}>
@@ -517,9 +516,9 @@ function App() {
                  <textarea placeholder="Description" value={description} onChange={e=>setDescription(e.target.value)} style={{...inputStyle, height:'60px', fontFamily:'inherit', resize:'vertical'}} />
                  <div style={{display:'flex', gap:'10px', alignItems:'start'}}>
                    <select value={categorie} onChange={handleCategoryChange} style={{...inputStyle, width:'50%'}}>
-                       {Array.isArray(categoriesSelectAdmin) && categoriesSelectAdmin.map(cat => <option key={cat}>{cat}</option>)}
+                       {categoriesSelectAdmin.map(cat => <option key={cat}>{cat}</option>)}
                    </select>
-                   {Array.isArray(variantes) && variantes.length > 0 ? (
+                   {variantes.length > 0 ? (
                        <div style={{width:'50%', display:'flex', gap:'5px', flexWrap:'wrap'}}>
                            {variantes.map((v, index) => (
                                <div key={index} style={{flex:1, minWidth:'120px', display:'flex', alignItems:'center', gap:'5px', background:'#F9FAFB', padding:'5px', borderRadius:'8px', border:'1px solid #eee'}}>
