@@ -1,34 +1,67 @@
 import { useState, useEffect, useRef } from 'react';
 import { db, auth } from './firebase';
 import { signInWithEmailAndPassword, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'firebase/auth';
-import { collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, setDoc, query, writeBatch } from 'firebase/firestore';
+import { 
+  collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, setDoc, query, writeBatch
+} from 'firebase/firestore';
 import './App.css';
 
-const COLORS = { primary: '#A84438', secondary: '#1A1E29', bg: '#F3F4F6', card: '#FFFFFF', success: '#10B981', danger: '#EF4444', warning: '#F59E0B', promo: '#D97706', textLight: '#6B7280', pending: '#F97316' };
+const COLORS = {
+  primary: '#A84438',    
+  secondary: '#1A1E29',  
+  bg: '#F3F4F6',        
+  card: '#FFFFFF',        
+  success: '#10B981',
+  danger: '#EF4444',
+  warning: '#F59E0B',
+  promo: '#D97706',    
+  textLight: '#6B7280',
+  pending: '#F97316' 
+};
+
 const INIT_VIANDES = [{ nom: "Poulet", available: true }, { nom: "Viande Hachée", available: true }, { nom: "Cordon Bleu", available: true }, { nom: "Nuggets", available: true }, { nom: "Poulet Crispy", available: true }];
 const INIT_GARNITURES_PIZZA = [{ nom: "Viande Hachée", available: true }, { nom: "Poulet", available: true }, { nom: "4 Fromages", available: true }, { nom: "Cannibale", available: true }, { nom: "Pepperoni", available: true }, { nom: "Thon", available: true }, { nom: "Charcuterie", available: true }, { nom: "Végétarienne", available: true }, { nom: "Fruits de Mer", available: true }];
 const INIT_SAUCES = [{ nom: "Algérienne Fait Maison", available: true }, { nom: "Biggy Fait Maison", available: true }, { nom: "Barbecue Fait Maison", available: true }, { nom: "Pas de sauce", available: true }];
 const INIT_PATES = [{ nom: "Penne", available: true }, { nom: "Tagliatelle", available: true }, { nom: "Spaghetti", available: true }];
 const INIT_TAILLES_PIZZA = [{ nom: "M", available: true }, { nom: "L", available: true }];
+
 const TOUTES_CATEGORIES = ["Tacos", "Pizzas", "Burgers", "Pâtes", "Sides", "Les Burritos", "Koniks", "Plats", "Salades", "Boissons", "Desserts"];
-const STOCK_TABS = [{ id: 'viandes', label: '🌮 Viandes' }, { id: 'garnitures', label: '🍕 Garnitures' }, { id: 'tailles_pizza', label: '📏 Tailles' }, { id: 'pates', label: '🍝 Pâtes' }, { id: 'sauces', label: '🥣 Sauces' }];
+
+const STOCK_TABS = [
+    { id: 'viandes', label: '🌮 Viandes' },
+    { id: 'garnitures', label: '🍕 Garnitures' },
+    { id: 'tailles_pizza', label: '📏 Tailles' },
+    { id: 'pates', label: '🍝 Pâtes' },
+    { id: 'sauces', label: '🥣 Sauces' }
+];
+
 const NOTIF_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
 
 function App() {
-  // L'ÉTAT UNIQUE INDESTRUCTIBLE : "LOADING" | null (déconnecté) | objet (connecté)
-  const [authState, setAuthState] = useState("LOADING");
+  // L'ÉTAT UNIQUE ET STRICT (Anti-Page Blanche)
+  const [authState, setAuthState] = useState("LOADING"); 
   
   const [menu, setMenu] = useState([]);
   const [commandes, setCommandes] = useState([]);
+  
+  const prevCommandesLength = useRef(0);
+  const audioRef = useRef(null);
+  const fileInputRef = useRef(null); 
+
   const [adminCategorie, setAdminCategorie] = useState(''); 
   const [rushMode, setRushMode] = useState('standard');
   const [isStoreOpen, setIsStoreOpen] = useState(true);
-  const [stocks, setStocks] = useState({ viandes: INIT_VIANDES, garnitures: INIT_GARNITURES_PIZZA, sauces: INIT_SAUCES, pates: INIT_PATES, tailles_pizza: INIT_TAILLES_PIZZA });
+
+  const [stocks, setStocks] = useState({
+      viandes: INIT_VIANDES, garnitures: INIT_GARNITURES_PIZZA, sauces: INIT_SAUCES, pates: INIT_PATES, tailles_pizza: INIT_TAILLES_PIZZA
+  });
   const [activeStockTab, setActiveStockTab] = useState('viandes');
   const [newItemName, setNewItemName] = useState('');
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  
   const [editId, setEditId] = useState(null); 
   const [nom, setNom] = useState('');
   const [description, setDescription] = useState(''); 
@@ -37,31 +70,25 @@ function App() {
   const [prixBase, setPrixBase] = useState('');
   const [variantes, setVariantes] = useState([]); 
 
-  const prevCommandesLength = useRef(0);
-  const audioRef = useRef(null);
-  const fileInputRef = useRef(null); 
   const SYNC_ID_VERSION = "053700";
 
-  // 1. ÉCOUTEUR D'AUTHENTIFICATION STRICT
+  // 1. GESTION DE LA SESSION FIREBASE (AU DÉMARRAGE)
   useEffect(() => {
-    setPersistence(auth, browserLocalPersistence).catch(() => {});
-    const unsubscribe = onAuthStateChanged(auth, (user) => { 
-        if (user) {
-            setAuthState(user); // Connecté
-        } else {
-            setAuthState(null); // Déconnecté
-        }
+    setPersistence(auth, browserLocalPersistence).finally(() => {
+        const unsubscribe = onAuthStateChanged(auth, (user) => { 
+            setAuthState(user ? user : null);
+        });
+        return () => unsubscribe();
     });
-    return () => unsubscribe();
   }, []);
 
-  // 2. RÉCUPÉRATION DES DONNÉES (Se déclenche uniquement si on est formellement connecté)
+  // 2. ÉCOUTEURS DE DONNÉES (SÉCURISÉS)
   useEffect(() => {
-    if (authState === "LOADING" || authState === null) return; 
+    if (!authState || authState === "LOADING") return;
 
     const unsubStatus = onSnapshot(doc(db, "parametres", "status"), (docSnap) => {
-        if (docSnap.exists()) setRushMode(docSnap.data().mode);
-        else setDoc(doc(db, "parametres", "status"), { mode: 'standard' }).catch(()=>{});
+      if (docSnap.exists()) setRushMode(docSnap.data().mode);
+      else setDoc(doc(db, "parametres", "status"), { mode: 'standard' }).catch(()=>{});
     });
 
     const unsubHoraires = onSnapshot(doc(db, "parametres", "horaires"), (docSnap) => {
@@ -84,28 +111,28 @@ function App() {
     });
 
     const unsubMenu = onSnapshot(collection(db, "produits"), (snap) => {
-        setMenu(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setMenu(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
     const q = query(collection(db, "commandes"));
     const unsubCmd = onSnapshot(q, (snap) => {
-        try {
-            const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            list.sort((a, b) => {
-                const timeA = a.date?.seconds || (a.date ? new Date(a.date).getTime() / 1000 : 0);
-                const timeB = b.date?.seconds || (b.date ? new Date(b.date).getTime() / 1000 : 0);
-                return timeB - timeA;
-            });
-            
-            if (list.length > prevCommandesLength.current) {
-                if (!audioRef.current) audioRef.current = new Audio(NOTIF_SOUND);
-                audioRef.current.play().catch(() => {});
-            }
-            prevCommandesLength.current = list.length;
-            setCommandes(list);
-        } catch (err) {
-            console.error("Tri evité", err);
-        }
+      try {
+          const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          list.sort((a, b) => {
+              const timeA = a.date?.seconds || (a.date ? new Date(a.date).getTime() / 1000 : 0);
+              const timeB = b.date?.seconds || (b.date ? new Date(b.date).getTime() / 1000 : 0);
+              return timeB - timeA;
+          });
+          
+          if (list.length > prevCommandesLength.current) {
+              if (!audioRef.current) audioRef.current = new Audio(NOTIF_SOUND);
+              audioRef.current.play().catch(() => {});
+          }
+          prevCommandesLength.current = list.length;
+          setCommandes(list);
+      } catch (error) {
+          console.error("Erreur de tri évitée", error);
+      }
     });
 
     return () => { unsubStatus(); unsubHoraires(); unsubStocks(); unsubMenu(); unsubCmd(); };
@@ -123,6 +150,18 @@ function App() {
       if (adminCategorie === 'RUPTURE') menuAdmin = menu.filter(p => p.available === false);
       else menuAdmin = menu.filter(p => p.categorie === adminCategorie);
   }
+
+  const handleLogin = async (e) => {
+      e.preventDefault(); 
+      if(!email || !password) return;
+      setLoading(true);
+      try {
+          await signInWithEmailAndPassword(auth, email, password); 
+      } catch(error) {
+          alert(`Erreur Firebase : ${error.code}`);
+      }
+      setLoading(false);
+  };
 
   const checkManagerAuth = () => {
       const code = prompt("🔒 Code Manager requis :");
@@ -262,61 +301,64 @@ function App() {
     };
   };
 
-  const btnStyle = { background: COLORS.primary, color: 'white', border: 'none', borderRadius: '12px', padding: '12px 20px', fontWeight: '600', cursor: 'pointer', width: '100%', fontSize: '1rem', boxShadow: '0 4px 6px rgba(168, 68, 56, 0.2)' };
-  const inputStyle = { width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #E5E7EB', background: 'white', marginBottom: '10px', fontSize: '1rem', outline: 'none' };
-  const cardStyle = { background: COLORS.card, borderRadius: '16px', padding: '15px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)', border: '1px solid #F3F4F6' };
+  const btnStyle = { 
+      background: COLORS.primary, color: 'white', border: 'none', borderRadius: '12px', 
+      padding: '12px 20px', fontWeight: '600', cursor: 'pointer', width: '100%', 
+      fontSize: '1rem', boxShadow: '0 4px 6px rgba(168, 68, 56, 0.2)' 
+  };
+  const inputStyle = { 
+      width: '100%', padding: '12px', borderRadius: '10px', 
+      border: '1px solid #E5E7EB', background: 'white', marginBottom: '10px', 
+      fontSize: '1rem', outline: 'none' 
+  };
+  const cardStyle = { 
+      background: COLORS.card, borderRadius: '16px', padding: '15px', 
+      boxShadow: '0 2px 10px rgba(0,0,0,0.03)', border: '1px solid #F3F4F6' 
+  };
 
-
-  // =========================================================================
-  // RENDU 1 : ÉCRAN D'ATTENTE (Impossible d'avoir un écran blanc)
-  // =========================================================================
+  // ==========================================
+  // RENDU 1 : ÉCRAN D'ATTENTE SÉCURISÉ
+  // ==========================================
   if (authState === "LOADING") {
       return (
           <div style={{ background: COLORS.secondary, minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
               <div style={{fontSize:'3rem', marginBottom:'20px'}}>⚙️</div>
-              <h3 style={{margin:0}}>Connexion au panel...</h3>
+              <h3 style={{margin:0}}>Démarrage Admin...</h3>
           </div>
       );
   }
 
-  // =========================================================================
-  // RENDU 2 : ÉCRAN DE LOGIN (Impossible d'avoir un écran blanc)
-  // =========================================================================
+  // ==========================================
+  // RENDU 2 : ÉCRAN DE LOGIN
+  // ==========================================
   if (authState === null) {
       return (
         <div style={{ background: COLORS.bg, minHeight: '100vh', paddingBottom: '100px', color: COLORS.secondary }}>
             <div style={{ padding: '40px 20px', maxWidth: '400px', margin: '0 auto', textAlign: 'center', paddingTop: '10vh' }}>
             <h2 style={{marginBottom: '20px'}}>⚙️ Foodji Admin</h2>
-            <input type="email" placeholder="Email Manager" value={email} onChange={e=>setEmail(e.target.value)} style={inputStyle}/>
-            <input type="password" placeholder="Mot de passe" value={password} onChange={e=>setPassword(e.target.value)} style={inputStyle}/>
-            <button onClick={async (e)=>{
-                e.preventDefault(); 
-                setLoading(true);
-                try{ 
-                  console.log('test cnx');
-                  await signInWithEmailAndPassword(auth, email, password);
-                  console.log('cnx ok');
-                } 
-                catch(error) { alert('Erreur de connexion'); }
-                setLoading(false);
-            }} style={btnStyle}>{loading ? '...' : 'Connexion'}</button>
+            <form onSubmit={handleLogin}>
+                <input type="email" placeholder="Email Manager" value={email} onChange={e=>setEmail(e.target.value)} style={inputStyle}/>
+                <input type="password" placeholder="Mot de passe" value={password} onChange={e=>setPassword(e.target.value)} style={inputStyle}/>
+                <button type="submit" disabled={loading} style={btnStyle}>{loading ? '...' : 'Connexion'}</button>
+            </form>
             </div>
         </div>
       );
   }
 
-  // =========================================================================
-  // RENDU 3 : ÉCRAN ADMIN (Impossible d'avoir un écran blanc)
-  // =========================================================================
+  // ==========================================
+  // RENDU 3 : ÉCRAN ADMIN (Le code exact complet)
+  // ==========================================
   return (
     <div style={{ background: COLORS.bg, minHeight: '100vh', paddingBottom: '100px', color: COLORS.secondary }}>
-        <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
+      <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
           
           <div style={{marginBottom:'20px', display:'flex', gap:'10px', alignItems:'center', justifyContent:'space-between'}}>
               <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
                 <h2 style={{margin:0}}>⚙️ Tableau de Bord</h2>
                 <div style={{fontSize:'0.8rem', color: COLORS.success, background:'#ECFDF5', padding:'5px 10px', borderRadius:'10px'}}>🔊 Son Actif</div>
               </div>
+              <button onClick={() => auth.signOut()} style={{padding:'5px 10px', borderRadius:'8px', border:'none', background:'#eee', cursor:'pointer'}}>Déconnexion</button>
           </div>
 
           <div style={{background: 'white', padding: '15px', borderRadius: '16px', marginBottom: '20px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)'}}>
@@ -346,7 +388,7 @@ function App() {
                       <div style={{color: COLORS.textLight, marginTop:'4px'}}>📞 {cmd.tel || 'N/A'}</div>
                       <div style={{marginTop:'5px', fontSize:'0.8rem', fontWeight:'bold', color: COLORS.secondary, display:'flex', gap:'10px', alignItems:'center'}}>
                           <span>📍 {cmd.distance ? cmd.distance : 'N/A'} km</span>
-                          {cmd.lat && cmd.lng && (<a href={`http://googleusercontent.com/maps.google.com/5{cmd.lat},${cmd.lng}`} target="_blank" rel="noreferrer" style={{color: COLORS.primary, textDecoration:'underline'}}>Voir Map</a>)}
+                          {cmd.lat && cmd.lng && (<a href={`http://googleusercontent.com/maps.google.com/6{cmd.lat},${cmd.lng}`} target="_blank" rel="noreferrer" style={{color: COLORS.primary, textDecoration:'underline'}}>Voir Map</a>)}
                       </div>
                   </div>
                   <div style={{textAlign:'right'}}>
