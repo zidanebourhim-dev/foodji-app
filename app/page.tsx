@@ -292,7 +292,11 @@ function App() {
             <button onClick={async (e)=>{
                 e.preventDefault(); 
                 setLoading(true);
-                try{ await signInWithEmailAndPassword(auth, email, password); } 
+                try{ 
+                  alert('test cnx');
+                  await signInWithEmailAndPassword(auth, email, password);
+                  alert('cnx ok');
+                } 
                 catch(error) { alert('Erreur de connexion'); }
                 setLoading(false);
             }} style={btnStyle}>{loading ? '...' : 'Connexion'}</button>
