@@ -1,8 +1,13 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { db, auth } from './firebase';
-import { signInWithEmailAndPassword, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { 
-  collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, setDoc, query, writeBatch
+  signInWithEmailAndPassword, 
+  onAuthStateChanged, 
+  setPersistence, 
+  browserLocalPersistence 
+} from 'firebase/auth';
+import { 
+  collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, setDoc, query, writeBatch 
 } from 'firebase/firestore';
 import './App.css';
 
@@ -19,11 +24,29 @@ const COLORS = {
   pending: '#F97316' 
 };
 
-const INIT_VIANDES = [{ nom: "Poulet", available: true }, { nom: "Viande Hachée", available: true }, { nom: "Cordon Bleu", available: true }, { nom: "Nuggets", available: true }, { nom: "Poulet Crispy", available: true }];
-const INIT_GARNITURES_PIZZA = [{ nom: "Viande Hachée", available: true }, { nom: "Poulet", available: true }, { nom: "4 Fromages", available: true }, { nom: "Cannibale", available: true }, { nom: "Pepperoni", available: true }, { nom: "Thon", available: true }, { nom: "Charcuterie", available: true }, { nom: "Végétarienne", available: true }, { nom: "Fruits de Mer", available: true }];
-const INIT_SAUCES = [{ nom: "Algérienne Fait Maison", available: true }, { nom: "Biggy Fait Maison", available: true }, { nom: "Barbecue Fait Maison", available: true }, { nom: "Pas de sauce", available: true }];
-const INIT_PATES = [{ nom: "Penne", available: true }, { nom: "Tagliatelle", available: true }, { nom: "Spaghetti", available: true }];
-const INIT_TAILLES_PIZZA = [{ nom: "M", available: true }, { nom: "L", available: true }];
+const INIT_VIANDES = [
+    { nom: "Poulet", available: true }, { nom: "Viande Hachée", available: true }, 
+    { nom: "Cordon Bleu", available: true }, { nom: "Nuggets", available: true }, 
+    { nom: "Poulet Crispy", available: true }
+];
+const INIT_GARNITURES_PIZZA = [
+    { nom: "Viande Hachée", available: true }, { nom: "Poulet", available: true }, 
+    { nom: "4 Fromages", available: true }, { nom: "Cannibale", available: true }, 
+    { nom: "Pepperoni", available: true }, { nom: "Thon", available: true }, 
+    { nom: "Charcuterie", available: true }, { nom: "Végétarienne", available: true }, 
+    { nom: "Fruits de Mer", available: true }
+];
+const INIT_SAUCES = [
+    { nom: "Algérienne Fait Maison", available: true }, { nom: "Biggy Fait Maison", available: true }, 
+    { nom: "Barbecue Fait Maison", available: true }, { nom: "Pas de sauce", available: true }
+];
+const INIT_PATES = [
+    { nom: "Penne", available: true }, { nom: "Tagliatelle", available: true }, 
+    { nom: "Spaghetti", available: true }
+];
+const INIT_TAILLES_PIZZA = [
+    { nom: "M", available: true }, { nom: "L", available: true }
+];
 
 const TOUTES_CATEGORIES = ["Tacos", "Pizzas", "Burgers", "Pâtes", "Sides", "Les Burritos", "Koniks", "Plats", "Salades", "Boissons", "Desserts"];
 
@@ -37,9 +60,44 @@ const STOCK_TABS = [
 
 const NOTIF_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
 
-function App() {
-  // L'ÉTAT UNIQUE ET STRICT (Anti-Page Blanche)
-  const [authState, setAuthState] = useState("LOADING"); 
+// ============================================================================
+// BOUCLIER ANTI-CRASH FATAL (ERROR BOUNDARY)
+// ============================================================================
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, errorMsg: '' };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, errorMsg: error.toString() };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("Crash React intercepté :", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '40px', background: '#FEF2F2', color: '#991B1B', minHeight: '100vh', fontFamily: 'sans-serif' }}>
+          <h2 style={{ fontSize: '2rem', marginBottom: '10px' }}>🚨 ERREUR DE DONNÉES</h2>
+          <p style={{ fontSize: '1.2rem' }}>L'application a bloqué une page blanche. Une donnée corrompue empêche l'affichage.</p>
+          <div style={{ background: '#7F1D1D', color: 'white', padding: '20px', borderRadius: '8px', marginTop: '20px', fontFamily: 'monospace', fontSize: '1.1rem', overflowX: 'auto' }}>
+            {this.state.errorMsg}
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// ============================================================================
+// L'APPLICATION PRINCIPALE
+// ============================================================================
+function FoodjiAdmin() {
+  const [authState, setAuthState] = useState("LOADING");
   
   const [menu, setMenu] = useState([]);
   const [commandes, setCommandes] = useState([]);
@@ -72,17 +130,15 @@ function App() {
 
   const SYNC_ID_VERSION = "053700";
 
-  // 1. GESTION DE LA SESSION FIREBASE (AU DÉMARRAGE)
   useEffect(() => {
     setPersistence(auth, browserLocalPersistence).finally(() => {
-        const unsubscribe = onAuthStateChanged(auth, (user) => { 
-            setAuthState(user ? user : null);
-        });
-        return () => unsubscribe();
+      const unsubscribe = onAuthStateChanged(auth, (user) => { 
+        setAuthState(user ? user : null);
+      });
+      return () => unsubscribe();
     });
   }, []);
 
-  // 2. ÉCOUTEURS DE DONNÉES (SÉCURISÉS)
   useEffect(() => {
     if (!authState || authState === "LOADING") return;
 
@@ -347,7 +403,7 @@ function App() {
   }
 
   // ==========================================
-  // RENDU 3 : ÉCRAN ADMIN (Le code exact complet)
+  // RENDU 3 : ÉCRAN ADMIN COMPLET
   // ==========================================
   return (
     <div style={{ background: COLORS.bg, minHeight: '100vh', paddingBottom: '100px', color: COLORS.secondary }}>
@@ -388,7 +444,7 @@ function App() {
                       <div style={{color: COLORS.textLight, marginTop:'4px'}}>📞 {cmd.tel || 'N/A'}</div>
                       <div style={{marginTop:'5px', fontSize:'0.8rem', fontWeight:'bold', color: COLORS.secondary, display:'flex', gap:'10px', alignItems:'center'}}>
                           <span>📍 {cmd.distance ? cmd.distance : 'N/A'} km</span>
-                          {cmd.lat && cmd.lng && (<a href={`http://googleusercontent.com/maps.google.com/6{cmd.lat},${cmd.lng}`} target="_blank" rel="noreferrer" style={{color: COLORS.primary, textDecoration:'underline'}}>Voir Map</a>)}
+                          {cmd.lat && cmd.lng && (<a href={`http://googleusercontent.com/maps.google.com/7{cmd.lat},${cmd.lng}`} target="_blank" rel="noreferrer" style={{color: COLORS.primary, textDecoration:'underline'}}>Voir Map</a>)}
                       </div>
                   </div>
                   <div style={{textAlign:'right'}}>
@@ -404,6 +460,7 @@ function App() {
                     {cmd.remisePromo > 0 && <div style={{color: COLORS.danger, fontSize:'0.9rem', fontWeight:'bold', border:'1px solid red', padding:'5px', borderRadius:'5px', display:'inline-block'}}>🎁 REMISE PROMO: -{cmd.remisePromo} DH</div>}
                 </div>
                 
+                {/* L'INTÉGRALITÉ DES DÉTAILS DE LA COMMANDE EST ICI */}
                 <ul style={{listStyle:'none', marginBottom:'15px'}}>
                   {Array.isArray(cmd.items) && cmd.items.map((it, i) => (
                     <li key={i} style={{padding:'8px 0', borderBottom:'1px dashed #eee', lineHeight:'1.4'}}>
@@ -554,6 +611,9 @@ function App() {
   );
 }
 
+// ============================================================================
+// FONCTIONS UTILITAIRES ET EXPORT
+// ============================================================================
 function formatOptions(list) {
     if(!list || !Array.isArray(list)) return "";
     const counts = {};
@@ -561,4 +621,10 @@ function formatOptions(list) {
     return Object.entries(counts).map(([name, count]) => count > 1 ? `${name} x${count}` : name).join(', ');
 }
 
-export default App;
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <FoodjiAdmin />
+    </ErrorBoundary>
+  );
+}
