@@ -293,9 +293,9 @@ function App() {
                 e.preventDefault(); 
                 setLoading(true);
                 try{ 
-                  alert('test cnx');
+                  console.log('test cnx');
                   await signInWithEmailAndPassword(auth, email, password);
-                  alert('cnx ok');
+                  console.log('cnx ok');
                 } 
                 catch(error) { alert('Erreur de connexion'); }
                 setLoading(false);
