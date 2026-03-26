@@ -1,94 +1,34 @@
 import { useState, useEffect, useRef } from 'react';
 import { db, auth } from './firebase';
 import { signInWithEmailAndPassword, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'firebase/auth';
-import { 
-  collection, 
-  addDoc, 
-  onSnapshot, 
-  doc, 
-  deleteDoc, 
-  updateDoc, 
-  setDoc,
-  query, 
-  writeBatch
-} from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, setDoc, query, writeBatch } from 'firebase/firestore';
 import './App.css';
 
-const COLORS = {
-  primary: '#A84438',    
-  secondary: '#1A1E29',  
-  bg: '#F3F4F6',        
-  card: '#FFFFFF',        
-  success: '#10B981',
-  danger: '#EF4444',
-  warning: '#F59E0B',
-  promo: '#D97706',    
-  textLight: '#6B7280',
-  pending: '#F97316' 
-};
-
-const INIT_VIANDES = [
-    { nom: "Poulet", available: true }, { nom: "Viande Hachée", available: true }, 
-    { nom: "Cordon Bleu", available: true }, { nom: "Nuggets", available: true }, 
-    { nom: "Poulet Crispy", available: true }
-];
-const INIT_GARNITURES_PIZZA = [
-    { nom: "Viande Hachée", available: true }, { nom: "Poulet", available: true }, 
-    { nom: "4 Fromages", available: true }, { nom: "Cannibale", available: true }, 
-    { nom: "Pepperoni", available: true }, { nom: "Thon", available: true }, 
-    { nom: "Charcuterie", available: true }, { nom: "Végétarienne", available: true }, 
-    { nom: "Fruits de Mer", available: true }
-];
-const INIT_SAUCES = [
-    { nom: "Algérienne Fait Maison", available: true }, { nom: "Biggy Fait Maison", available: true }, 
-    { nom: "Barbecue Fait Maison", available: true }, { nom: "Pas de sauce", available: true }
-];
-const INIT_PATES = [
-    { nom: "Penne", available: true }, { nom: "Tagliatelle", available: true }, 
-    { nom: "Spaghetti", available: true }
-];
-const INIT_TAILLES_PIZZA = [
-    { nom: "M", available: true }, { nom: "L", available: true }
-];
-
+const COLORS = { primary: '#A84438', secondary: '#1A1E29', bg: '#F3F4F6', card: '#FFFFFF', success: '#10B981', danger: '#EF4444', warning: '#F59E0B', promo: '#D97706', textLight: '#6B7280', pending: '#F97316' };
+const INIT_VIANDES = [{ nom: "Poulet", available: true }, { nom: "Viande Hachée", available: true }, { nom: "Cordon Bleu", available: true }, { nom: "Nuggets", available: true }, { nom: "Poulet Crispy", available: true }];
+const INIT_GARNITURES_PIZZA = [{ nom: "Viande Hachée", available: true }, { nom: "Poulet", available: true }, { nom: "4 Fromages", available: true }, { nom: "Cannibale", available: true }, { nom: "Pepperoni", available: true }, { nom: "Thon", available: true }, { nom: "Charcuterie", available: true }, { nom: "Végétarienne", available: true }, { nom: "Fruits de Mer", available: true }];
+const INIT_SAUCES = [{ nom: "Algérienne Fait Maison", available: true }, { nom: "Biggy Fait Maison", available: true }, { nom: "Barbecue Fait Maison", available: true }, { nom: "Pas de sauce", available: true }];
+const INIT_PATES = [{ nom: "Penne", available: true }, { nom: "Tagliatelle", available: true }, { nom: "Spaghetti", available: true }];
+const INIT_TAILLES_PIZZA = [{ nom: "M", available: true }, { nom: "L", available: true }];
 const TOUTES_CATEGORIES = ["Tacos", "Pizzas", "Burgers", "Pâtes", "Sides", "Les Burritos", "Koniks", "Plats", "Salades", "Boissons", "Desserts"];
-
-const STOCK_TABS = [
-    { id: 'viandes', label: '🌮 Viandes' },
-    { id: 'garnitures', label: '🍕 Garnitures' },
-    { id: 'tailles_pizza', label: '📏 Tailles' },
-    { id: 'pates', label: '🍝 Pâtes' },
-    { id: 'sauces', label: '🥣 Sauces' }
-];
-
+const STOCK_TABS = [{ id: 'viandes', label: '🌮 Viandes' }, { id: 'garnitures', label: '🍕 Garnitures' }, { id: 'tailles_pizza', label: '📏 Tailles' }, { id: 'pates', label: '🍝 Pâtes' }, { id: 'sauces', label: '🥣 Sauces' }];
 const NOTIF_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
 
 function App() {
-  const [isAuthLoading, setIsAuthLoading] = useState(true);
-  const [user, setUser] = useState(null);
-  const [view, setView] = useState('login'); 
+  // L'ÉTAT UNIQUE INDESTRUCTIBLE : "LOADING" | null (déconnecté) | objet (connecté)
+  const [authState, setAuthState] = useState("LOADING");
   
   const [menu, setMenu] = useState([]);
   const [commandes, setCommandes] = useState([]);
-  
-  const prevCommandesLength = useRef(0);
-  const audioRef = useRef(null);
-  const fileInputRef = useRef(null); 
-
   const [adminCategorie, setAdminCategorie] = useState(''); 
   const [rushMode, setRushMode] = useState('standard');
   const [isStoreOpen, setIsStoreOpen] = useState(true);
-
-  const [stocks, setStocks] = useState({
-      viandes: INIT_VIANDES, garnitures: INIT_GARNITURES_PIZZA, sauces: INIT_SAUCES, pates: INIT_PATES, tailles_pizza: INIT_TAILLES_PIZZA
-  });
+  const [stocks, setStocks] = useState({ viandes: INIT_VIANDES, garnitures: INIT_GARNITURES_PIZZA, sauces: INIT_SAUCES, pates: INIT_PATES, tailles_pizza: INIT_TAILLES_PIZZA });
   const [activeStockTab, setActiveStockTab] = useState('viandes');
   const [newItemName, setNewItemName] = useState('');
-
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  
   const [editId, setEditId] = useState(null); 
   const [nom, setNom] = useState('');
   const [description, setDescription] = useState(''); 
@@ -97,36 +37,36 @@ function App() {
   const [prixBase, setPrixBase] = useState('');
   const [variantes, setVariantes] = useState([]); 
 
+  const prevCommandesLength = useRef(0);
+  const audioRef = useRef(null);
+  const fileInputRef = useRef(null); 
   const SYNC_ID_VERSION = "053700";
 
-  // 1. FORÇAGE DE LA PERSISTANCE (Exécuté une seule fois)
+  // 1. ÉCOUTEUR D'AUTHENTIFICATION STRICT
   useEffect(() => {
     setPersistence(auth, browserLocalPersistence).catch(() => {});
-  }, []);
-
-  // 2. ÉCOUTEUR D'AUTHENTIFICATION (Indépendant)
-  useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (u) => { 
-        setUser(u);
-        if (u) setView('admin');
-        else setView('login');
-        setIsAuthLoading(false);
+    const unsubscribe = onAuthStateChanged(auth, (user) => { 
+        if (user) {
+            setAuthState(user); // Connecté
+        } else {
+            setAuthState(null); // Déconnecté
+        }
     });
-    return () => { unsubscribeAuth(); };
+    return () => unsubscribe();
   }, []);
 
-  // 3. ÉCOUTEURS DE DONNÉES SÉCURISÉS (Se déclenchent UNIQUEMENT si connecté)
+  // 2. RÉCUPÉRATION DES DONNÉES (Se déclenche uniquement si on est formellement connecté)
   useEffect(() => {
-    if (!user) return;
+    if (authState === "LOADING" || authState === null) return; 
 
     const unsubStatus = onSnapshot(doc(db, "parametres", "status"), (docSnap) => {
-      if (docSnap.exists()) setRushMode(docSnap.data().mode);
-      else setDoc(doc(db, "parametres", "status"), { mode: 'standard' });
+        if (docSnap.exists()) setRushMode(docSnap.data().mode);
+        else setDoc(doc(db, "parametres", "status"), { mode: 'standard' }).catch(()=>{});
     });
 
     const unsubHoraires = onSnapshot(doc(db, "parametres", "horaires"), (docSnap) => {
         if (docSnap.exists()) setIsStoreOpen(docSnap.data().isOuvert);
-        else setDoc(doc(db, "parametres", "horaires"), { isOuvert: true });
+        else setDoc(doc(db, "parametres", "horaires"), { isOuvert: true }).catch(()=>{});
     });
 
     const unsubStocks = onSnapshot(doc(db, "parametres", "stocks"), (docSnap) => {
@@ -138,51 +78,51 @@ function App() {
             });
         } else {
             const initData = { viandes: INIT_VIANDES, garnitures: INIT_GARNITURES_PIZZA, sauces: INIT_SAUCES, pates: INIT_PATES, tailles_pizza: INIT_TAILLES_PIZZA };
-            setDoc(doc(db, "parametres", "stocks"), initData);
+            setDoc(doc(db, "parametres", "stocks"), initData).catch(()=>{});
             setStocks(initData);
         }
     });
 
     const unsubMenu = onSnapshot(collection(db, "produits"), (snap) => {
-      setMenu(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        setMenu(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
     const q = query(collection(db, "commandes"));
     const unsubCmd = onSnapshot(q, (snap) => {
-      try {
-          const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-          list.sort((a, b) => {
-              const timeA = a.date?.seconds || (a.date ? new Date(a.date).getTime() / 1000 : 0);
-              const timeB = b.date?.seconds || (b.date ? new Date(b.date).getTime() / 1000 : 0);
-              return timeB - timeA;
-          });
-          
-          if (list.length > prevCommandesLength.current) {
-              if (!audioRef.current) audioRef.current = new Audio(NOTIF_SOUND);
-              audioRef.current.play().catch(() => {});
-          }
-          prevCommandesLength.current = list.length;
-          setCommandes(list);
-      } catch (error) {
-          console.error("Erreur de tri évitée");
-      }
+        try {
+            const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            list.sort((a, b) => {
+                const timeA = a.date?.seconds || (a.date ? new Date(a.date).getTime() / 1000 : 0);
+                const timeB = b.date?.seconds || (b.date ? new Date(b.date).getTime() / 1000 : 0);
+                return timeB - timeA;
+            });
+            
+            if (list.length > prevCommandesLength.current) {
+                if (!audioRef.current) audioRef.current = new Audio(NOTIF_SOUND);
+                audioRef.current.play().catch(() => {});
+            }
+            prevCommandesLength.current = list.length;
+            setCommandes(list);
+        } catch (err) {
+            console.error("Tri evité", err);
+        }
     });
 
-    return () => { 
-        unsubStatus(); unsubHoraires(); unsubStocks(); unsubMenu(); unsubCmd(); 
-    };
-  }, [user]);
+    return () => { unsubStatus(); unsubHoraires(); unsubStocks(); unsubMenu(); unsubCmd(); };
+  }, [authState]);
 
-  const categoriesReelles = [...new Set(menu.map(p => p.categorie))];
+  const categoriesReelles = Array.isArray(menu) ? [...new Set(menu.map(p => p.categorie))] : [];
   const categoriesSelectAdmin = [...new Set([...TOUTES_CATEGORIES, ...categoriesReelles])];
 
   useEffect(() => {
       if (categoriesReelles.length > 0 && !adminCategorie) setAdminCategorie(categoriesReelles[0]);
-  }, [menu]);
+  }, [menu, adminCategorie]);
 
   let menuAdmin = [];
-  if (adminCategorie === 'RUPTURE') menuAdmin = menu.filter(p => p.available === false);
-  else menuAdmin = menu.filter(p => p.categorie === adminCategorie);
+  if (Array.isArray(menu)) {
+      if (adminCategorie === 'RUPTURE') menuAdmin = menu.filter(p => p.available === false);
+      else menuAdmin = menu.filter(p => p.categorie === adminCategorie);
+  }
 
   const checkManagerAuth = () => {
       const code = prompt("🔒 Code Manager requis :");
@@ -322,54 +262,50 @@ function App() {
     };
   };
 
-  const btnStyle = { 
-      background: COLORS.primary, color: 'white', border: 'none', borderRadius: '12px', 
-      padding: '12px 20px', fontWeight: '600', cursor: 'pointer', width: '100%', 
-      fontSize: '1rem', boxShadow: '0 4px 6px rgba(168, 68, 56, 0.2)' 
-  };
-  const inputStyle = { 
-      width: '100%', padding: '12px', borderRadius: '10px', 
-      border: '1px solid #E5E7EB', background: 'white', marginBottom: '10px', 
-      fontSize: '1rem', outline: 'none' 
-  };
-  const cardStyle = { 
-      background: COLORS.card, borderRadius: '16px', padding: '15px', 
-      boxShadow: '0 2px 10px rgba(0,0,0,0.03)', border: '1px solid #F3F4F6' 
-  };
+  const btnStyle = { background: COLORS.primary, color: 'white', border: 'none', borderRadius: '12px', padding: '12px 20px', fontWeight: '600', cursor: 'pointer', width: '100%', fontSize: '1rem', boxShadow: '0 4px 6px rgba(168, 68, 56, 0.2)' };
+  const inputStyle = { width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #E5E7EB', background: 'white', marginBottom: '10px', fontSize: '1rem', outline: 'none' };
+  const cardStyle = { background: COLORS.card, borderRadius: '16px', padding: '15px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)', border: '1px solid #F3F4F6' };
 
-  if (isAuthLoading) {
+
+  // =========================================================================
+  // RENDU 1 : ÉCRAN D'ATTENTE (Impossible d'avoir un écran blanc)
+  // =========================================================================
+  if (authState === "LOADING") {
       return (
           <div style={{ background: COLORS.secondary, minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
               <div style={{fontSize:'3rem', marginBottom:'20px'}}>⚙️</div>
-              <h3 style={{margin:0}}>Démarrage Admin...</h3>
+              <h3 style={{margin:0}}>Connexion au panel...</h3>
           </div>
       );
   }
 
+  // =========================================================================
+  // RENDU 2 : ÉCRAN DE LOGIN (Impossible d'avoir un écran blanc)
+  // =========================================================================
+  if (authState === null) {
+      return (
+        <div style={{ background: COLORS.bg, minHeight: '100vh', paddingBottom: '100px', color: COLORS.secondary }}>
+            <div style={{ padding: '40px 20px', maxWidth: '400px', margin: '0 auto', textAlign: 'center', paddingTop: '10vh' }}>
+            <h2 style={{marginBottom: '20px'}}>⚙️ Foodji Admin</h2>
+            <input type="email" placeholder="Email Manager" value={email} onChange={e=>setEmail(e.target.value)} style={inputStyle}/>
+            <input type="password" placeholder="Mot de passe" value={password} onChange={e=>setPassword(e.target.value)} style={inputStyle}/>
+            <button onClick={async (e)=>{
+                e.preventDefault(); 
+                setLoading(true);
+                try{ await signInWithEmailAndPassword(auth, email, password); } 
+                catch(error) { alert('Erreur de connexion'); }
+                setLoading(false);
+            }} style={btnStyle}>{loading ? '...' : 'Connexion'}</button>
+            </div>
+        </div>
+      );
+  }
+
+  // =========================================================================
+  // RENDU 3 : ÉCRAN ADMIN (Impossible d'avoir un écran blanc)
+  // =========================================================================
   return (
     <div style={{ background: COLORS.bg, minHeight: '100vh', paddingBottom: '100px', color: COLORS.secondary }}>
-      
-      {view === 'login' && !user && (
-        <div style={{ padding: '40px 20px', maxWidth: '400px', margin: '0 auto', textAlign: 'center', paddingTop: '10vh' }}>
-          <h2 style={{marginBottom: '20px'}}>⚙️ Foodji Admin</h2>
-          <input type="email" placeholder="Email Manager" value={email} onChange={e=>setEmail(e.target.value)} style={inputStyle}/>
-          <input type="password" placeholder="Mot de passe" value={password} onChange={e=>setPassword(e.target.value)} style={inputStyle}/>
-          
-          <button onClick={async (e)=>{
-              e.preventDefault(); 
-              setLoading(true);
-              try{
-                  await signInWithEmailAndPassword(auth, email, password); 
-                  setView('admin');
-              } catch(error) {
-                  alert('Erreur de connexion');
-              }
-              setLoading(false);
-          }} style={btnStyle}>{loading ? '...' : 'Connexion'}</button>
-        </div>
-      )}
-
-      {view === 'admin' && user && (
         <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
           
           <div style={{marginBottom:'20px', display:'flex', gap:'10px', alignItems:'center', justifyContent:'space-between'}}>
@@ -396,12 +332,187 @@ function App() {
               </div>
           </div>
 
-          <h3 style={{marginTop:'30px'}}>Commandes ({commandes.filter(c => c.status !== 'Terminé').length})</h3>
+          <h3 style={{marginTop:'30px'}}>Commandes ({Array.isArray(commandes) ? commandes.filter(c => c && c.status !== 'Terminé').length : 0})</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '20px', marginBottom:'40px' }}>
-            {commandes.map(cmd => (
+            {Array.isArray(commandes) && commandes.map(cmd => (
               <div key={cmd.id} style={{ ...cardStyle, borderLeft: cmd.status === 'Terminé' ? '5px solid #ccc' : (cmd.status === 'En cours de validation' ? `5px solid ${COLORS.pending}` : `5px solid ${COLORS.success}`) }}>
                 <div style={{display:'flex', justifyContent:'space-between', alignItems:'start', marginBottom:'15px', paddingBottom:'15px', borderBottom:'1px solid #f0f0f0'}}>
                   <div>
                       <strong style={{fontSize:'1.2rem', display:'block'}}>{cmd.client || 'Client'}</strong>
                       <div style={{color: COLORS.textLight, marginTop:'4px'}}>📞 {cmd.tel || 'N/A'}</div>
-             
+                      <div style={{marginTop:'5px', fontSize:'0.8rem', fontWeight:'bold', color: COLORS.secondary, display:'flex', gap:'10px', alignItems:'center'}}>
+                          <span>📍 {cmd.distance ? cmd.distance : 'N/A'} km</span>
+                          {cmd.lat && cmd.lng && (<a href={`http://googleusercontent.com/maps.google.com/5{cmd.lat},${cmd.lng}`} target="_blank" rel="noreferrer" style={{color: COLORS.primary, textDecoration:'underline'}}>Voir Map</a>)}
+                      </div>
+                  </div>
+                  <div style={{textAlign:'right'}}>
+                    <div style={{fontSize:'1.3rem', fontWeight:'bold', color: COLORS.primary}}>{cmd.total || 0} DH</div>
+                    <button onClick={() => copierOdoo(cmd)} style={{marginTop:'5px', background: COLORS.secondary, color:'white', border:'none', padding:'6px 12px', borderRadius:'6px', fontSize:'0.75rem', cursor:'pointer'}}>📋 COPIER</button>
+                  </div>
+                </div>
+                
+                <div style={{marginBottom:'10px'}}>
+                    {cmd.status === 'En cours de validation' && <div style={{background: '#FFF7ED', color: '#C2410C', padding:'8px', borderRadius:'8px', fontSize:'0.9rem', fontWeight:'bold', marginBottom:'10px', border:'1px solid #FED7AA'}}>⚠️ GROS PANIER - À VALIDER TEL</div>}
+                    {cmd.type === 'livraison' && <div style={{background:'#FEF3C7', color:'#D97706', padding:'8px', borderRadius:'8px', fontSize:'0.9rem', marginBottom:'5px'}}>🛵 <strong>{cmd.adresse || 'N/A'}</strong></div>}
+                    {cmd.commentaire && <div style={{background: COLORS.warning, color:'white', padding:'8px', borderRadius:'8px', fontSize:'0.9rem', fontWeight:'bold'}}>📝 Note: {cmd.commentaire}</div>}
+                    {cmd.remisePromo > 0 && <div style={{color: COLORS.danger, fontSize:'0.9rem', fontWeight:'bold', border:'1px solid red', padding:'5px', borderRadius:'5px', display:'inline-block'}}>🎁 REMISE PROMO: -{cmd.remisePromo} DH</div>}
+                </div>
+                
+                <ul style={{listStyle:'none', marginBottom:'15px'}}>
+                  {Array.isArray(cmd.items) && cmd.items.map((it, i) => (
+                    <li key={i} style={{padding:'8px 0', borderBottom:'1px dashed #eee', lineHeight:'1.4'}}>
+                      <div style={{display:'flex', alignItems:'center', gap:'10px', marginBottom:'2px'}}>
+                          <span style={{fontSize:'0.75rem', fontWeight:'bold', color: COLORS.primary, background:'#FEE2E2', padding:'2px 6px', borderRadius:'4px'}}>
+                              [{it.categorie ? it.categorie.toUpperCase() : 'PLAT'}]
+                          </span>
+                          <strong style={{fontSize:'1.1rem'}}>{it.nom || 'Inconnu'}</strong>
+                      </div>
+                      <div style={{display:'flex', justifyContent:'space-between', color: COLORS.secondary}}>
+                          <span>
+                              {it.choixPates && <strong style={{color: COLORS.primary, marginRight:'5px'}}>{it.choixPates}</strong>}
+                              {it.varianteNom && <strong style={{color: COLORS.secondary, fontSize:'0.95rem'}}>({it.varianteNom})</strong>}
+                          </span>
+                          <strong style={{color: COLORS.textLight}}>{it.prixFinal || 0} DH</strong>
+                      </div>
+                      <div style={{fontSize:'0.85rem', color:'#444', marginLeft:'10px', marginTop:'2px'}}>
+                          {it.isCheesyCrust && <div style={{fontWeight:'bold', color: COLORS.promo}}>★ CHEESY CRUST</div>}
+                          {Array.isArray(it.extras) && it.extras.length > 0 && <div>+ {it.extras.map(e => e.nom).join(', ')}</div>}
+                          {Array.isArray(it.sauces) && it.sauces.length > 0 && <div>Sauces: {formatOptions(it.sauces)}</div>}
+                          {Array.isArray(it.optionsChoisies) && it.optionsChoisies.length > 0 && <div>+ {formatOptions(it.optionsChoisies)}</div>}
+                          {Array.isArray(it.sans) && it.sans.length > 0 && <div style={{color: COLORS.danger, fontWeight:'bold'}}>🚫 {it.sans.join(', ')}</div>}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+
+                <div style={{display:'flex', gap:'10px', flexWrap:'wrap'}}>
+                  {cmd.status === 'En cours de validation' ? (
+                      <>
+                        <button onClick={()=>changerStatus(cmd.id, 'En attente')} style={{...btnStyle, background: COLORS.success, padding:'10px', flex:1}}>☎️ CLIENT OK</button>
+                        <button onClick={()=>changerStatus(cmd.id, 'Refusé')} style={{...btnStyle, background: COLORS.danger, padding:'10px', flex:1}}>REFUSER</button>
+                      </>
+                  ) : (
+                      <>
+                          {cmd.status !== 'Terminé' && cmd.status !== 'Refusé' && <button onClick={()=>changerStatus(cmd.id, 'Terminé')} style={{...btnStyle, background: COLORS.success, padding:'10px'}}>✅ SERVI</button>}
+                          <button onClick={()=>supprimerCmd(cmd.id)} style={{...btnStyle, background:'white', color:'red', border:'1px solid #eee', padding:'10px'}}>🗑️</button>
+                      </>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+           <div style={{marginTop:'40px', borderTop:'2px solid #eee', paddingTop:'20px'}}>
+             <h3 style={{marginBottom:'15px'}}>📦 Menu</h3>
+             <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '15px', display:'flex', gap:'10px' }}>
+              {Array.isArray(categoriesReelles) && categoriesReelles.map(c => (
+                <button key={c} onClick={() => setAdminCategorie(c)} style={{padding:'8px 15px', borderRadius:'20px', border:'none', background: adminCategorie===c?COLORS.secondary:'#eee', color:adminCategorie===c?'white':'black', cursor:'pointer'}}>{c}</button>
+              ))}
+              <button onClick={() => setAdminCategorie('RUPTURE')} style={{padding:'8px 15px', borderRadius:'20px', border:'none', background: adminCategorie==='RUPTURE'?COLORS.danger:'#FEE2E2', color: adminCategorie==='RUPTURE'?'white':COLORS.danger, fontWeight:'bold', cursor:'pointer'}}>🚫 RUPTURE</button>
+             </div>
+
+             {Array.isArray(menuAdmin) && menuAdmin.map(p => (
+              <div key={p.id} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px', borderBottom:'1px solid #f0f0f0', background: p.available === false ? '#FFF5F5' : 'white', opacity: p.available === false ? 0.7 : 1}}>
+                <div style={{display:'flex', alignItems:'center', gap:'15px'}}>
+                  <div onClick={() => toggleAvailability(p)} style={{width:'50px', height:'26px', background: p.available !== false ? COLORS.success : '#ccc', borderRadius:'20px', position:'relative', cursor:'pointer', transition:'0.3s'}}>
+                    <div style={{width:'20px', height:'20px', background:'white', borderRadius:'50%', position:'absolute', top:'3px', left: p.available !== false ? '27px' : '3px', transition:'0.3s'}}></div>
+                  </div>
+                  <div style={{width:'40px', height:'40px', background:'#eee', borderRadius:'5px', overflow:'hidden', position:'relative'}}>
+                    {p.image && <img src={p.image} style={{width:'100%', height:'100%', objectFit:'cover'}} alt="" />}
+                    <input type="file" onChange={(e)=>updateProductImage(p.id, e.target.files[0])} style={{position:'absolute', top:0, left:0, width:'100%', height:'100%', opacity:0, cursor:'pointer'}} />
+                  </div>
+                  <div>
+                    <div style={{fontWeight:'bold', textDecoration: p.available === false ? 'line-through' : 'none'}}>{p.nom}</div>
+                    <div style={{fontSize:'0.8rem', color: COLORS.textLight}}>{p.categorie} • {Array.isArray(p.variantes) && p.variantes.length > 0 ? 'Multi-tailles' : p.prix + ' DH'}</div>
+                  </div>
+                </div>
+                <div style={{display:'flex', gap:'10px'}}>
+                    <button onClick={() => handleEdit(p)} style={{border:'none', background:'transparent', fontSize:'1.2rem', cursor:'pointer'}}>✏️</button>
+                    <button onClick={()=>supprimerProduit(p.id)} style={{color:'red', border:'none', background:'transparent', cursor:'pointer'}}>X</button>
+                </div>
+              </div>
+            ))}
+          </div>
+          
+           <details style={{marginTop:'30px', background:'white', padding:'15px', borderRadius:'10px'}}>
+             <summary>{editId ? '✏️ Modifier Produit' : 'Ajout Manuel'}</summary>
+             <div style={{marginTop:'10px'}}>
+                 <input placeholder="Nom" value={nom} onChange={e=>setNom(e.target.value)} style={inputStyle} />
+                 <textarea placeholder="Description" value={description} onChange={e=>setDescription(e.target.value)} style={{...inputStyle, height:'60px', fontFamily:'inherit', resize:'vertical'}} />
+                 <div style={{display:'flex', gap:'10px', alignItems:'start'}}>
+                   <select value={categorie} onChange={handleCategoryChange} style={{...inputStyle, width:'50%'}}>
+                       {Array.isArray(categoriesSelectAdmin) && categoriesSelectAdmin.map(cat => <option key={cat}>{cat}</option>)}
+                   </select>
+                   {Array.isArray(variantes) && variantes.length > 0 ? (
+                       <div style={{width:'50%', display:'flex', gap:'5px', flexWrap:'wrap'}}>
+                           {variantes.map((v, index) => (
+                               <div key={index} style={{flex:1, minWidth:'120px', display:'flex', alignItems:'center', gap:'5px', background:'#F9FAFB', padding:'5px', borderRadius:'8px', border:'1px solid #eee'}}>
+                                   <div style={{flex:1}}>
+                                       <label style={{fontSize:'0.7rem', fontWeight:'bold', color: COLORS.textLight, display:'block'}}>{v.nom}</label>
+                                       <input type="number" value={v.prix} onChange={(e) => updateVariantPrice(index, 'prix', e.target.value)} style={{...inputStyle, marginBottom:0, padding:'5px', fontSize:'0.9rem'}} />
+                                   </div>
+                                   <div style={{display:'flex', flexDirection:'column', alignItems:'center'}}>
+                                       <label style={{fontSize:'0.6rem', color: COLORS.textLight}}>Dispo</label>
+                                       <input type="checkbox" checked={v.available !== false} onChange={(e) => updateVariantPrice(index, 'available', e.target.checked)} style={{width:'20px', height:'20px'}} />
+                                   </div>
+                               </div>
+                           ))}
+                       </div>
+                   ) : (
+                       <input type="number" placeholder="Prix" value={prixBase} onChange={e=>setPrixBase(e.target.value)} style={{...inputStyle, width:'50%'}} />
+                   )}
+                 </div>
+                 <button onClick={saveProduit} style={{...btnStyle, width:'auto', marginTop:'15px'}}>{editId ? 'Mettre à jour' : 'Ajouter'}</button>
+                 {editId && <button onClick={() => {setEditId(null); setNom(''); setPrixBase(''); setVariantes([]); setDescription('');}} style={{...btnStyle, background:'gray', width:'auto', marginLeft:'10px'}}>Annuler</button>}
+             </div>
+           </details>
+
+           <details style={{marginTop:'30px', background:'#FFF7ED', padding:'15px', borderRadius:'10px', border:`1px solid ${COLORS.promo}`}}>
+                <summary style={{fontWeight:'bold', color: '#C2410C', cursor:'pointer'}}>🥕 GESTION DES STOCKS (ON/OFF)</summary>
+                <div style={{marginTop:'20px'}}>
+                    <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '20px', scrollbarWidth: 'none', display:'flex', gap:'10px' }}>
+                        {STOCK_TABS.map(tab => (
+                            <button key={tab.id} onClick={() => setActiveStockTab(tab.id)} style={{display:'inline-block', padding:'10px 20px', borderRadius:'25px', background: activeStockTab === tab.id ? COLORS.secondary : 'white', color: activeStockTab === tab.id ? 'white' : COLORS.secondary, fontWeight:'600', fontSize:'0.9rem', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', cursor: 'pointer', transition: '0.2s', border: activeStockTab === tab.id ? 'none' : '1px solid #ddd'}}>{tab.label}</button>
+                        ))}
+                    </div>
+                    <div style={{background:'white', padding:'15px', borderRadius:'15px', marginTop:'10px'}}>
+                        <div style={{display:'flex', gap:'10px', marginBottom:'20px'}}>
+                            {activeStockTab !== 'tailles_pizza' && (
+                                 <>
+                                    <input type="text" placeholder={`Ajouter dans ${STOCK_TABS.find(t=>t.id===activeStockTab).label}...`} value={newItemName} onChange={(e) => setNewItemName(e.target.value)} style={{...inputStyle, marginBottom:0}} />
+                                    <button onClick={addNewStockItem} style={{...btnStyle, width:'auto'}}>Ajouter</button>
+                                 </>
+                            )}
+                        </div>
+                        <div style={{display:'flex', flexWrap:'wrap', gap:'10px'}}>
+                            {stocks[activeStockTab] && Array.isArray(stocks[activeStockTab]) && stocks[activeStockTab].map((item, index) => (
+                                <div key={item.nom} onClick={() => toggleStockItem(activeStockTab, index)} style={{padding:'12px 18px', borderRadius:'25px', cursor:'pointer', fontWeight:'bold', transition:'0.2s', background: item.available ? COLORS.success : '#E5E7EB', color: item.available ? 'white' : '#9CA3AF', border: item.available ? `1px solid ${COLORS.success}` : '1px solid #D1D5DB', display:'flex', alignItems:'center', gap:'8px', fontSize:'0.95rem'}}>
+                                    <div style={{width:'12px', height:'12px', borderRadius:'50%', background: item.available ? 'white' : '#9CA3AF'}}></div>{item.nom}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+           </details>
+
+           <details style={{marginTop:'50px', background:'#FEE2E2', padding:'15px', borderRadius:'10px', border:`1px solid ${COLORS.danger}`}}>
+             <summary style={{fontWeight:'bold', color: COLORS.danger, cursor:'pointer'}}>💀 ZONE DANGEREUSE (Import / Reset)</summary>
+             <input type="file" accept=".csv" ref={fileInputRef} onChange={handleCSVImport} style={{display:'none'}} />
+             <div style={{marginTop:'20px', display:'flex', gap:'10px', flexDirection:'column'}}>
+                <button onClick={triggerImport} style={{...btnStyle, background: 'white', color: COLORS.secondary, border:'1px solid #ccc'}}>📂 IMPORTER UN MENU (CSV)</button>
+                <button onClick={viderMenu} style={{...btnStyle, background: COLORS.danger, color:'white'}}>🗑️ TOUT SUPPRIMER (RESET)</button>
+             </div>
+           </details>
+        </div>
+    </div>
+  );
+}
+
+function formatOptions(list) {
+    if(!list || !Array.isArray(list)) return "";
+    const counts = {};
+    list.forEach(x => { counts[x] = (counts[x] || 0) + 1; });
+    return Object.entries(counts).map(([name, count]) => count > 1 ? `${name} x${count}` : name).join(', ');
+}
+
+export default App;
