@@ -1,12 +1,16 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 
-// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
   build: {
-    // Force Vite à ne JAMAIS transformer les images en texte (Base64)
-    // Cela oblige le navigateur à les charger en parallèle (beaucoup plus rapide)
-    assetsInlineLimit: 0, 
-  },
-})
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-helmet-async'],
+          firebase: ['firebase/app', 'firebase/firestore', 'firebase/auth'] // À ajuster si tu utilises d'autres services comme firebase/storage
+        }
+      }
+    }
+  }
+});
