@@ -121,14 +121,14 @@ function App() {
         setUser(u);
         if (u) setView('admin');
         else setView('login');
-        setIsAuthLoading(false);
+        setIsAuthLoading(false); // Le sas de sécurité s'ouvre
     });
     return () => { unsubscribeAuth(); };
   }, []);
 
   // 4. ÉCOUTEURS DE DONNÉES SÉCURISÉS (Se déclenchent UNIQUEMENT si connecté)
   useEffect(() => {
-    if (!user) return;
+    if (!user) return; // Barrière de sécurité : empêche les erreurs "Permission Denied"
 
     const unsubStatus = onSnapshot(doc(db, "parametres", "status"), (docSnap) => {
       if (docSnap.exists()) setRushMode(docSnap.data().mode);
@@ -162,6 +162,7 @@ function App() {
     const unsubCmd = onSnapshot(q, (snap) => {
       try {
           const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          // BOUCLIER ANTI-CRASH SUR LE TRI DES DATES
           list.sort((a, b) => {
               const timeA = a.date?.seconds || (a.date ? new Date(a.date).getTime() / 1000 : 0);
               const timeB = b.date?.seconds || (b.date ? new Date(b.date).getTime() / 1000 : 0);
@@ -179,6 +180,7 @@ function App() {
       }
     });
 
+    // Nettoyage de tous les écouteurs si l'utilisateur se déconnecte
     return () => { 
         unsubStatus(); unsubHoraires(); unsubStocks(); unsubMenu(); unsubCmd(); 
     };
@@ -189,7 +191,7 @@ function App() {
 
   useEffect(() => {
       if (categoriesReelles.length > 0 && !adminCategorie) setAdminCategorie(categoriesReelles[0]);
-  }, [menu]);
+  }, [menu, adminCategorie]);
 
   let menuAdmin = [];
   if (adminCategorie === 'RUPTURE') menuAdmin = menu.filter(p => p.available === false);
@@ -348,6 +350,7 @@ function App() {
       boxShadow: '0 2px 10px rgba(0,0,0,0.03)', border: '1px solid #F3F4F6' 
   };
 
+  // ÉCRAN DE CHARGEMENT SÉCURISÉ
   if (isAuthLoading) {
       return (
           <div style={{ background: COLORS.secondary, minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
@@ -417,7 +420,7 @@ function App() {
                       <div style={{color: COLORS.textLight, marginTop:'4px'}}>📞 {cmd.tel || 'N/A'}</div>
                       <div style={{marginTop:'5px', fontSize:'0.8rem', fontWeight:'bold', color: COLORS.secondary, display:'flex', gap:'10px', alignItems:'center'}}>
                           <span>📍 {cmd.distance ? cmd.distance : 'N/A'} km</span>
-                          {cmd.lat && cmd.lng && (<a href={`https://www.google.com/maps/search/?api=1&query=${cmd.lat},${cmd.lng}`} target="_blank" rel="noreferrer" style={{color: COLORS.primary, textDecoration:'underline'}}>Voir Map</a>)}
+                          {cmd.lat && cmd.lng && (<a href={`http://googleusercontent.com/maps.google.com/3{cmd.lat},${cmd.lng}`} target="_blank" rel="noreferrer" style={{color: COLORS.primary, textDecoration:'underline'}}>Voir Map</a>)}
                       </div>
                   </div>
                   <div style={{textAlign:'right'}}>
