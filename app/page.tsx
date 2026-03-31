@@ -130,13 +130,26 @@ function FoodjiAdmin() {
 
   const SYNC_ID_VERSION = "053700";
 
+  // CORRECTIF STRICT : Suppression du renvoi de Promise dans le useEffect
   useEffect(() => {
-    setPersistence(auth, browserLocalPersistence).finally(() => {
-      const unsubscribe = onAuthStateChanged(auth, (user) => { 
+    let unsubscribe;
+
+    const initAuth = async () => {
+      try {
+        await setPersistence(auth, browserLocalPersistence);
+      } catch (error) {
+        console.error("Erreur de persistance Firebase:", error);
+      }
+      unsubscribe = onAuthStateChanged(auth, (user) => { 
         setAuthState(user ? user : null);
       });
-      return () => unsubscribe();
-    });
+    };
+
+    initAuth();
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
@@ -460,7 +473,6 @@ function FoodjiAdmin() {
                     {cmd.remisePromo > 0 && <div style={{color: COLORS.danger, fontSize:'0.9rem', fontWeight:'bold', border:'1px solid red', padding:'5px', borderRadius:'5px', display:'inline-block'}}>🎁 REMISE PROMO: -{cmd.remisePromo} DH</div>}
                 </div>
                 
-                {/* L'INTÉGRALITÉ DES DÉTAILS DE LA COMMANDE EST ICI */}
                 <ul style={{listStyle:'none', marginBottom:'15px'}}>
                   {Array.isArray(cmd.items) && cmd.items.map((it, i) => (
                     <li key={i} style={{padding:'8px 0', borderBottom:'1px dashed #eee', lineHeight:'1.4'}}>
