@@ -2,9 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { db, auth } from './firebase';
 import { 
   signInWithEmailAndPassword, 
-  onAuthStateChanged, 
-  setPersistence, 
-  browserLocalPersistence 
+  onAuthStateChanged 
 } from 'firebase/auth';
 import { 
   collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, setDoc, query, writeBatch, orderBy, limit 
@@ -130,26 +128,13 @@ function FoodjiAdmin() {
 
   const SYNC_ID_VERSION = "053700";
 
-  // CORRECTIF STRICT : Suppression du renvoi de Promise dans le useEffect
+  // CORRECTIF DÉFINITIF : On laisse Firebase gérer sa persistance nativement
   useEffect(() => {
-    let unsubscribe;
+    const unsubscribe = onAuthStateChanged(auth, (user) => { 
+      setAuthState(user ? user : null);
+    });
 
-    const initAuth = async () => {
-      try {
-        await setPersistence(auth, browserLocalPersistence);
-      } catch (error) {
-        console.error("Erreur de persistance Firebase:", error);
-      }
-      unsubscribe = onAuthStateChanged(auth, (user) => { 
-        setAuthState(user ? user : null);
-      });
-    };
-
-    initAuth();
-
-    return () => {
-      if (unsubscribe) unsubscribe();
-    };
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
