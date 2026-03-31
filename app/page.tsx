@@ -7,7 +7,7 @@ import {
   browserLocalPersistence 
 } from 'firebase/auth';
 import { 
-  collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, setDoc, query, writeBatch 
+  collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, setDoc, query, writeBatch, orderBy, limit 
 } from 'firebase/firestore';
 import './App.css';
 
@@ -183,15 +183,11 @@ function FoodjiAdmin() {
       setMenu(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
-    const q = query(collection(db, "commandes"));
+    // CORRECTIF STRICT : Pagination (limit) et Tri par le serveur (orderBy)
+    const q = query(collection(db, "commandes"), orderBy("date", "desc"), limit(50));
     const unsubCmd = onSnapshot(q, (snap) => {
       try {
           const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-          list.sort((a, b) => {
-              const timeA = a.date?.seconds || (a.date ? new Date(a.date).getTime() / 1000 : 0);
-              const timeB = b.date?.seconds || (b.date ? new Date(b.date).getTime() / 1000 : 0);
-              return timeB - timeA;
-          });
           
           if (list.length > prevCommandesLength.current) {
               if (!audioRef.current) audioRef.current = new Audio(NOTIF_SOUND);
@@ -200,7 +196,7 @@ function FoodjiAdmin() {
           prevCommandesLength.current = list.length;
           setCommandes(list);
       } catch (error) {
-          console.error("Erreur de tri évitée", error);
+          console.error("Erreur de lecture Firestore :", error);
       }
     });
 
