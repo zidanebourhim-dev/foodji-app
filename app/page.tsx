@@ -1,623 +1,478 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db, auth } from './firebase';
-import { 
-  signInWithEmailAndPassword, 
-  onAuthStateChanged 
-} from 'firebase/auth';
-import { 
-  collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, setDoc, query, writeBatch, orderBy, limit 
-} from 'firebase/firestore';
+import { signInWithEmailAndPassword, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'firebase/auth';
+import { collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, setDoc, query, writeBatch } from 'firebase/firestore';
 import './App.css';
 
-const COLORS = {
-  primary: '#A84438',    
-  secondary: '#1A1E29',  
-  bg: '#F3F4F6',        
-  card: '#FFFFFF',        
-  success: '#10B981',
-  danger: '#EF4444',
-  warning: '#F59E0B',
-  promo: '#D97706',    
-  textLight: '#6B7280',
-  pending: '#F97316' 
-};
+const COLORS = { primary: '#A84438', secondary: '#1A1E29', bg: '#F3F4F6', card: '#FFFFFF', success: '#10B981', danger: '#EF4444', warning: '#F59E0B', promo: '#D97706', textLight: '#6B7280', pending: '#F97316' };
 
-const INIT_VIANDES = [
-    { nom: "Poulet", available: true }, { nom: "Viande Hachée", available: true }, 
-    { nom: "Cordon Bleu", available: true }, { nom: "Nuggets", available: true }, 
-    { nom: "Poulet Crispy", available: true }
-];
-const INIT_GARNITURES_PIZZA = [
-    { nom: "Viande Hachée", available: true }, { nom: "Poulet", available: true }, 
-    { nom: "4 Fromages", available: true }, { nom: "Cannibale", available: true }, 
-    { nom: "Pepperoni", available: true }, { nom: "Thon", available: true }, 
-    { nom: "Charcuterie", available: true }, { nom: "Végétarienne", available: true }, 
-    { nom: "Fruits de Mer", available: true }
-];
-const INIT_SAUCES = [
-    { nom: "Algérienne Fait Maison", available: true }, { nom: "Biggy Fait Maison", available: true }, 
-    { nom: "Barbecue Fait Maison", available: true }, { nom: "Pas de sauce", available: true }
-];
-const INIT_PATES = [
-    { nom: "Penne", available: true }, { nom: "Tagliatelle", available: true }, 
-    { nom: "Spaghetti", available: true }
-];
-const INIT_TAILLES_PIZZA = [
-    { nom: "M", available: true }, { nom: "L", available: true }
-];
-
+const INIT_VIANDES = [{ nom: "Poulet", available: true }, { nom: "Viande Hachée", available: true }, { nom: "Cordon Bleu", available: true }, { nom: "Nuggets", available: true }, { nom: "Poulet Crispy", available: true }];
+const INIT_GARNITURES_PIZZA = [{ nom: "Viande Hachée", available: true }, { nom: "Poulet", available: true }, { nom: "4 Fromages", available: true }, { nom: "Cannibale", available: true }, { nom: "Pepperoni", available: true }, { nom: "Thon", available: true }, { nom: "Charcuterie", available: true }, { nom: "Végétarienne", available: true }, { nom: "Fruits de Mer", available: true }];
+const INIT_SAUCES = [{ nom: "Algérienne Fait Maison", available: true }, { nom: "Biggy Fait Maison", available: true }, { nom: "Barbecue Fait Maison", available: true }, { nom: "Pas de sauce", available: true }];
+const INIT_PATES = [{ nom: "Penne", available: true }, { nom: "Tagliatelle", available: true }, { nom: "Spaghetti", available: true }];
+const INIT_TAILLES_PIZZA = [{ nom: "M", available: true }, { nom: "L", available: true }];
 const TOUTES_CATEGORIES = ["Tacos", "Pizzas", "Burgers", "Pâtes", "Sides", "Les Burritos", "Koniks", "Plats", "Salades", "Boissons", "Desserts"];
-
-const STOCK_TABS = [
-    { id: 'viandes', label: '🌮 Viandes' },
-    { id: 'garnitures', label: '🍕 Garnitures' },
-    { id: 'tailles_pizza', label: '📏 Tailles' },
-    { id: 'pates', label: '🍝 Pâtes' },
-    { id: 'sauces', label: '🥣 Sauces' }
-];
-
+const STOCK_TABS = [{ id: 'viandes', label: '🌮 Viandes' }, { id: 'garnitures', label: '🍕 Garnitures' }, { id: 'tailles_pizza', label: '📏 Tailles' }, { id: 'pates', label: '🍝 Pâtes' }, { id: 'sauces', label: '🥣 Sauces' }];
 const NOTIF_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
 
-// ============================================================================
-// BOUCLIER ANTI-CRASH FATAL (ERROR BOUNDARY)
-// ============================================================================
 class ErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false, errorMsg: '' };
-  }
-
-  static getDerivedStateFromError(error) {
-    return { hasError: true, errorMsg: error.toString() };
-  }
-
-  componentDidCatch(error, errorInfo) {
-    console.error("Crash React intercepté :", error, errorInfo);
-  }
-
+  constructor(props) { super(props); this.state = { hasError: false, errorMsg: '' }; }
+  static getDerivedStateFromError(error) { return { hasError: true, errorMsg: error.toString() }; }
+  componentDidCatch(error, errorInfo) { console.error("Crash intercepté:", error, errorInfo); }
   render() {
-    if (this.state.hasError) {
-      return (
-        <div style={{ padding: '40px', background: '#FEF2F2', color: '#991B1B', minHeight: '100vh', fontFamily: 'sans-serif' }}>
-          <h2 style={{ fontSize: '2rem', marginBottom: '10px' }}>🚨 ERREUR DE DONNÉES</h2>
-          <p style={{ fontSize: '1.2rem' }}>L'application a bloqué une page blanche. Une donnée corrompue empêche l'affichage.</p>
-          <div style={{ background: '#7F1D1D', color: 'white', padding: '20px', borderRadius: '8px', marginTop: '20px', fontFamily: 'monospace', fontSize: '1.1rem', overflowX: 'auto' }}>
-            {this.state.errorMsg}
-          </div>
-        </div>
-      );
-    }
+    if (this.state.hasError) return ( <div style={{ padding: '40px', background: '#FEF2F2', color: '#991B1B', minHeight: '100vh', fontFamily: 'sans-serif' }}><h2>🚨 ERREUR FATALE</h2><div style={{ background: '#7F1D1D', color: 'white', padding: '20px', borderRadius: '8px', marginTop: '20px', fontFamily: 'monospace' }}>{this.state.errorMsg}</div></div> );
     return this.props.children;
   }
 }
 
-// ============================================================================
-// L'APPLICATION PRINCIPALE
-// ============================================================================
-function FoodjiAdmin() {
+function FoodjiSystem() {
   const [authState, setAuthState] = useState("LOADING");
+  const [appMode, setAppMode] = useState('ADMIN'); // 'ADMIN' ou 'POS'
   
+  // DONNÉES GLOBALES
   const [menu, setMenu] = useState([]);
   const [commandes, setCommandes] = useState([]);
+  const [parametres, setParametres] = useState({ isOuvert: true, rushMode: 'standard', stocks: { viandes: INIT_VIANDES, garnitures: INIT_GARNITURES_PIZZA, sauces: INIT_SAUCES, pates: INIT_PATES, tailles_pizza: INIT_TAILLES_PIZZA } });
   
+  // ETATS ADMIN
+  const [adminCategorie, setAdminCategorie] = useState(''); 
+  const [activeStockTab, setActiveStockTab] = useState('viandes');
+  const [newItemName, setNewItemName] = useState('');
+  const [editId, setEditId] = useState(null); 
+  const [formProd, setFormProd] = useState({ nom: '', description: '', image: '', categorie: 'Burgers', prixBase: '', variantes: [] });
+  
+  // ETATS POS (CAISSE)
+  const [posCart, setPosCart] = useState([]);
+  const [posPhone, setPosPhone] = useState('');
+  const [posNote, setPosNote] = useState('');
+  const [posClientName, setPosClientName] = useState('Client Comptoir');
+  const [posCategory, setPosCategory] = useState('Tacos');
+  const [orderToPrint, setOrderToPrint] = useState(null);
+  const [showZDeCaisse, setShowZDeCaisse] = useState(false);
+
   const prevCommandesLength = useRef(0);
   const audioRef = useRef(null);
   const fileInputRef = useRef(null); 
-
-  const [adminCategorie, setAdminCategorie] = useState(''); 
-  const [rushMode, setRushMode] = useState('standard');
-  const [isStoreOpen, setIsStoreOpen] = useState(true);
-
-  const [stocks, setStocks] = useState({
-      viandes: INIT_VIANDES, garnitures: INIT_GARNITURES_PIZZA, sauces: INIT_SAUCES, pates: INIT_PATES, tailles_pizza: INIT_TAILLES_PIZZA
-  });
-  const [activeStockTab, setActiveStockTab] = useState('viandes');
-  const [newItemName, setNewItemName] = useState('');
-
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  
-  const [editId, setEditId] = useState(null); 
-  const [nom, setNom] = useState('');
-  const [description, setDescription] = useState(''); 
-  const [image, setImage] = useState('');
-  const [categorie, setCategorie] = useState('Burgers');
-  const [prixBase, setPrixBase] = useState('');
-  const [variantes, setVariantes] = useState([]); 
 
   const SYNC_ID_VERSION = "053700";
 
-  // CORRECTIF DÉFINITIF : On laisse Firebase gérer sa persistance nativement
+  // --- 1. INITIALISATION ---
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => { 
-      setAuthState(user ? user : null);
+    setPersistence(auth, browserLocalPersistence).finally(() => {
+      const unsubscribe = onAuthStateChanged(auth, (user) => setAuthState(user ? user : null));
+      return () => unsubscribe();
     });
-
-    return () => unsubscribe();
   }, []);
 
+  // --- 2. ÉCOUTEURS FIREBASE ---
   useEffect(() => {
     if (!authState || authState === "LOADING") return;
 
-    const unsubStatus = onSnapshot(doc(db, "parametres", "status"), (docSnap) => {
-      if (docSnap.exists()) setRushMode(docSnap.data().mode);
-      else setDoc(doc(db, "parametres", "status"), { mode: 'standard' }).catch(()=>{});
+    const unsubHoraires = onSnapshot(doc(db, "parametres", "horaires"), (s) => s.exists() && setParametres(prev => ({...prev, isOuvert: s.data().isOuvert})));
+    const unsubStatus = onSnapshot(doc(db, "parametres", "status"), (s) => s.exists() && setParametres(prev => ({...prev, rushMode: s.data().mode})));
+    const unsubStocks = onSnapshot(doc(db, "parametres", "stocks"), (s) => {
+        if (s.exists()) setParametres(prev => ({...prev, stocks: s.data()}));
+        else setDoc(doc(db, "parametres", "stocks"), parametres.stocks);
     });
-
-    const unsubHoraires = onSnapshot(doc(db, "parametres", "horaires"), (docSnap) => {
-        if (docSnap.exists()) setIsStoreOpen(docSnap.data().isOuvert);
-        else setDoc(doc(db, "parametres", "horaires"), { isOuvert: true }).catch(()=>{});
-    });
-
-    const unsubStocks = onSnapshot(doc(db, "parametres", "stocks"), (docSnap) => {
-        if (docSnap.exists()) {
-            const data = docSnap.data();
-            setStocks({
-                viandes: data.viandes || INIT_VIANDES, garnitures: data.garnitures || INIT_GARNITURES_PIZZA,
-                sauces: data.sauces || INIT_SAUCES, pates: data.pates || INIT_PATES, tailles_pizza: data.tailles_pizza || INIT_TAILLES_PIZZA
-            });
-        } else {
-            const initData = { viandes: INIT_VIANDES, garnitures: INIT_GARNITURES_PIZZA, sauces: INIT_SAUCES, pates: INIT_PATES, tailles_pizza: INIT_TAILLES_PIZZA };
-            setDoc(doc(db, "parametres", "stocks"), initData).catch(()=>{});
-            setStocks(initData);
-        }
-    });
-
-    const unsubMenu = onSnapshot(collection(db, "produits"), (snap) => {
-      setMenu(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-
-    // CORRECTIF STRICT : Pagination (limit) et Tri par le serveur (orderBy)
-    const q = query(collection(db, "commandes"), orderBy("date", "desc"), limit(50));
-    const unsubCmd = onSnapshot(q, (snap) => {
+    
+    const unsubMenu = onSnapshot(collection(db, "produits"), (snap) => setMenu(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    
+    const unsubCmd = onSnapshot(query(collection(db, "commandes")), (snap) => {
       try {
           const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-          
+          list.sort((a, b) => (b.date?.seconds || 0) - (a.date?.seconds || 0));
           if (list.length > prevCommandesLength.current) {
               if (!audioRef.current) audioRef.current = new Audio(NOTIF_SOUND);
               audioRef.current.play().catch(() => {});
           }
           prevCommandesLength.current = list.length;
           setCommandes(list);
-      } catch (error) {
-          console.error("Erreur de lecture Firestore :", error);
-      }
+      } catch (e) { console.error("Erreur tri", e); }
     });
 
     return () => { unsubStatus(); unsubHoraires(); unsubStocks(); unsubMenu(); unsubCmd(); };
   }, [authState]);
 
-  const categoriesReelles = Array.isArray(menu) ? [...new Set(menu.map(p => p.categorie))] : [];
-  const categoriesSelectAdmin = [...new Set([...TOUTES_CATEGORIES, ...categoriesReelles])];
+  useEffect(() => { if (menu.length > 0 && !adminCategorie) setAdminCategorie(menu[0].categorie); }, [menu, adminCategorie]);
 
-  useEffect(() => {
-      if (categoriesReelles.length > 0 && !adminCategorie) setAdminCategorie(categoriesReelles[0]);
-  }, [menu, adminCategorie]);
-
-  let menuAdmin = [];
-  if (Array.isArray(menu)) {
-      if (adminCategorie === 'RUPTURE') menuAdmin = menu.filter(p => p.available === false);
-      else menuAdmin = menu.filter(p => p.categorie === adminCategorie);
-  }
-
+  // --- ACTIONS COMMUNES ---
   const handleLogin = async (e) => {
-      e.preventDefault(); 
-      if(!email || !password) return;
+      e.preventDefault(); if(!email || !password) return; setLoading(true);
+      try { await signInWithEmailAndPassword(auth, email, password); } catch(err) { alert(`Erreur: ${err.code}`); }
+      setLoading(false);
+  };
+  const checkManagerAuth = () => { const code = prompt("🔒 Code Manager requis :"); if (code === SYNC_ID_VERSION) return true; alert("❌ Code incorrect !"); return false; };
+
+  // --- ACTIONS ADMIN ---
+  const toggleAvailability = async (item) => await updateDoc(doc(db, "produits", item.id), { available: !item.available });
+  const supprimerProduit = async (id) => { if (!checkManagerAuth()) return; if(confirm("Supprimer définitivement ?")) await deleteDoc(doc(db, "produits", id)); };
+  const toggleStockItem = async (listName, index) => { const newList = [...parametres.stocks[listName]]; newList[index].available = !newList[index].available; await updateDoc(doc(db, "parametres", "stocks"), { ...parametres.stocks, [listName]: newList }); };
+  const addNewStockItem = async () => { if(!checkManagerAuth() || !newItemName.trim()) return; const newList = [...parametres.stocks[activeStockTab], { nom: newItemName.trim(), available: true }]; await updateDoc(doc(db, "parametres", "stocks"), { ...parametres.stocks, [activeStockTab]: newList }); setNewItemName(''); };
+  const changerStatus = async (id, st) => await updateDoc(doc(db, "commandes", id), { status: st });
+  const supprimerCmd = async (id) => confirm("Supprimer commande ?") && await deleteDoc(doc(db, "commandes", id));
+  
+  const saveProduit = async () => {
+    if(!formProd.nom) return; setLoading(true);
+    const data = { nom: formProd.nom, description: formProd.description, categorie: formProd.categorie, prix: formProd.variantes.length > 0 ? 0 : Number(formProd.prixBase), variantes: formProd.variantes, available: true, date: new Date() };
+    if(formProd.image) data.image = formProd.image;
+    if (editId) { await updateDoc(doc(db, "produits", editId), data); alert("Modifié !"); setEditId(null); } else { await addDoc(collection(db, "produits"), data); alert("Ajouté !"); }
+    setFormProd({ nom: '', description: '', image: '', categorie: 'Burgers', prixBase: '', variantes: [] }); setLoading(false);
+  };
+
+  // --- ACTIONS CAISSE (POS) ---
+  const addToCart = (produit, variante = null) => {
+      const prixFinal = variante ? variante.prix : produit.prix;
+      const nomComplet = variante ? `${produit.nom} (${variante.nom})` : produit.nom;
+      setPosCart([...posCart, { ...produit, nom: nomComplet, prixFinal, idCart: Date.now() + Math.random() }]);
+  };
+
+  const removeFromCart = (idCart) => { setPosCart(posCart.filter(item => item.idCart !== idCart)); };
+  const totalCart = posCart.reduce((sum, item) => sum + Number(item.prixFinal), 0);
+
+  const validerCommandePOS = async (methodePaiement) => {
+      if (posCart.length === 0) return alert("Panier vide !");
       setLoading(true);
+      const newCmd = {
+          client: posClientName,
+          tel: posPhone || "Comptoir",
+          adresse: "Sur place",
+          type: "sur_place",
+          commentaire: posNote,
+          items: posCart,
+          total: totalCart,
+          status: "En attente",
+          methodePaiement: methodePaiement, // 'Espèces' ou 'TPE'
+          date: new Date()
+      };
+      
       try {
-          await signInWithEmailAndPassword(auth, email, password); 
-      } catch(error) {
-          alert(`Erreur Firebase : ${error.code}`);
-      }
+          const docRef = await addDoc(collection(db, "commandes"), newCmd);
+          newCmd.id = docRef.id;
+          // Lancer l'impression automatique
+          setOrderToPrint(newCmd);
+          setTimeout(() => { window.print(); setOrderToPrint(null); }, 800);
+          
+          // Reset Caisse
+          setPosCart([]); setPosPhone(''); setPosNote(''); setPosClientName('Client Comptoir');
+      } catch(e) { alert("Erreur lors de la création de la commande."); }
       setLoading(false);
   };
 
-  const checkManagerAuth = () => {
-      const code = prompt("🔒 Code Manager requis :");
-      if (code === SYNC_ID_VERSION) return true;
-      alert("❌ Code incorrect !");
-      return false;
+  const genererZDeCaisse = () => {
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      
+      const cmdsDuJour = commandes.filter(c => {
+          const d = c.date?.seconds ? new Date(c.date.seconds * 1000) : new Date(c.date);
+          return d >= today && c.status !== 'Refusé' && c.status !== 'Annulé';
+      });
+
+      let totalEspeces = 0;
+      let totalTPE = 0;
+      let totalLivrApp = 0; // Glovo/En ligne potentiel
+
+      cmdsDuJour.forEach(c => {
+          if (c.methodePaiement === 'Espèces') totalEspeces += c.total;
+          else if (c.methodePaiement === 'TPE') totalTPE += c.total;
+          else totalLivrApp += c.total; // Les commandes en ligne arrivent souvent sans methodePaiement "caisse"
+      });
+
+      return { totalGeneral: totalEspeces + totalTPE + totalLivrApp, totalEspeces, totalTPE, totalLivrApp, nbCommandes: cmdsDuJour.length };
   };
 
-  const triggerImport = () => { if (checkManagerAuth()) fileInputRef.current.click(); };
-
-  const handleCSVImport = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
-      const text = evt.target.result;
-      const rows = text.split('\n').filter(r => r.trim() !== '');
-      if(confirm(`Importer ${rows.length} lignes ?`)) {
-        setLoading(true);
-        for (let i = 1; i < rows.length; i++) { 
-          const row = rows[i];
-          const tokens = row.split(','); 
-          if (tokens.length >= 5) {
-             const cat = tokens[0].trim(); const name = tokens[1].trim();
-             const len = tokens.length;
-             const p1Raw = tokens[len - 3]; const p2Raw = tokens[len - 2]; const p3Raw = tokens[len - 1];
-             const clean = (val) => val ? Number(val.toString().replace(/[^0-9.]/g, '')) : 0;
-             const p1 = clean(p1Raw.replace(',','.')); const p2 = clean(p2Raw.replace(',','.')); const p3 = clean(p3Raw.replace(',','.'));
-             let vars = [];
-             if (p2 > 0 || p3 > 0) {
-                let n1="Standard", n2="Moyen", n3="Grand";
-                if (cat.toLowerCase().includes('tacos')) { n1="L"; n2="XL"; n3="XXL"; }
-                else if (cat.toLowerCase().includes('pizza')) { n1="M"; n2="L"; n3="XL"; }
-                if(p1>0) vars.push({nom:n1, prix:p1, available: true});
-                if(p2>0) vars.push({nom:n2, prix:p2, available: true});
-                if(p3>0) vars.push({nom:n3, prix:p3, available: true});
-             }
-             if(name && cat) await addDoc(collection(db, "produits"), { categorie: cat, nom: name, description: tokens.slice(2, len - 3).join(', ').replace(/"/g, ''), prix: vars.length>0?0:p1, image: '', variantes: vars, date: new Date(), available: true });
-          }
-        }
-        setLoading(false); alert("Import terminé !"); e.target.value = null; 
-      }
-    };
-    reader.readAsText(file);
-  };
-
-  const viderMenu = async () => {
-      if (!checkManagerAuth()) return;
-      if(confirm("⚠️ SUPPRIMER TOUT LE MENU ?")) {
-          setLoading(true);
-          const batch = writeBatch(db);
-          menu.forEach(p => { batch.delete(doc(db, "produits", p.id)); });
-          await batch.commit();
-          setLoading(false); alert("Menu vidé !");
-      }
-  };
-
-  const toggleAvailability = async (item) => { await updateDoc(doc(db, "produits", item.id), { available: !item.available }); };
-  
-  const handleCategoryChange = (e) => {
-      const cat = e.target.value;
-      setCategorie(cat);
-      if (!editId) {
-          if (cat === 'Tacos') { setVariantes([{nom: 'L', prix: '', available: true}, {nom: 'XL', prix: '', available: true}, {nom: 'XXL', prix: '', available: true}]); setPrixBase(''); }
-          else if (cat === 'Pizzas') { setVariantes([{nom: 'M', prix: '', available: true}, {nom: 'L', prix: '', available: true}]); setPrixBase(''); }
-          else { setVariantes([]); }
-      }
-  };
-
-  const handleEdit = (p) => {
-      setEditId(p.id); setNom(p.nom); setDescription(p.description || ''); setCategorie(p.categorie);
-      if (p.variantes && p.variantes.length > 0) { setVariantes(p.variantes.map(v => ({...v, available: v.available !== false}))); setPrixBase(''); } 
-      else { setVariantes([]); setPrixBase(p.prix); }
-      window.scrollTo(0,0);
-  };
-
-  const updateVariantPrice = (index, field, newVal) => {
-      const newVars = [...variantes];
-      if(field === 'available') newVars[index].available = newVal;
-      else newVars[index].prix = Number(newVal);
-      setVariantes(newVars);
-  };
-
-  const saveProduit = async () => {
-    if(!nom) return; setLoading(true);
-    const data = { nom, description, categorie, prix: variantes.length > 0 ? 0 : Number(prixBase), variantes, available: true, date: new Date() };
-    if(image) data.image = image;
-    if (editId) { await updateDoc(doc(db, "produits", editId), data); alert("Modifié !"); setEditId(null); } 
-    else { await addDoc(collection(db, "produits"), data); alert("Ajouté !"); }
-    setNom(''); setDescription(''); setImage(''); setPrixBase(''); setVariantes([]); setLoading(false);
-  };
-
-  const supprimerProduit = async (id) => { 
-      if (!checkManagerAuth()) return;
-      if(confirm("Confirmer la suppression définitive ?")) { await deleteDoc(doc(db, "produits", id)); }
-  };
-
-  const toggleStockItem = async (listName, index) => {
-      const newList = [...stocks[listName]];
-      newList[index].available = !newList[index].available;
-      const newData = { ...stocks, [listName]: newList };
-      await updateDoc(doc(db, "parametres", "stocks"), newData);
-  };
-
-  const addNewStockItem = async () => {
-      if(!checkManagerAuth()) return;
-      if(!newItemName.trim()) return;
-      const newList = [...stocks[activeStockTab], { nom: newItemName.trim(), available: true }];
-      const newData = { ...stocks, [activeStockTab]: newList };
-      await updateDoc(doc(db, "parametres", "stocks"), newData);
-      setNewItemName('');
-  };
-  
-  const copierOdoo = (cmd) => {
-    let t = `Nom : ${cmd.client}\nTél : ${cmd.tel}\n`;
-    if (cmd.type === 'livraison') t += `Adresse : ${cmd.adresse}`;
-    else t += `Mode : ${cmd.type === 'sur_place' ? 'Sur Place' : 'Emporter'}`;
-    if (cmd.commentaire) t += `\nNote : ${cmd.commentaire}`;
-    navigator.clipboard.writeText(t).then(() => alert("Copié !"));
-  };
-  
-  const changerStatus = async (id, st) => { await updateDoc(doc(db, "commandes", id), { status: st }); };
-  const supprimerCmd = async (id) => { if(confirm("Supprimer cette commande ?")) await deleteDoc(doc(db, "commandes", id)); };
-  
-  const updateProductImage = async (id, file) => {
-    if(!file) return;
-    const reader = new FileReader(); reader.readAsDataURL(file);
-    reader.onload = (e) => {
-      const img = document.createElement("img"); img.src = e.target.result;
-      img.onload = async () => {
-         const c = document.createElement("canvas"); const ctx = c.getContext("2d");
-         const s = 800/img.width; c.width = 800; c.height = img.height*s;
-         ctx.drawImage(img,0,0,c.width,c.height); 
-         await updateDoc(doc(db, "produits", id), { image: c.toDataURL("image/jpeg", 0.7) });
-         alert("Image mise à jour !");
-      }
-    };
-  };
-
-  const btnStyle = { 
-      background: COLORS.primary, color: 'white', border: 'none', borderRadius: '12px', 
-      padding: '12px 20px', fontWeight: '600', cursor: 'pointer', width: '100%', 
-      fontSize: '1rem', boxShadow: '0 4px 6px rgba(168, 68, 56, 0.2)' 
-  };
-  const inputStyle = { 
-      width: '100%', padding: '12px', borderRadius: '10px', 
-      border: '1px solid #E5E7EB', background: 'white', marginBottom: '10px', 
-      fontSize: '1rem', outline: 'none' 
-  };
-  const cardStyle = { 
-      background: COLORS.card, borderRadius: '16px', padding: '15px', 
-      boxShadow: '0 2px 10px rgba(0,0,0,0.03)', border: '1px solid #F3F4F6' 
-  };
 
   // ==========================================
-  // RENDU 1 : ÉCRAN D'ATTENTE SÉCURISÉ
+  // RENDU 1 : ÉCRAN D'ATTENTE & LOGIN
   // ==========================================
-  if (authState === "LOADING") {
+  if (authState === "LOADING") return <div style={{ background: COLORS.secondary, height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}><h3>Chargement...</h3></div>;
+  if (authState === null) return (
+      <div style={{ background: COLORS.bg, height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <form onSubmit={handleLogin} style={{ background: 'white', padding: '40px', borderRadius: '15px', width: '350px', textAlign: 'center' }}>
+              <h2>⚙️ Connexion Foodji</h2>
+              <input type="email" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} style={{width:'100%', padding:'12px', margin:'15px 0', border:'1px solid #ddd', borderRadius:'8px'}}/>
+              <input type="password" placeholder="Pass" value={password} onChange={e=>setPassword(e.target.value)} style={{width:'100%', padding:'12px', marginBottom:'20px', border:'1px solid #ddd', borderRadius:'8px'}}/>
+              <button type="submit" style={{width:'100%', padding:'12px', background:COLORS.primary, color:'white', border:'none', borderRadius:'8px', fontWeight:'bold'}}>{loading ? '...' : 'Valider'}</button>
+          </form>
+      </div>
+  );
+
+  // ==========================================
+  // RENDU INVISIBLE : TICKETS D'IMPRESSION (80mm)
+  // ==========================================
+  const renderTickets = () => {
+      if (!orderToPrint) return null;
+      const d = new Date();
+      const heure = `${d.getHours()}:${d.getMinutes().toString().padStart(2, '0')}`;
+      
       return (
-          <div style={{ background: COLORS.secondary, minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
-              <div style={{fontSize:'3rem', marginBottom:'20px'}}>⚙️</div>
-              <h3 style={{margin:0}}>Démarrage Admin...</h3>
+          <div className="print-only">
+              {/* TICKET CUISINE */}
+              <div className="ticket-80mm">
+                  <h1 style={{textAlign:'center', fontSize:'24px', borderBottom:'2px solid black', paddingBottom:'10px'}}>CUISINE - #{orderToPrint.id.substring(0,4).toUpperCase()}</h1>
+                  <p style={{textAlign:'center', fontSize:'18px', fontWeight:'bold'}}>{orderToPrint.type === 'sur_place' ? 'SUR PLACE / EMPORTER' : 'LIVRAISON'}</p>
+                  <p style={{textAlign:'center'}}>{d.toLocaleDateString()} - {heure}</p>
+                  {orderToPrint.commentaire && <div style={{border:'2px dashed black', padding:'10px', margin:'10px 0', fontWeight:'bold', fontSize:'18px'}}>NOTE: {orderToPrint.commentaire}</div>}
+                  
+                  <ul style={{listStyle:'none', padding:0, marginTop:'20px'}}>
+                      {orderToPrint.items.map((it, i) => (
+                          <li key={i} style={{fontSize:'16px', fontWeight:'bold', borderBottom:'1px dotted black', padding:'10px 0'}}>
+                              <div>{it.nom}</div>
+                              {it.sans?.length > 0 && <div style={{fontSize:'14px'}}>SANS: {it.sans.join(', ')}</div>}
+                              {it.sauces?.length > 0 && <div style={{fontSize:'14px'}}>SAUCES: {it.sauces.join(', ')}</div>}
+                          </li>
+                      ))}
+                  </ul>
+              </div>
+
+              <div className="page-break"></div>
+
+              {/* TICKET CLIENT */}
+              <div className="ticket-80mm">
+                  <h1 style={{textAlign:'center', fontSize:'28px'}}>FOODJI</h1>
+                  <p style={{textAlign:'center', fontSize:'14px'}}>Sala Al Jadida</p>
+                  <p style={{textAlign:'center', fontSize:'14px'}}>Tél: 06 00 00 00 00</p>
+                  <hr style={{borderTop:'2px dashed black'}}/>
+                  <p>Date: {d.toLocaleDateString()} {heure}</p>
+                  <p>Client: {orderToPrint.client}</p>
+                  <p>Tél: {orderToPrint.tel}</p>
+                  <hr style={{borderTop:'2px dashed black'}}/>
+                  <table style={{width:'100%', fontSize:'14px', marginBottom:'20px'}}>
+                      <tbody>
+                          {orderToPrint.items.map((it, i) => (
+                              <tr key={i}>
+                                  <td style={{paddingTop:'5px'}}>{it.nom}</td>
+                                  <td style={{textAlign:'right', paddingTop:'5px'}}>{it.prixFinal} DH</td>
+                              </tr>
+                          ))}
+                      </tbody>
+                  </table>
+                  <hr style={{borderTop:'2px dashed black'}}/>
+                  <h2 style={{textAlign:'right', fontSize:'24px'}}>TOTAL: {orderToPrint.total} DH</h2>
+                  <p style={{textAlign:'right', fontSize:'14px'}}>Paiement: {orderToPrint.methodePaiement || 'Non spécifié'}</p>
+                  <p style={{textAlign:'center', marginTop:'30px', fontWeight:'bold'}}>Merci de votre visite !</p>
+              </div>
+          </div>
+      );
+  };
+
+
+  // ==========================================
+  // RENDU 2 : CAISSE TACTILE (POS)
+  // ==========================================
+  if (appMode === 'POS') {
+      const zData = genererZDeCaisse();
+      
+      return (
+          <div className="pos-container no-print" style={{display:'flex', height:'100vh', background:'#f0f2f5', fontFamily:'sans-serif'}}>
+              {renderTickets()}
+              
+              {/* PARTIE GAUCHE : MENU */}
+              <div style={{flex: 1, display:'flex', flexDirection:'column', padding:'10px'}}>
+                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', background:'white', padding:'15px', borderRadius:'10px', marginBottom:'10px'}}>
+                      <h2 style={{margin:0, color:COLORS.primary}}>🍔 Foodji POS</h2>
+                      <button onClick={()=>setAppMode('ADMIN')} style={{padding:'10px 20px', background:COLORS.secondary, color:'white', borderRadius:'8px', border:'none', cursor:'pointer'}}>Retour Admin</button>
+                  </div>
+                  
+                  <div style={{display:'flex', gap:'10px', overflowX:'auto', paddingBottom:'10px', scrollbarWidth:'none'}}>
+                      {TOUTES_CATEGORIES.map(c => (
+                          <button key={c} onClick={()=>setPosCategory(c)} style={{padding:'15px 25px', fontSize:'1.1rem', fontWeight:'bold', borderRadius:'10px', border:'none', background: posCategory===c ? COLORS.primary : 'white', color: posCategory===c ? 'white' : 'black', cursor:'pointer', flexShrink:0}}>{c}</button>
+                      ))}
+                  </div>
+
+                  <div style={{flex:1, overflowY:'auto', display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(150px, 1fr))', gap:'10px', alignContent:'start'}}>
+                      {menu.filter(p => p.categorie === posCategory && p.available !== false).map(p => (
+                          <div key={p.id} style={{background:'white', borderRadius:'10px', overflow:'hidden', boxShadow:'0 2px 5px rgba(0,0,0,0.1)', cursor:'pointer'}}>
+                              {p.variantes?.length > 0 ? (
+                                  <div style={{padding:'10px'}}>
+                                      <div style={{fontWeight:'bold', textAlign:'center', marginBottom:'10px'}}>{p.nom}</div>
+                                      <div style={{display:'flex', flexDirection:'column', gap:'5px'}}>
+                                          {p.variantes.filter(v=>v.available !== false).map((v, i) => (
+                                              <button key={i} onClick={()=>addToCart(p, v)} style={{padding:'8px', background:'#eee', border:'none', borderRadius:'5px'}}>{v.nom} - {v.prix}DH</button>
+                                          ))}
+                                      </div>
+                                  </div>
+                              ) : (
+                                  <div onClick={()=>addToCart(p)} style={{padding:'20px 10px', textAlign:'center'}}>
+                                      <div style={{fontWeight:'bold'}}>{p.nom}</div>
+                                      <div style={{color:COLORS.primary, fontWeight:'bold', marginTop:'5px'}}>{p.prix} DH</div>
+                                  </div>
+                              )}
+                          </div>
+                      ))}
+                  </div>
+              </div>
+
+              {/* PARTIE DROITE : PANIER & PAIEMENT */}
+              <div style={{width:'380px', background:'white', display:'flex', flexDirection:'column', borderLeft:'2px solid #ddd', boxShadow:'-5px 0 15px rgba(0,0,0,0.05)'}}>
+                  <div style={{padding:'20px', borderBottom:'1px solid #eee', background:COLORS.secondary, color:'white'}}>
+                      <input type="text" placeholder="Nom Client (ex: Table 4 / Ali)" value={posClientName} onChange={e=>setPosClientName(e.target.value)} style={{width:'100%', padding:'12px', borderRadius:'8px', border:'none', marginBottom:'10px', fontSize:'1rem'}}/>
+                      <input type="tel" placeholder="N° Téléphone (Optionnel)" value={posPhone} onChange={e=>setPosPhone(e.target.value)} style={{width:'100%', padding:'12px', borderRadius:'8px', border:'none', fontSize:'1rem'}}/>
+                  </div>
+
+                  <div style={{flex:1, overflowY:'auto', padding:'10px'}}>
+                      {posCart.length === 0 ? <p style={{textAlign:'center', color:'#999', marginTop:'50px'}}>Panier vide</p> : null}
+                      {posCart.map(item => (
+                          <div key={item.idCart} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px', borderBottom:'1px dashed #ddd'}}>
+                              <div style={{fontWeight:'bold'}}>{item.nom}</div>
+                              <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+                                  <span>{item.prixFinal} DH</span>
+                                  <button onClick={()=>removeFromCart(item.idCart)} style={{background:'#fee2e2', color:'red', border:'none', padding:'5px 10px', borderRadius:'5px', cursor:'pointer'}}>X</button>
+                              </div>
+                          </div>
+                      ))}
+                  </div>
+
+                  <div style={{padding:'20px', borderTop:'2px solid #eee', background:'#fafafa'}}>
+                      <textarea placeholder="Commentaire (ex: Sans oignons)" value={posNote} onChange={e=>setPosNote(e.target.value)} style={{width:'100%', padding:'10px', borderRadius:'8px', border:'1px solid #ddd', marginBottom:'15px', resize:'none'}}/>
+                      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'15px', fontSize:'1.5rem', fontWeight:'bold'}}>
+                          <span>TOTAL</span>
+                          <span style={{color:COLORS.primary}}>{totalCart} DH</span>
+                      </div>
+                      <div style={{display:'flex', gap:'10px', marginBottom:'10px'}}>
+                          <button onClick={()=>validerCommandePOS('Espèces')} disabled={loading || posCart.length===0} style={{flex:1, padding:'15px', background:COLORS.success, color:'white', border:'none', borderRadius:'8px', fontSize:'1.1rem', fontWeight:'bold', cursor:'pointer'}}>💵 ESPÈCES</button>
+                          <button onClick={()=>validerCommandePOS('TPE')} disabled={loading || posCart.length===0} style={{flex:1, padding:'15px', background:'#3B82F6', color:'white', border:'none', borderRadius:'8px', fontSize:'1.1rem', fontWeight:'bold', cursor:'pointer'}}>💳 TPE</button>
+                      </div>
+                      <button onClick={()=>setPosCart([])} style={{width:'100%', padding:'12px', background:'#fee2e2', color:'red', border:'none', borderRadius:'8px', fontWeight:'bold', cursor:'pointer'}}>🗑️ Vider le panier</button>
+                  </div>
+              </div>
           </div>
       );
   }
 
   // ==========================================
-  // RENDU 2 : ÉCRAN DE LOGIN
+  // RENDU 3 : ÉCRAN ADMIN CLASSIQUE
   // ==========================================
-  if (authState === null) {
-      return (
-        <div style={{ background: COLORS.bg, minHeight: '100vh', paddingBottom: '100px', color: COLORS.secondary }}>
-            <div style={{ padding: '40px 20px', maxWidth: '400px', margin: '0 auto', textAlign: 'center', paddingTop: '10vh' }}>
-            <h2 style={{marginBottom: '20px'}}>⚙️ Foodji Admin</h2>
-            <form onSubmit={handleLogin}>
-                <input type="email" placeholder="Email Manager" value={email} onChange={e=>setEmail(e.target.value)} style={inputStyle}/>
-                <input type="password" placeholder="Mot de passe" value={password} onChange={e=>setPassword(e.target.value)} style={inputStyle}/>
-                <button type="submit" disabled={loading} style={btnStyle}>{loading ? '...' : 'Connexion'}</button>
-            </form>
-            </div>
-        </div>
-      );
-  }
+  const zData = genererZDeCaisse();
 
-  // ==========================================
-  // RENDU 3 : ÉCRAN ADMIN COMPLET
-  // ==========================================
   return (
-    <div style={{ background: COLORS.bg, minHeight: '100vh', paddingBottom: '100px', color: COLORS.secondary }}>
+    <div className="no-print" style={{ background: COLORS.bg, minHeight: '100vh', paddingBottom: '100px', color: COLORS.secondary }}>
       <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
           
-          <div style={{marginBottom:'20px', display:'flex', gap:'10px', alignItems:'center', justifyContent:'space-between'}}>
-              <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
-                <h2 style={{margin:0}}>⚙️ Tableau de Bord</h2>
-                <div style={{fontSize:'0.8rem', color: COLORS.success, background:'#ECFDF5', padding:'5px 10px', borderRadius:'10px'}}>🔊 Son Actif</div>
-              </div>
-              <button onClick={() => auth.signOut()} style={{padding:'5px 10px', borderRadius:'8px', border:'none', background:'#eee', cursor:'pointer'}}>Déconnexion</button>
-          </div>
-
-          <div style={{background: 'white', padding: '15px', borderRadius: '16px', marginBottom: '20px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)'}}>
-              <h3 style={{marginTop:0, marginBottom:'15px', fontSize:'1rem'}}>Ouverture / Fermeture du Restaurant</h3>
+          <div style={{marginBottom:'20px', display:'flex', flexWrap:'wrap', gap:'10px', alignItems:'center', justifyContent:'space-between'}}>
+              <h2 style={{margin:0}}>⚙️ Tableau de Bord</h2>
               <div style={{display:'flex', gap:'10px'}}>
-                  <button onClick={() => updateDoc(doc(db, "parametres", "horaires"), { isOuvert: true })} style={{flex:1, padding:'12px', borderRadius:'10px', border: isStoreOpen ? `2px solid ${COLORS.success}` : '1px solid #ddd', background: isStoreOpen ? '#ECFDF5' : 'white', color: isStoreOpen ? COLORS.success : 'black', fontWeight:'bold', cursor:'pointer'}}>🟢 OUVERT</button>
-                  <button onClick={() => updateDoc(doc(db, "parametres", "horaires"), { isOuvert: false })} style={{flex:1, padding:'12px', borderRadius:'10px', border: !isStoreOpen ? `2px solid ${COLORS.danger}` : '1px solid #ddd', background: !isStoreOpen ? '#FEF2F2' : 'white', color: !isStoreOpen ? COLORS.danger : 'black', fontWeight:'bold', cursor:'pointer'}}>🔴 FERMÉ</button>
+                  <button onClick={()=>setShowZDeCaisse(true)} style={{padding:'10px 15px', borderRadius:'8px', border:'none', background:'#3B82F6', color:'white', fontWeight:'bold', cursor:'pointer'}}>📊 Z de Caisse</button>
+                  <button onClick={()=>setAppMode('POS')} style={{padding:'10px 15px', borderRadius:'8px', border:'none', background:COLORS.primary, color:'white', fontWeight:'bold', cursor:'pointer'}}>🍔 OUVRIR LA CAISSE</button>
+                  <button onClick={() => auth.signOut()} style={{padding:'10px 15px', borderRadius:'8px', border:'none', background:'#eee', cursor:'pointer'}}>Déconnexion</button>
               </div>
           </div>
 
-          <div style={{background: 'white', padding: '15px', borderRadius: '16px', marginBottom: '30px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)'}}>
-              <h3 style={{marginTop:0, marginBottom:'15px', fontSize:'1rem'}}>Gestion du Rush</h3>
-              <div style={{display:'flex', gap:'10px', flexWrap:'wrap'}}>
-                  <button onClick={() => updateDoc(doc(db, "parametres", "status"), { mode: 'standard' })} style={{flex:1, padding:'12px', borderRadius:'10px', border: rushMode === 'standard' ? `2px solid ${COLORS.success}` : '1px solid #ddd', background: rushMode === 'standard' ? '#ECFDF5' : 'white', color: rushMode === 'standard' ? COLORS.success : 'black', fontWeight:'bold', cursor:'pointer'}}>✅ Standard</button>
-                  <button onClick={() => updateDoc(doc(db, "parametres", "status"), { mode: 'rush' })} style={{flex:1, padding:'12px', borderRadius:'10px', border: rushMode === 'rush' ? `2px solid ${COLORS.warning}` : '1px solid #ddd', background: rushMode === 'rush' ? '#FFFBEB' : 'white', color: rushMode === 'rush' ? COLORS.warning : 'black', fontWeight:'bold', cursor:'pointer'}}>⚠️ Rush (30min+)</button>
-                  <button onClick={() => updateDoc(doc(db, "parametres", "status"), { mode: 'gros_rush' })} style={{flex:1, padding:'12px', borderRadius:'10px', border: rushMode === 'gros_rush' ? `2px solid ${COLORS.danger}` : '1px solid #ddd', background: rushMode === 'gros_rush' ? '#FEF2F2' : 'white', color: rushMode === 'gros_rush' ? COLORS.danger : 'black', fontWeight:'bold', cursor:'pointer'}}>🔥 Gros Rush (1h+)</button>
+          {/* MODAL Z DE CAISSE */}
+          {showZDeCaisse && (
+              <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000}}>
+                  <div style={{background:'white', padding:'30px', borderRadius:'15px', width:'90%', maxWidth:'400px'}}>
+                      <h2 style={{marginTop:0, textAlign:'center'}}>📊 Fin de Service</h2>
+                      <p style={{textAlign:'center', color:'#666'}}>Aujourd'hui ({new Date().toLocaleDateString()})</p>
+                      <hr style={{margin:'20px 0'}}/>
+                      <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', fontSize:'1.2rem'}}><span>Espèces (Tiroir) :</span> <strong>{zData.totalEspeces} DH</strong></div>
+                      <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', fontSize:'1.2rem'}}><span>TPE (Carte) :</span> <strong>{zData.totalTPE} DH</strong></div>
+                      <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', fontSize:'1.2rem', color:'#666'}}><span>Livr. App/Web :</span> <strong>{zData.totalLivrApp} DH</strong></div>
+                      <hr style={{margin:'20px 0'}}/>
+                      <div style={{display:'flex', justifyContent:'space-between', fontSize:'1.5rem', color:COLORS.primary}}><span>TOTAL JOUR :</span> <strong>{zData.totalGeneral} DH</strong></div>
+                      <div style={{textAlign:'center', marginTop:'10px', color:'#666'}}>Nombre de commandes : {zData.nbCommandes}</div>
+                      <button onClick={()=>setShowZDeCaisse(false)} style={{width:'100%', padding:'15px', background:COLORS.secondary, color:'white', border:'none', borderRadius:'10px', marginTop:'20px', fontSize:'1.1rem', cursor:'pointer'}}>Fermer</button>
+                  </div>
               </div>
+          )}
+
+          {/* STATUS BOUTIQUE */}
+          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(250px, 1fr))', gap:'20px', marginBottom:'30px'}}>
+            <div style={{background: 'white', padding: '20px', borderRadius: '16px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', textAlign:'center'}}>
+                <h3 style={{marginTop:0, marginBottom:'15px', fontSize:'1rem'}}>Service Client</h3>
+                <button onClick={() => updateDoc(doc(db, "parametres", "horaires"), { isOuvert: !parametres.isOuvert })} style={{width:'100%', padding:'15px', borderRadius:'10px', border: parametres.isOuvert ? `2px solid ${COLORS.success}` : '1px solid #ddd', background: parametres.isOuvert ? '#ECFDF5' : 'white', color: parametres.isOuvert ? COLORS.success : 'black', fontWeight:'bold', cursor:'pointer'}}>
+                    {parametres.isOuvert ? '🟢 OUVERT' : '🔴 FERMÉ'}
+                </button>
+            </div>
+            <div style={{background: 'white', padding: '20px', borderRadius: '16px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', textAlign:'center'}}>
+                <h3 style={{marginTop:0, marginBottom:'15px', fontSize:'1rem'}}>Mode Rush</h3>
+                <select value={parametres.rushMode} onChange={(e) => updateDoc(doc(db, "parametres", "status"), { mode: e.target.value })} style={{width:'100%', padding:'15px', borderRadius:'10px', border:'1px solid #ddd', fontSize:'1rem'}}>
+                    <option value="standard">✅ Standard</option>
+                    <option value="rush">⚠️ Rush (30min+)</option>
+                    <option value="gros_rush">🔥 Gros Rush (1h+)</option>
+                </select>
+            </div>
           </div>
 
-          <h3 style={{marginTop:'30px'}}>Commandes ({Array.isArray(commandes) ? commandes.filter(c => c && c.status !== 'Terminé').length : 0})</h3>
+          <h3 style={{marginBottom:'15px'}}>Commandes Web & App ({commandes.filter(c => c.status !== 'Terminé' && c.status !== 'Annulé').length})</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '20px', marginBottom:'40px' }}>
-            {Array.isArray(commandes) && commandes.map(cmd => (
-              <div key={cmd.id} style={{ ...cardStyle, borderLeft: cmd.status === 'Terminé' ? '5px solid #ccc' : (cmd.status === 'En cours de validation' ? `5px solid ${COLORS.pending}` : `5px solid ${COLORS.success}`) }}>
-                <div style={{display:'flex', justifyContent:'space-between', alignItems:'start', marginBottom:'15px', paddingBottom:'15px', borderBottom:'1px solid #f0f0f0'}}>
+            {commandes.slice(0, 50).map(cmd => (
+              <div key={cmd.id} style={{ background:'white', borderRadius:'16px', padding:'15px', borderLeft: cmd.status === 'Terminé' ? '5px solid #ccc' : (cmd.status === 'Annulé' ? `5px solid ${COLORS.danger}` : `5px solid ${COLORS.success}`), opacity: cmd.status === 'Annulé' ? 0.6 : 1 }}>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'start', borderBottom:'1px solid #f0f0f0', paddingBottom:'10px', marginBottom:'10px'}}>
                   <div>
-                      <strong style={{fontSize:'1.2rem', display:'block'}}>{cmd.client || 'Client'}</strong>
-                      <div style={{color: COLORS.textLight, marginTop:'4px'}}>📞 {cmd.tel || 'N/A'}</div>
-                      <div style={{marginTop:'5px', fontSize:'0.8rem', fontWeight:'bold', color: COLORS.secondary, display:'flex', gap:'10px', alignItems:'center'}}>
-                          <span>📍 {cmd.distance ? cmd.distance : 'N/A'} km</span>
-                          {cmd.lat && cmd.lng && (<a href={`http://googleusercontent.com/maps.google.com/7{cmd.lat},${cmd.lng}`} target="_blank" rel="noreferrer" style={{color: COLORS.primary, textDecoration:'underline'}}>Voir Map</a>)}
-                      </div>
+                      <strong style={{fontSize:'1.2rem'}}>{cmd.client || 'Client'}</strong>
+                      <div style={{color: COLORS.textLight}}>📞 {cmd.tel || 'N/A'}</div>
+                      <div style={{fontSize:'0.8rem', color: '#666'}}>{cmd.methodePaiement ? `💳 ${cmd.methodePaiement}` : '🌐 App/Web'}</div>
                   </div>
                   <div style={{textAlign:'right'}}>
-                    <div style={{fontSize:'1.3rem', fontWeight:'bold', color: COLORS.primary}}>{cmd.total || 0} DH</div>
-                    <button onClick={() => copierOdoo(cmd)} style={{marginTop:'5px', background: COLORS.secondary, color:'white', border:'none', padding:'6px 12px', borderRadius:'6px', fontSize:'0.75rem', cursor:'pointer'}}>📋 COPIER</button>
+                    <div style={{fontSize:'1.3rem', fontWeight:'bold', color: COLORS.primary}}>{cmd.total} DH</div>
+                    <div style={{fontSize:'0.8rem', color:cmd.status==='Annulé'?'red':'#666'}}>{cmd.status}</div>
                   </div>
                 </div>
                 
-                <div style={{marginBottom:'10px'}}>
-                    {cmd.status === 'En cours de validation' && <div style={{background: '#FFF7ED', color: '#C2410C', padding:'8px', borderRadius:'8px', fontSize:'0.9rem', fontWeight:'bold', marginBottom:'10px', border:'1px solid #FED7AA'}}>⚠️ GROS PANIER - À VALIDER TEL</div>}
-                    {cmd.type === 'livraison' && <div style={{background:'#FEF3C7', color:'#D97706', padding:'8px', borderRadius:'8px', fontSize:'0.9rem', marginBottom:'5px'}}>🛵 <strong>{cmd.adresse || 'N/A'}</strong></div>}
-                    {cmd.commentaire && <div style={{background: COLORS.warning, color:'white', padding:'8px', borderRadius:'8px', fontSize:'0.9rem', fontWeight:'bold'}}>📝 Note: {cmd.commentaire}</div>}
-                    {cmd.remisePromo > 0 && <div style={{color: COLORS.danger, fontSize:'0.9rem', fontWeight:'bold', border:'1px solid red', padding:'5px', borderRadius:'5px', display:'inline-block'}}>🎁 REMISE PROMO: -{cmd.remisePromo} DH</div>}
-                </div>
+                {cmd.commentaire && <div style={{background: COLORS.warning, color:'white', padding:'8px', borderRadius:'8px', fontSize:'0.9rem', fontWeight:'bold', marginBottom:'10px'}}>📝 {cmd.commentaire}</div>}
                 
-                <ul style={{listStyle:'none', marginBottom:'15px'}}>
-                  {Array.isArray(cmd.items) && cmd.items.map((it, i) => (
-                    <li key={i} style={{padding:'8px 0', borderBottom:'1px dashed #eee', lineHeight:'1.4'}}>
-                      <div style={{display:'flex', alignItems:'center', gap:'10px', marginBottom:'2px'}}>
-                          <span style={{fontSize:'0.75rem', fontWeight:'bold', color: COLORS.primary, background:'#FEE2E2', padding:'2px 6px', borderRadius:'4px'}}>
-                              [{it.categorie ? it.categorie.toUpperCase() : 'PLAT'}]
-                          </span>
-                          <strong style={{fontSize:'1.1rem'}}>{it.nom || 'Inconnu'}</strong>
-                      </div>
-                      <div style={{display:'flex', justifyContent:'space-between', color: COLORS.secondary}}>
-                          <span>
-                              {it.choixPates && <strong style={{color: COLORS.primary, marginRight:'5px'}}>{it.choixPates}</strong>}
-                              {it.varianteNom && <strong style={{color: COLORS.secondary, fontSize:'0.95rem'}}>({it.varianteNom})</strong>}
-                          </span>
-                          <strong style={{color: COLORS.textLight}}>{it.prixFinal || 0} DH</strong>
-                      </div>
-                      <div style={{fontSize:'0.85rem', color:'#444', marginLeft:'10px', marginTop:'2px'}}>
-                          {it.isCheesyCrust && <div style={{fontWeight:'bold', color: COLORS.promo}}>★ CHEESY CRUST</div>}
-                          {Array.isArray(it.extras) && it.extras.length > 0 && <div>+ {it.extras.map(e => e.nom).join(', ')}</div>}
-                          {Array.isArray(it.sauces) && it.sauces.length > 0 && <div>Sauces: {formatOptions(it.sauces)}</div>}
-                          {Array.isArray(it.optionsChoisies) && it.optionsChoisies.length > 0 && <div>+ {formatOptions(it.optionsChoisies)}</div>}
-                          {Array.isArray(it.sans) && it.sans.length > 0 && <div style={{color: COLORS.danger, fontWeight:'bold'}}>🚫 {it.sans.join(', ')}</div>}
-                      </div>
+                <ul style={{listStyle:'none', padding:0, marginBottom:'15px'}}>
+                  {cmd.items?.map((it, i) => (
+                    <li key={i} style={{padding:'5px 0', borderBottom:'1px dashed #eee', display:'flex', justifyContent:'space-between'}}>
+                      <span><strong>{it.nom}</strong> <span style={{fontSize:'0.8rem', color:'#666'}}>{it.varianteNom ? `(${it.varianteNom})` : ''}</span></span>
+                      <span>{it.prixFinal} DH</span>
                     </li>
                   ))}
                 </ul>
 
-                <div style={{display:'flex', gap:'10px', flexWrap:'wrap'}}>
-                  {cmd.status === 'En cours de validation' ? (
-                      <>
-                        <button onClick={()=>changerStatus(cmd.id, 'En attente')} style={{...btnStyle, background: COLORS.success, padding:'10px', flex:1}}>☎️ CLIENT OK</button>
-                        <button onClick={()=>changerStatus(cmd.id, 'Refusé')} style={{...btnStyle, background: COLORS.danger, padding:'10px', flex:1}}>REFUSER</button>
-                      </>
-                  ) : (
-                      <>
-                          {cmd.status !== 'Terminé' && cmd.status !== 'Refusé' && <button onClick={()=>changerStatus(cmd.id, 'Terminé')} style={{...btnStyle, background: COLORS.success, padding:'10px'}}>✅ SERVI</button>}
-                          <button onClick={()=>supprimerCmd(cmd.id)} style={{...btnStyle, background:'white', color:'red', border:'1px solid #eee', padding:'10px'}}>🗑️</button>
-                      </>
-                  )}
+                <div style={{display:'flex', gap:'10px'}}>
+                  {cmd.status !== 'Terminé' && cmd.status !== 'Annulé' && <button onClick={()=>changerStatus(cmd.id, 'Terminé')} style={{flex:1, padding:'10px', background: COLORS.success, color:'white', border:'none', borderRadius:'8px', fontWeight:'bold'}}>✅ SERVI</button>}
+                  {cmd.status !== 'Annulé' && <button onClick={()=>changerStatus(cmd.id, 'Annulé')} style={{flex:1, padding:'10px', background: COLORS.danger, color:'white', border:'none', borderRadius:'8px', fontWeight:'bold'}}>❌ ANNULER</button>}
+                  <button onClick={()=>supprimerCmd(cmd.id)} style={{padding:'10px', background:'#fee2e2', color:'red', border:'none', borderRadius:'8px'}}>🗑️</button>
                 </div>
               </div>
             ))}
           </div>
 
-           <div style={{marginTop:'40px', borderTop:'2px solid #eee', paddingTop:'20px'}}>
-             <h3 style={{marginBottom:'15px'}}>📦 Menu</h3>
-             <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '15px', display:'flex', gap:'10px' }}>
-              {Array.isArray(categoriesReelles) && categoriesReelles.map(c => (
-                <button key={c} onClick={() => setAdminCategorie(c)} style={{padding:'8px 15px', borderRadius:'20px', border:'none', background: adminCategorie===c?COLORS.secondary:'#eee', color:adminCategorie===c?'white':'black', cursor:'pointer'}}>{c}</button>
-              ))}
-              <button onClick={() => setAdminCategorie('RUPTURE')} style={{padding:'8px 15px', borderRadius:'20px', border:'none', background: adminCategorie==='RUPTURE'?COLORS.danger:'#FEE2E2', color: adminCategorie==='RUPTURE'?'white':COLORS.danger, fontWeight:'bold', cursor:'pointer'}}>🚫 RUPTURE</button>
+          <h3 style={{marginBottom:'15px'}}>📦 Gestion du Menu</h3>
+          <div style={{background:'white', padding:'20px', borderRadius:'15px'}}>
+             <div style={{ overflowX: 'auto', display:'flex', gap:'10px', paddingBottom:'15px', marginBottom:'15px' }}>
+              {Array.isArray(menu) && [...new Set(menu.map(p=>p.categorie))].map(c => <button key={c} onClick={() => setAdminCategorie(c)} style={{padding:'8px 15px', borderRadius:'20px', border:'none', background: adminCategorie===c?COLORS.secondary:'#eee', color:adminCategorie===c?'white':'black', cursor:'pointer', whiteSpace:'nowrap'}}>{c}</button>)}
              </div>
 
-             {Array.isArray(menuAdmin) && menuAdmin.map(p => (
-              <div key={p.id} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px', borderBottom:'1px solid #f0f0f0', background: p.available === false ? '#FFF5F5' : 'white', opacity: p.available === false ? 0.7 : 1}}>
-                <div style={{display:'flex', alignItems:'center', gap:'15px'}}>
-                  <div onClick={() => toggleAvailability(p)} style={{width:'50px', height:'26px', background: p.available !== false ? COLORS.success : '#ccc', borderRadius:'20px', position:'relative', cursor:'pointer', transition:'0.3s'}}>
-                    <div style={{width:'20px', height:'20px', background:'white', borderRadius:'50%', position:'absolute', top:'3px', left: p.available !== false ? '27px' : '3px', transition:'0.3s'}}></div>
-                  </div>
-                  <div style={{width:'40px', height:'40px', background:'#eee', borderRadius:'5px', overflow:'hidden', position:'relative'}}>
-                    {p.image && <img src={p.image} style={{width:'100%', height:'100%', objectFit:'cover'}} alt="" />}
-                    <input type="file" onChange={(e)=>updateProductImage(p.id, e.target.files[0])} style={{position:'absolute', top:0, left:0, width:'100%', height:'100%', opacity:0, cursor:'pointer'}} />
-                  </div>
-                  <div>
-                    <div style={{fontWeight:'bold', textDecoration: p.available === false ? 'line-through' : 'none'}}>{p.nom}</div>
-                    <div style={{fontSize:'0.8rem', color: COLORS.textLight}}>{p.categorie} • {Array.isArray(p.variantes) && p.variantes.length > 0 ? 'Multi-tailles' : p.prix + ' DH'}</div>
-                  </div>
+             {menu.filter(p => p.categorie === adminCategorie).map(p => (
+              <div key={p.id} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px', borderBottom:'1px solid #f0f0f0', background: p.available === false ? '#FFF5F5' : 'white'}}>
+                <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+                  <button onClick={() => toggleAvailability(p)} style={{padding:'5px 10px', border:'none', borderRadius:'5px', background:p.available?COLORS.success:'#ccc', color:'white'}}>{p.available ? 'ON' : 'OFF'}</button>
+                  <div style={{fontWeight:'bold', textDecoration: p.available === false ? 'line-through' : 'none'}}>{p.nom} - {p.variantes?.length>0 ? 'Multi' : p.prix+' DH'}</div>
                 </div>
                 <div style={{display:'flex', gap:'10px'}}>
-                    <button onClick={() => handleEdit(p)} style={{border:'none', background:'transparent', fontSize:'1.2rem', cursor:'pointer'}}>✏️</button>
+                    <button onClick={() => {setEditId(p.id); setFormProd({nom: p.nom, description: p.description||'', categorie: p.categorie, prixBase: p.prix, variantes: p.variantes||[]}); window.scrollTo(0,0);}} style={{border:'none', background:'transparent', fontSize:'1.2rem', cursor:'pointer'}}>✏️</button>
                     <button onClick={()=>supprimerProduit(p.id)} style={{color:'red', border:'none', background:'transparent', cursor:'pointer'}}>X</button>
                 </div>
               </div>
             ))}
           </div>
-          
-           <details style={{marginTop:'30px', background:'white', padding:'15px', borderRadius:'10px'}}>
-             <summary>{editId ? '✏️ Modifier Produit' : 'Ajout Manuel'}</summary>
-             <div style={{marginTop:'10px'}}>
-                 <input placeholder="Nom" value={nom} onChange={e=>setNom(e.target.value)} style={inputStyle} />
-                 <textarea placeholder="Description" value={description} onChange={e=>setDescription(e.target.value)} style={{...inputStyle, height:'60px', fontFamily:'inherit', resize:'vertical'}} />
-                 <div style={{display:'flex', gap:'10px', alignItems:'start'}}>
-                   <select value={categorie} onChange={handleCategoryChange} style={{...inputStyle, width:'50%'}}>
-                       {Array.isArray(categoriesSelectAdmin) && categoriesSelectAdmin.map(cat => <option key={cat}>{cat}</option>)}
-                   </select>
-                   {Array.isArray(variantes) && variantes.length > 0 ? (
-                       <div style={{width:'50%', display:'flex', gap:'5px', flexWrap:'wrap'}}>
-                           {variantes.map((v, index) => (
-                               <div key={index} style={{flex:1, minWidth:'120px', display:'flex', alignItems:'center', gap:'5px', background:'#F9FAFB', padding:'5px', borderRadius:'8px', border:'1px solid #eee'}}>
-                                   <div style={{flex:1}}>
-                                       <label style={{fontSize:'0.7rem', fontWeight:'bold', color: COLORS.textLight, display:'block'}}>{v.nom}</label>
-                                       <input type="number" value={v.prix} onChange={(e) => updateVariantPrice(index, 'prix', e.target.value)} style={{...inputStyle, marginBottom:0, padding:'5px', fontSize:'0.9rem'}} />
-                                   </div>
-                                   <div style={{display:'flex', flexDirection:'column', alignItems:'center'}}>
-                                       <label style={{fontSize:'0.6rem', color: COLORS.textLight}}>Dispo</label>
-                                       <input type="checkbox" checked={v.available !== false} onChange={(e) => updateVariantPrice(index, 'available', e.target.checked)} style={{width:'20px', height:'20px'}} />
-                                   </div>
-                               </div>
-                           ))}
-                       </div>
-                   ) : (
-                       <input type="number" placeholder="Prix" value={prixBase} onChange={e=>setPrixBase(e.target.value)} style={{...inputStyle, width:'50%'}} />
-                   )}
-                 </div>
-                 <button onClick={saveProduit} style={{...btnStyle, width:'auto', marginTop:'15px'}}>{editId ? 'Mettre à jour' : 'Ajouter'}</button>
-                 {editId && <button onClick={() => {setEditId(null); setNom(''); setPrixBase(''); setVariantes([]); setDescription('');}} style={{...btnStyle, background:'gray', width:'auto', marginLeft:'10px'}}>Annuler</button>}
-             </div>
-           </details>
-
-           <details style={{marginTop:'30px', background:'#FFF7ED', padding:'15px', borderRadius:'10px', border:`1px solid ${COLORS.promo}`}}>
-                <summary style={{fontWeight:'bold', color: '#C2410C', cursor:'pointer'}}>🥕 GESTION DES STOCKS (ON/OFF)</summary>
-                <div style={{marginTop:'20px'}}>
-                    <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '20px', scrollbarWidth: 'none', display:'flex', gap:'10px' }}>
-                        {STOCK_TABS.map(tab => (
-                            <button key={tab.id} onClick={() => setActiveStockTab(tab.id)} style={{display:'inline-block', padding:'10px 20px', borderRadius:'25px', background: activeStockTab === tab.id ? COLORS.secondary : 'white', color: activeStockTab === tab.id ? 'white' : COLORS.secondary, fontWeight:'600', fontSize:'0.9rem', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', cursor: 'pointer', transition: '0.2s', border: activeStockTab === tab.id ? 'none' : '1px solid #ddd'}}>{tab.label}</button>
-                        ))}
-                    </div>
-                    <div style={{background:'white', padding:'15px', borderRadius:'15px', marginTop:'10px'}}>
-                        <div style={{display:'flex', gap:'10px', marginBottom:'20px'}}>
-                            {activeStockTab !== 'tailles_pizza' && (
-                                 <>
-                                    <input type="text" placeholder={`Ajouter dans ${STOCK_TABS.find(t=>t.id===activeStockTab).label}...`} value={newItemName} onChange={(e) => setNewItemName(e.target.value)} style={{...inputStyle, marginBottom:0}} />
-                                    <button onClick={addNewStockItem} style={{...btnStyle, width:'auto'}}>Ajouter</button>
-                                 </>
-                            )}
-                        </div>
-                        <div style={{display:'flex', flexWrap:'wrap', gap:'10px'}}>
-                            {stocks[activeStockTab] && Array.isArray(stocks[activeStockTab]) && stocks[activeStockTab].map((item, index) => (
-                                <div key={item.nom} onClick={() => toggleStockItem(activeStockTab, index)} style={{padding:'12px 18px', borderRadius:'25px', cursor:'pointer', fontWeight:'bold', transition:'0.2s', background: item.available ? COLORS.success : '#E5E7EB', color: item.available ? 'white' : '#9CA3AF', border: item.available ? `1px solid ${COLORS.success}` : '1px solid #D1D5DB', display:'flex', alignItems:'center', gap:'8px', fontSize:'0.95rem'}}>
-                                    <div style={{width:'12px', height:'12px', borderRadius:'50%', background: item.available ? 'white' : '#9CA3AF'}}></div>{item.nom}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-           </details>
-
-           <details style={{marginTop:'50px', background:'#FEE2E2', padding:'15px', borderRadius:'10px', border:`1px solid ${COLORS.danger}`}}>
-             <summary style={{fontWeight:'bold', color: COLORS.danger, cursor:'pointer'}}>💀 ZONE DANGEREUSE (Import / Reset)</summary>
-             <input type="file" accept=".csv" ref={fileInputRef} onChange={handleCSVImport} style={{display:'none'}} />
-             <div style={{marginTop:'20px', display:'flex', gap:'10px', flexDirection:'column'}}>
-                <button onClick={triggerImport} style={{...btnStyle, background: 'white', color: COLORS.secondary, border:'1px solid #ccc'}}>📂 IMPORTER UN MENU (CSV)</button>
-                <button onClick={viderMenu} style={{...btnStyle, background: COLORS.danger, color:'white'}}>🗑️ TOUT SUPPRIMER (RESET)</button>
-             </div>
-           </details>
-        </div>
+      </div>
     </div>
   );
 }
 
-// ============================================================================
-// FONCTIONS UTILITAIRES ET EXPORT
-// ============================================================================
-function formatOptions(list) {
-    if(!list || !Array.isArray(list)) return "";
-    const counts = {};
-    list.forEach(x => { counts[x] = (counts[x] || 0) + 1; });
-    return Object.entries(counts).map(([name, count]) => count > 1 ? `${name} x${count}` : name).join(', ');
-}
+// STYLES D'IMPRESSION (À ajouter manuellement dans ton App.css si le JS ne suffit pas, mais géré ici)
+const printStyles = `
+  @media print {
+    .no-print { display: none !important; }
+    .print-only { display: block !important; width: 80mm; font-family: 'Courier New', monospace; color: black; background: white; padding: 0; margin: 0; }
+    .ticket-80mm { width: 75mm; margin: 0 auto; padding-bottom: 20px; }
+    .page-break { page-break-after: always; }
+    body, html { background: white; width: 80mm; margin: 0; padding: 0; }
+  }
+  @media screen { .print-only { display: none !important; } }
+`;
 
-export default function App() {
-  return (
-    <ErrorBoundary>
-      <FoodjiAdmin />
-    </ErrorBoundary>
-  );
+export default function App() { 
+    return (
+        <ErrorBoundary>
+            <style>{printStyles}</style>
+            <FoodjiSystem />
+        </ErrorBoundary>
+    ); 
 }
