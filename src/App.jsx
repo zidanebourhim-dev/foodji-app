@@ -8,11 +8,21 @@ const COLORS = { primary: '#A84438', secondary: '#1A1E29', bg: '#F3F4F6', card: 
 
 const INIT_VIANDES = [{ nom: "Poulet", available: true }, { nom: "Viande Hachée", available: true }, { nom: "Cordon Bleu", available: true }, { nom: "Nuggets", available: true }, { nom: "Poulet Crispy", available: true }];
 const INIT_GARNITURES_PIZZA = [{ nom: "Viande Hachée", available: true }, { nom: "Poulet", available: true }, { nom: "4 Fromages", available: true }, { nom: "Cannibale", available: true }, { nom: "Pepperoni", available: true }, { nom: "Thon", available: true }, { nom: "Charcuterie", available: true }, { nom: "Végétarienne", available: true }, { nom: "Fruits de Mer", available: true }];
-const INIT_SAUCES = [{ nom: "Algérienne Fait Maison", available: true }, { nom: "Biggy Fait Maison", available: true }, { nom: "Barbecue Fait Maison", available: true }, { nom: "Pas de sauce", available: true }];
+const INIT_SAUCES = [{ nom: "Algérienne", available: true }, { nom: "Biggy", available: true }, { nom: "Barbecue", available: true }, { nom: "Andalouse", available: true }, { nom: "Samouraï", available: true }, { nom: "Gruyère", available: true }, { nom: "Pas de sauce", available: true }];
 const INIT_PATES = [{ nom: "Penne", available: true }, { nom: "Tagliatelle", available: true }, { nom: "Spaghetti", available: true }];
 const INIT_TAILLES_PIZZA = [{ nom: "M", available: true }, { nom: "L", available: true }];
-const TOUTES_CATEGORIES = ["Tacos", "Pizzas", "Burgers", "Pâtes", "Sides", "Les Burritos", "Koniks", "Plats", "Salades", "Boissons", "Desserts"];
-const STOCK_TABS = [{ id: 'viandes', label: '🌮 Viandes' }, { id: 'garnitures', label: '🍕 Garnitures' }, { id: 'tailles_pizza', label: '📏 Tailles' }, { id: 'pates', label: '🍝 Pâtes' }, { id: 'sauces', label: '🥣 Sauces' }];
+
+// PURGE DES CATÉGORIES : Strictement ce que tu vends
+const TOUTES_CATEGORIES = ["Tacos", "Pizzas", "Burgers", "Pâtes", "Sides", "Boissons"];
+
+const STOCK_TABS = [
+    { id: 'viandes', label: '🌮 Viandes' },
+    { id: 'garnitures', label: '🍕 Garnitures' },
+    { id: 'sauces', label: '🥣 Sauces' },
+    { id: 'pates', label: '🍝 Pâtes' },
+    { id: 'tailles_pizza', label: '📏 Tailles Pizza' }
+];
+
 const NOTIF_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
 
 class ErrorBoundary extends React.Component {
@@ -27,21 +37,18 @@ class ErrorBoundary extends React.Component {
 
 function FoodjiSystem() {
   const [authState, setAuthState] = useState("LOADING");
-  const [appMode, setAppMode] = useState('ADMIN'); // 'ADMIN' ou 'POS'
+  const [appMode, setAppMode] = useState('ADMIN'); 
   
-  // DONNÉES GLOBALES
   const [menu, setMenu] = useState([]);
   const [commandes, setCommandes] = useState([]);
   const [parametres, setParametres] = useState({ isOuvert: true, rushMode: 'standard', stocks: { viandes: INIT_VIANDES, garnitures: INIT_GARNITURES_PIZZA, sauces: INIT_SAUCES, pates: INIT_PATES, tailles_pizza: INIT_TAILLES_PIZZA } });
   
-  // ETATS ADMIN
-  const [adminCategorie, setAdminCategorie] = useState(''); 
+  const [adminCategorie, setAdminCategorie] = useState('Tacos'); 
   const [activeStockTab, setActiveStockTab] = useState('viandes');
   const [newItemName, setNewItemName] = useState('');
   const [editId, setEditId] = useState(null); 
   const [formProd, setFormProd] = useState({ nom: '', description: '', image: '', categorie: 'Burgers', prixBase: '', variantes: [] });
   
-  // ETATS POS (CAISSE)
   const [posCart, setPosCart] = useState([]);
   const [posPhone, setPosPhone] = useState('');
   const [posNote, setPosNote] = useState('');
@@ -59,7 +66,6 @@ function FoodjiSystem() {
 
   const SYNC_ID_VERSION = "053700";
 
-  // --- 1. INITIALISATION ---
   useEffect(() => {
     setPersistence(auth, browserLocalPersistence).finally(() => {
       const unsubscribe = onAuthStateChanged(auth, (user) => setAuthState(user ? user : null));
@@ -67,7 +73,6 @@ function FoodjiSystem() {
     });
   }, []);
 
-  // --- 2. ÉCOUTEURS FIREBASE ---
   useEffect(() => {
     if (!authState || authState === "LOADING") return;
 
@@ -77,9 +82,7 @@ function FoodjiSystem() {
         if (s.exists()) setParametres(prev => ({...prev, stocks: s.data()}));
         else setDoc(doc(db, "parametres", "stocks"), parametres.stocks);
     });
-    
     const unsubMenu = onSnapshot(collection(db, "produits"), (snap) => setMenu(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-    
     const unsubCmd = onSnapshot(query(collection(db, "commandes")), (snap) => {
       try {
           const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -96,9 +99,6 @@ function FoodjiSystem() {
     return () => { unsubStatus(); unsubHoraires(); unsubStocks(); unsubMenu(); unsubCmd(); };
   }, [authState]);
 
-  useEffect(() => { if (menu.length > 0 && !adminCategorie) setAdminCategorie(menu[0].categorie); }, [menu, adminCategorie]);
-
-  // --- ACTIONS COMMUNES ---
   const handleLogin = async (e) => {
       e.preventDefault(); if(!email || !password) return; setLoading(true);
       try { await signInWithEmailAndPassword(auth, email, password); } catch(err) { alert(`Erreur: ${err.code}`); }
@@ -106,7 +106,6 @@ function FoodjiSystem() {
   };
   const checkManagerAuth = () => { const code = prompt("🔒 Code Manager requis :"); if (code === SYNC_ID_VERSION) return true; alert("❌ Code incorrect !"); return false; };
 
-  // --- ACTIONS ADMIN ---
   const toggleAvailability = async (item) => await updateDoc(doc(db, "produits", item.id), { available: !item.available });
   const supprimerProduit = async (id) => { if (!checkManagerAuth()) return; if(confirm("Supprimer définitivement ?")) await deleteDoc(doc(db, "produits", id)); };
   const toggleStockItem = async (listName, index) => { const newList = [...parametres.stocks[listName]]; newList[index].available = !newList[index].available; await updateDoc(doc(db, "parametres", "stocks"), { ...parametres.stocks, [listName]: newList }); };
@@ -122,7 +121,6 @@ function FoodjiSystem() {
     setFormProd({ nom: '', description: '', image: '', categorie: 'Burgers', prixBase: '', variantes: [] }); setLoading(false);
   };
 
-  // --- ACTIONS CAISSE (POS) ---
   const addToCart = (produit, variante = null) => {
       const prixFinal = variante ? variante.prix : produit.prix;
       const nomComplet = variante ? `${produit.nom} (${variante.nom})` : produit.nom;
@@ -143,55 +141,41 @@ function FoodjiSystem() {
           commentaire: posNote,
           items: posCart,
           total: totalCart,
-          status: "En attente",
-          methodePaiement: methodePaiement, // 'Espèces' ou 'TPE'
+          status: "Terminé", // En POS, on sert souvent direct ou on donne un biper. On peut mettre "En attente" si tu as un écran cuisine.
+          methodePaiement: methodePaiement,
           date: new Date()
       };
       
       try {
           const docRef = await addDoc(collection(db, "commandes"), newCmd);
           newCmd.id = docRef.id;
-          // Lancer l'impression automatique
           setOrderToPrint(newCmd);
-          setTimeout(() => { window.print(); setOrderToPrint(null); }, 800);
-          
-          // Reset Caisse
+          setTimeout(() => { window.print(); setOrderToPrint(null); }, 500);
           setPosCart([]); setPosPhone(''); setPosNote(''); setPosClientName('Client Comptoir');
-      } catch(e) { alert("Erreur lors de la création de la commande."); }
+      } catch(e) { alert("Erreur création commande."); }
       setLoading(false);
   };
 
   const genererZDeCaisse = () => {
-      const today = new Date();
-      today.setHours(0,0,0,0);
-      
+      const today = new Date(); today.setHours(0,0,0,0);
       const cmdsDuJour = commandes.filter(c => {
           const d = c.date?.seconds ? new Date(c.date.seconds * 1000) : new Date(c.date);
           return d >= today && c.status !== 'Refusé' && c.status !== 'Annulé';
       });
-
-      let totalEspeces = 0;
-      let totalTPE = 0;
-      let totalLivrApp = 0; // Glovo/En ligne potentiel
-
+      let totalEspeces = 0, totalTPE = 0, totalLivrApp = 0;
       cmdsDuJour.forEach(c => {
           if (c.methodePaiement === 'Espèces') totalEspeces += c.total;
           else if (c.methodePaiement === 'TPE') totalTPE += c.total;
-          else totalLivrApp += c.total; // Les commandes en ligne arrivent souvent sans methodePaiement "caisse"
+          else totalLivrApp += c.total; 
       });
-
       return { totalGeneral: totalEspeces + totalTPE + totalLivrApp, totalEspeces, totalTPE, totalLivrApp, nbCommandes: cmdsDuJour.length };
   };
 
-
-  // ==========================================
-  // RENDU 1 : ÉCRAN D'ATTENTE & LOGIN
-  // ==========================================
   if (authState === "LOADING") return <div style={{ background: COLORS.secondary, height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}><h3>Chargement...</h3></div>;
   if (authState === null) return (
       <div style={{ background: COLORS.bg, height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <form onSubmit={handleLogin} style={{ background: 'white', padding: '40px', borderRadius: '15px', width: '350px', textAlign: 'center' }}>
-              <h2>⚙️ Connexion Foodji</h2>
+              <h2>⚙️ Foodji Admin</h2>
               <input type="email" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} style={{width:'100%', padding:'12px', margin:'15px 0', border:'1px solid #ddd', borderRadius:'8px'}}/>
               <input type="password" placeholder="Pass" value={password} onChange={e=>setPassword(e.target.value)} style={{width:'100%', padding:'12px', marginBottom:'20px', border:'1px solid #ddd', borderRadius:'8px'}}/>
               <button type="submit" style={{width:'100%', padding:'12px', background:COLORS.primary, color:'white', border:'none', borderRadius:'8px', fontWeight:'bold'}}>{loading ? '...' : 'Valider'}</button>
@@ -199,23 +183,16 @@ function FoodjiSystem() {
       </div>
   );
 
-  // ==========================================
-  // RENDU INVISIBLE : TICKETS D'IMPRESSION (80mm)
-  // ==========================================
   const renderTickets = () => {
       if (!orderToPrint) return null;
-      const d = new Date();
-      const heure = `${d.getHours()}:${d.getMinutes().toString().padStart(2, '0')}`;
-      
+      const d = new Date(); const heure = `${d.getHours()}:${d.getMinutes().toString().padStart(2, '0')}`;
       return (
           <div className="print-only">
-              {/* TICKET CUISINE */}
               <div className="ticket-80mm">
                   <h1 style={{textAlign:'center', fontSize:'24px', borderBottom:'2px solid black', paddingBottom:'10px'}}>CUISINE - #{orderToPrint.id.substring(0,4).toUpperCase()}</h1>
                   <p style={{textAlign:'center', fontSize:'18px', fontWeight:'bold'}}>{orderToPrint.type === 'sur_place' ? 'SUR PLACE / EMPORTER' : 'LIVRAISON'}</p>
                   <p style={{textAlign:'center'}}>{d.toLocaleDateString()} - {heure}</p>
                   {orderToPrint.commentaire && <div style={{border:'2px dashed black', padding:'10px', margin:'10px 0', fontWeight:'bold', fontSize:'18px'}}>NOTE: {orderToPrint.commentaire}</div>}
-                  
                   <ul style={{listStyle:'none', padding:0, marginTop:'20px'}}>
                       {orderToPrint.items.map((it, i) => (
                           <li key={i} style={{fontSize:'16px', fontWeight:'bold', borderBottom:'1px dotted black', padding:'10px 0'}}>
@@ -226,10 +203,7 @@ function FoodjiSystem() {
                       ))}
                   </ul>
               </div>
-
               <div className="page-break"></div>
-
-              {/* TICKET CLIENT */}
               <div className="ticket-80mm">
                   <h1 style={{textAlign:'center', fontSize:'28px'}}>FOODJI</h1>
                   <p style={{textAlign:'center', fontSize:'14px'}}>Sala Al Jadida</p>
@@ -237,17 +211,9 @@ function FoodjiSystem() {
                   <hr style={{borderTop:'2px dashed black'}}/>
                   <p>Date: {d.toLocaleDateString()} {heure}</p>
                   <p>Client: {orderToPrint.client}</p>
-                  <p>Tél: {orderToPrint.tel}</p>
                   <hr style={{borderTop:'2px dashed black'}}/>
                   <table style={{width:'100%', fontSize:'14px', marginBottom:'20px'}}>
-                      <tbody>
-                          {orderToPrint.items.map((it, i) => (
-                              <tr key={i}>
-                                  <td style={{paddingTop:'5px'}}>{it.nom}</td>
-                                  <td style={{textAlign:'right', paddingTop:'5px'}}>{it.prixFinal} DH</td>
-                              </tr>
-                          ))}
-                      </tbody>
+                      <tbody>{orderToPrint.items.map((it, i) => (<tr key={i}><td style={{paddingTop:'5px'}}>{it.nom}</td><td style={{textAlign:'right', paddingTop:'5px'}}>{it.prixFinal} DH</td></tr>))}</tbody>
                   </table>
                   <hr style={{borderTop:'2px dashed black'}}/>
                   <h2 style={{textAlign:'right', fontSize:'24px'}}>TOTAL: {orderToPrint.total} DH</h2>
@@ -258,46 +224,43 @@ function FoodjiSystem() {
       );
   };
 
-
   // ==========================================
-  // RENDU 2 : CAISSE TACTILE (POS)
+  // CAISSE TACTILE (POS) - LAYOUT CORRIGÉ ET VERROUILLÉ
   // ==========================================
   if (appMode === 'POS') {
-      const zData = genererZDeCaisse();
-      
       return (
-          <div className="pos-container no-print" style={{display:'flex', height:'100vh', background:'#f0f2f5', fontFamily:'sans-serif'}}>
+          <div className="pos-container no-print" style={{display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', background: '#f0f2f5', fontFamily: 'sans-serif'}}>
               {renderTickets()}
               
-              {/* PARTIE GAUCHE : MENU */}
-              <div style={{flex: 1, display:'flex', flexDirection:'column', padding:'10px'}}>
-                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', background:'white', padding:'15px', borderRadius:'10px', marginBottom:'10px'}}>
+              {/* COLONNE GAUCHE (MENU) : Prend tout l'espace libre, scrollable individuellement */}
+              <div style={{flex: 1, display: 'flex', flexDirection: 'column', padding: '10px', height: '100%', overflowY: 'auto'}}>
+                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', background:'white', padding:'15px', borderRadius:'10px', marginBottom:'10px', flexShrink: 0}}>
                       <h2 style={{margin:0, color:COLORS.primary}}>🍔 Foodji POS</h2>
-                      <button onClick={()=>setAppMode('ADMIN')} style={{padding:'10px 20px', background:COLORS.secondary, color:'white', borderRadius:'8px', border:'none', cursor:'pointer'}}>Retour Admin</button>
+                      <button onClick={()=>setAppMode('ADMIN')} style={{padding:'10px 20px', background:COLORS.secondary, color:'white', borderRadius:'8px', border:'none', cursor:'pointer'}}>Quitter Caisse</button>
                   </div>
                   
-                  <div style={{display:'flex', gap:'10px', overflowX:'auto', paddingBottom:'10px', scrollbarWidth:'none'}}>
+                  <div style={{display:'flex', gap:'10px', overflowX:'auto', paddingBottom:'10px', marginBottom:'10px', flexShrink: 0, scrollbarWidth:'none'}}>
                       {TOUTES_CATEGORIES.map(c => (
-                          <button key={c} onClick={()=>setPosCategory(c)} style={{padding:'15px 25px', fontSize:'1.1rem', fontWeight:'bold', borderRadius:'10px', border:'none', background: posCategory===c ? COLORS.primary : 'white', color: posCategory===c ? 'white' : 'black', cursor:'pointer', flexShrink:0}}>{c}</button>
+                          <button key={c} onClick={()=>setPosCategory(c)} style={{padding:'15px 25px', fontSize:'1.1rem', fontWeight:'bold', borderRadius:'10px', border:'none', background: posCategory===c ? COLORS.primary : 'white', color: posCategory===c ? 'white' : 'black', cursor:'pointer', flexShrink:0, boxShadow:'0 2px 5px rgba(0,0,0,0.05)'}}>{c}</button>
                       ))}
                   </div>
 
-                  <div style={{flex:1, overflowY:'auto', display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(150px, 1fr))', gap:'10px', alignContent:'start'}}>
+                  <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(160px, 1fr))', gap:'10px'}}>
                       {menu.filter(p => p.categorie === posCategory && p.available !== false).map(p => (
-                          <div key={p.id} style={{background:'white', borderRadius:'10px', overflow:'hidden', boxShadow:'0 2px 5px rgba(0,0,0,0.1)', cursor:'pointer'}}>
+                          <div key={p.id} style={{background:'white', borderRadius:'10px', overflow:'hidden', boxShadow:'0 2px 5px rgba(0,0,0,0.1)', cursor:'pointer', border:'2px solid transparent'}}>
                               {p.variantes?.length > 0 ? (
                                   <div style={{padding:'10px'}}>
-                                      <div style={{fontWeight:'bold', textAlign:'center', marginBottom:'10px'}}>{p.nom}</div>
+                                      <div style={{fontWeight:'bold', textAlign:'center', marginBottom:'10px', fontSize:'1.1rem'}}>{p.nom}</div>
                                       <div style={{display:'flex', flexDirection:'column', gap:'5px'}}>
                                           {p.variantes.filter(v=>v.available !== false).map((v, i) => (
-                                              <button key={i} onClick={()=>addToCart(p, v)} style={{padding:'8px', background:'#eee', border:'none', borderRadius:'5px'}}>{v.nom} - {v.prix}DH</button>
+                                              <button key={i} onClick={()=>addToCart(p, v)} style={{padding:'10px', background:'#f8f9fa', border:'1px solid #ddd', borderRadius:'5px', fontWeight:'bold', cursor:'pointer'}}>{v.nom} <span style={{color:COLORS.primary}}>{v.prix}DH</span></button>
                                           ))}
                                       </div>
                                   </div>
                               ) : (
-                                  <div onClick={()=>addToCart(p)} style={{padding:'20px 10px', textAlign:'center'}}>
-                                      <div style={{fontWeight:'bold'}}>{p.nom}</div>
-                                      <div style={{color:COLORS.primary, fontWeight:'bold', marginTop:'5px'}}>{p.prix} DH</div>
+                                  <div onClick={()=>addToCart(p)} style={{padding:'20px 10px', textAlign:'center', height:'100%', display:'flex', flexDirection:'column', justifyContent:'center'}}>
+                                      <div style={{fontWeight:'bold', fontSize:'1.1rem'}}>{p.nom}</div>
+                                      <div style={{color:COLORS.primary, fontWeight:'bold', marginTop:'5px', fontSize:'1.2rem'}}>{p.prix} DH</div>
                                   </div>
                               )}
                           </div>
@@ -305,37 +268,41 @@ function FoodjiSystem() {
                   </div>
               </div>
 
-              {/* PARTIE DROITE : PANIER & PAIEMENT */}
-              <div style={{width:'380px', background:'white', display:'flex', flexDirection:'column', borderLeft:'2px solid #ddd', boxShadow:'-5px 0 15px rgba(0,0,0,0.05)'}}>
-                  <div style={{padding:'20px', borderBottom:'1px solid #eee', background:COLORS.secondary, color:'white'}}>
-                      <input type="text" placeholder="Nom Client (ex: Table 4 / Ali)" value={posClientName} onChange={e=>setPosClientName(e.target.value)} style={{width:'100%', padding:'12px', borderRadius:'8px', border:'none', marginBottom:'10px', fontSize:'1rem'}}/>
-                      <input type="tel" placeholder="N° Téléphone (Optionnel)" value={posPhone} onChange={e=>setPosPhone(e.target.value)} style={{width:'100%', padding:'12px', borderRadius:'8px', border:'none', fontSize:'1rem'}}/>
+              {/* COLONNE DROITE (PANIER) : Largeur FIXE, hauteur 100%, impossible à écraser */}
+              <div style={{width: '400px', flexShrink: 0, background: 'white', display: 'flex', flexDirection: 'column', height: '100%', borderLeft: '2px solid #ddd', boxShadow: '-5px 0 15px rgba(0,0,0,0.05)'}}>
+                  
+                  {/* Entête du panier */}
+                  <div style={{padding:'15px', borderBottom:'1px solid #eee', background:COLORS.secondary, color:'white', flexShrink: 0}}>
+                      <input type="text" placeholder="Nom Client (ex: Salle / Ali)" value={posClientName} onChange={e=>setPosClientName(e.target.value)} style={{width:'100%', padding:'12px', borderRadius:'8px', border:'none', marginBottom:'10px', fontSize:'1rem', boxSizing:'border-box'}}/>
+                      <input type="tel" placeholder="N° Tél (Optionnel)" value={posPhone} onChange={e=>setPosPhone(e.target.value)} style={{width:'100%', padding:'12px', borderRadius:'8px', border:'none', fontSize:'1rem', boxSizing:'border-box'}}/>
                   </div>
 
-                  <div style={{flex:1, overflowY:'auto', padding:'10px'}}>
-                      {posCart.length === 0 ? <p style={{textAlign:'center', color:'#999', marginTop:'50px'}}>Panier vide</p> : null}
+                  {/* Liste des articles du panier : C'EST LA SEULE PARTIE QUI SCROLLE ICI */}
+                  <div style={{flex: 1, overflowY: 'auto', padding: '10px'}}>
+                      {posCart.length === 0 ? <div style={{textAlign:'center', color:'#999', marginTop:'50px', fontSize:'1.2rem'}}>Panier vide</div> : null}
                       {posCart.map(item => (
-                          <div key={item.idCart} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px', borderBottom:'1px dashed #ddd'}}>
-                              <div style={{fontWeight:'bold'}}>{item.nom}</div>
-                              <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
-                                  <span>{item.prixFinal} DH</span>
-                                  <button onClick={()=>removeFromCart(item.idCart)} style={{background:'#fee2e2', color:'red', border:'none', padding:'5px 10px', borderRadius:'5px', cursor:'pointer'}}>X</button>
+                          <div key={item.idCart} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px', borderBottom:'1px dashed #ddd', background:'#fafafa', borderRadius:'8px', marginBottom:'5px'}}>
+                              <div style={{fontWeight:'bold', fontSize:'1.1rem'}}>{item.nom}</div>
+                              <div style={{display:'flex', alignItems:'center', gap:'15px'}}>
+                                  <span style={{fontWeight:'bold', color:COLORS.primary}}>{item.prixFinal} DH</span>
+                                  <button onClick={()=>removeFromCart(item.idCart)} style={{background:'#fee2e2', color:'red', border:'none', padding:'8px 12px', borderRadius:'5px', cursor:'pointer', fontWeight:'bold'}}>X</button>
                               </div>
                           </div>
                       ))}
                   </div>
 
-                  <div style={{padding:'20px', borderTop:'2px solid #eee', background:'#fafafa'}}>
-                      <textarea placeholder="Commentaire (ex: Sans oignons)" value={posNote} onChange={e=>setPosNote(e.target.value)} style={{width:'100%', padding:'10px', borderRadius:'8px', border:'1px solid #ddd', marginBottom:'15px', resize:'none'}}/>
-                      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'15px', fontSize:'1.5rem', fontWeight:'bold'}}>
+                  {/* Boutons de validation : TOUJOURS VISIBLES EN BAS */}
+                  <div style={{padding: '20px', borderTop: '2px solid #eee', background: '#fff', flexShrink: 0}}>
+                      <textarea placeholder="Note cuisine (ex: Sans frites)" value={posNote} onChange={e=>setPosNote(e.target.value)} style={{width:'100%', padding:'10px', borderRadius:'8px', border:'1px solid #ddd', marginBottom:'15px', resize:'none', boxSizing:'border-box'}}/>
+                      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'15px', fontSize:'1.8rem', fontWeight:'bold'}}>
                           <span>TOTAL</span>
                           <span style={{color:COLORS.primary}}>{totalCart} DH</span>
                       </div>
                       <div style={{display:'flex', gap:'10px', marginBottom:'10px'}}>
-                          <button onClick={()=>validerCommandePOS('Espèces')} disabled={loading || posCart.length===0} style={{flex:1, padding:'15px', background:COLORS.success, color:'white', border:'none', borderRadius:'8px', fontSize:'1.1rem', fontWeight:'bold', cursor:'pointer'}}>💵 ESPÈCES</button>
-                          <button onClick={()=>validerCommandePOS('TPE')} disabled={loading || posCart.length===0} style={{flex:1, padding:'15px', background:'#3B82F6', color:'white', border:'none', borderRadius:'8px', fontSize:'1.1rem', fontWeight:'bold', cursor:'pointer'}}>💳 TPE</button>
+                          <button onClick={()=>validerCommandePOS('Espèces')} disabled={loading || posCart.length===0} style={{flex:1, padding:'20px 10px', background:COLORS.success, color:'white', border:'none', borderRadius:'10px', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer', opacity: posCart.length===0?0.5:1}}>💵 ESPÈCES</button>
+                          <button onClick={()=>validerCommandePOS('TPE')} disabled={loading || posCart.length===0} style={{flex:1, padding:'20px 10px', background:'#3B82F6', color:'white', border:'none', borderRadius:'10px', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer', opacity: posCart.length===0?0.5:1}}>💳 TPE</button>
                       </div>
-                      <button onClick={()=>setPosCart([])} style={{width:'100%', padding:'12px', background:'#fee2e2', color:'red', border:'none', borderRadius:'8px', fontWeight:'bold', cursor:'pointer'}}>🗑️ Vider le panier</button>
+                      <button onClick={()=>setPosCart([])} style={{width:'100%', padding:'15px', background:'#fee2e2', color:'red', border:'none', borderRadius:'10px', fontWeight:'bold', cursor:'pointer', fontSize:'1rem'}}>🗑️ Vider le panier</button>
                   </div>
               </div>
           </div>
@@ -343,7 +310,7 @@ function FoodjiSystem() {
   }
 
   // ==========================================
-  // RENDU 3 : ÉCRAN ADMIN CLASSIQUE
+  // RENDU ADMIN & STOCKS (Affichés en grand, fini le menu caché)
   // ==========================================
   const zData = genererZDeCaisse();
 
@@ -355,7 +322,7 @@ function FoodjiSystem() {
               <h2 style={{margin:0}}>⚙️ Tableau de Bord</h2>
               <div style={{display:'flex', gap:'10px'}}>
                   <button onClick={()=>setShowZDeCaisse(true)} style={{padding:'10px 15px', borderRadius:'8px', border:'none', background:'#3B82F6', color:'white', fontWeight:'bold', cursor:'pointer'}}>📊 Z de Caisse</button>
-                  <button onClick={()=>setAppMode('POS')} style={{padding:'10px 15px', borderRadius:'8px', border:'none', background:COLORS.primary, color:'white', fontWeight:'bold', cursor:'pointer'}}>🍔 OUVRIR LA CAISSE</button>
+                  <button onClick={()=>setAppMode('POS')} style={{padding:'10px 15px', borderRadius:'8px', border:'none', background:COLORS.primary, color:'white', fontWeight:'bold', cursor:'pointer', fontSize:'1.1rem'}}>🍔 OUVRIR LA CAISSE</button>
                   <button onClick={() => auth.signOut()} style={{padding:'10px 15px', borderRadius:'8px', border:'none', background:'#eee', cursor:'pointer'}}>Déconnexion</button>
               </div>
           </div>
@@ -378,85 +345,68 @@ function FoodjiSystem() {
               </div>
           )}
 
-          {/* STATUS BOUTIQUE */}
-          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(250px, 1fr))', gap:'20px', marginBottom:'30px'}}>
-            <div style={{background: 'white', padding: '20px', borderRadius: '16px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', textAlign:'center'}}>
-                <h3 style={{marginTop:0, marginBottom:'15px', fontSize:'1rem'}}>Service Client</h3>
-                <button onClick={() => updateDoc(doc(db, "parametres", "horaires"), { isOuvert: !parametres.isOuvert })} style={{width:'100%', padding:'15px', borderRadius:'10px', border: parametres.isOuvert ? `2px solid ${COLORS.success}` : '1px solid #ddd', background: parametres.isOuvert ? '#ECFDF5' : 'white', color: parametres.isOuvert ? COLORS.success : 'black', fontWeight:'bold', cursor:'pointer'}}>
-                    {parametres.isOuvert ? '🟢 OUVERT' : '🔴 FERMÉ'}
-                </button>
-            </div>
-            <div style={{background: 'white', padding: '20px', borderRadius: '16px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', textAlign:'center'}}>
-                <h3 style={{marginTop:0, marginBottom:'15px', fontSize:'1rem'}}>Mode Rush</h3>
-                <select value={parametres.rushMode} onChange={(e) => updateDoc(doc(db, "parametres", "status"), { mode: e.target.value })} style={{width:'100%', padding:'15px', borderRadius:'10px', border:'1px solid #ddd', fontSize:'1rem'}}>
-                    <option value="standard">✅ Standard</option>
-                    <option value="rush">⚠️ Rush (30min+)</option>
-                    <option value="gros_rush">🔥 Gros Rush (1h+)</option>
-                </select>
-            </div>
-          </div>
-
-          <h3 style={{marginBottom:'15px'}}>Commandes Web & App ({commandes.filter(c => c.status !== 'Terminé' && c.status !== 'Annulé').length})</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '20px', marginBottom:'40px' }}>
-            {commandes.slice(0, 50).map(cmd => (
-              <div key={cmd.id} style={{ background:'white', borderRadius:'16px', padding:'15px', borderLeft: cmd.status === 'Terminé' ? '5px solid #ccc' : (cmd.status === 'Annulé' ? `5px solid ${COLORS.danger}` : `5px solid ${COLORS.success}`), opacity: cmd.status === 'Annulé' ? 0.6 : 1 }}>
-                <div style={{display:'flex', justifyContent:'space-between', alignItems:'start', borderBottom:'1px solid #f0f0f0', paddingBottom:'10px', marginBottom:'10px'}}>
-                  <div>
-                      <strong style={{fontSize:'1.2rem'}}>{cmd.client || 'Client'}</strong>
-                      <div style={{color: COLORS.textLight}}>📞 {cmd.tel || 'N/A'}</div>
-                      <div style={{fontSize:'0.8rem', color: '#666'}}>{cmd.methodePaiement ? `💳 ${cmd.methodePaiement}` : '🌐 App/Web'}</div>
-                  </div>
-                  <div style={{textAlign:'right'}}>
-                    <div style={{fontSize:'1.3rem', fontWeight:'bold', color: COLORS.primary}}>{cmd.total} DH</div>
-                    <div style={{fontSize:'0.8rem', color:cmd.status==='Annulé'?'red':'#666'}}>{cmd.status}</div>
-                  </div>
+          {/* GESTION DES STOCKS : AFFICHÉE EN GRAND, COMME DANS LE SYSTÈME EXCELLENT D'AVANT */}
+          <div style={{background:'white', padding:'25px', borderRadius:'15px', marginBottom:'40px', border:`2px solid ${COLORS.primary}`}}>
+                <h3 style={{marginTop:0, color: COLORS.primary, fontSize:'1.3rem'}}>🥕 GESTION RAPIDE DES STOCKS (RUPTURES)</h3>
+                <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '10px', display:'flex', gap:'10px', marginBottom:'20px', scrollbarWidth:'none' }}>
+                    {STOCK_TABS.map(tab => (
+                        <button key={tab.id} onClick={() => setActiveStockTab(tab.id)} style={{padding:'10px 20px', borderRadius:'25px', background: activeStockTab === tab.id ? COLORS.secondary : '#f0f2f5', color: activeStockTab === tab.id ? 'white' : 'black', fontWeight:'bold', border:'none', cursor: 'pointer', fontSize:'1rem'}}>{tab.label}</button>
+                    ))}
                 </div>
                 
-                {cmd.commentaire && <div style={{background: COLORS.warning, color:'white', padding:'8px', borderRadius:'8px', fontSize:'0.9rem', fontWeight:'bold', marginBottom:'10px'}}>📝 {cmd.commentaire}</div>}
-                
-                <ul style={{listStyle:'none', padding:0, marginBottom:'15px'}}>
-                  {cmd.items?.map((it, i) => (
-                    <li key={i} style={{padding:'5px 0', borderBottom:'1px dashed #eee', display:'flex', justifyContent:'space-between'}}>
-                      <span><strong>{it.nom}</strong> <span style={{fontSize:'0.8rem', color:'#666'}}>{it.varianteNom ? `(${it.varianteNom})` : ''}</span></span>
-                      <span>{it.prixFinal} DH</span>
-                    </li>
-                  ))}
-                </ul>
-
-                <div style={{display:'flex', gap:'10px'}}>
-                  {cmd.status !== 'Terminé' && cmd.status !== 'Annulé' && <button onClick={()=>changerStatus(cmd.id, 'Terminé')} style={{flex:1, padding:'10px', background: COLORS.success, color:'white', border:'none', borderRadius:'8px', fontWeight:'bold'}}>✅ SERVI</button>}
-                  {cmd.status !== 'Annulé' && <button onClick={()=>changerStatus(cmd.id, 'Annulé')} style={{flex:1, padding:'10px', background: COLORS.danger, color:'white', border:'none', borderRadius:'8px', fontWeight:'bold'}}>❌ ANNULER</button>}
-                  <button onClick={()=>supprimerCmd(cmd.id)} style={{padding:'10px', background:'#fee2e2', color:'red', border:'none', borderRadius:'8px'}}>🗑️</button>
+                <div style={{display:'flex', gap:'10px', marginBottom:'20px'}}>
+                    <input type="text" placeholder={`Ajouter dans ${STOCK_TABS.find(t=>t.id===activeStockTab).label}...`} value={newItemName} onChange={(e) => setNewItemName(e.target.value)} style={{flex:1, padding:'12px', borderRadius:'8px', border:'1px solid #ddd', fontSize:'1rem'}} />
+                    <button onClick={addNewStockItem} style={{padding:'12px 20px', background:COLORS.success, color:'white', border:'none', borderRadius:'8px', fontWeight:'bold', cursor:'pointer'}}>Ajouter</button>
                 </div>
-              </div>
-            ))}
+
+                <div style={{display:'flex', flexWrap:'wrap', gap:'10px'}}>
+                    {parametres.stocks[activeStockTab] && parametres.stocks[activeStockTab].map((item, index) => (
+                        <button key={index} onClick={() => toggleStockItem(activeStockTab, index)} style={{padding:'12px 20px', borderRadius:'25px', cursor:'pointer', fontWeight:'bold', background: item.available ? COLORS.success : '#fef2f2', color: item.available ? 'white' : COLORS.danger, border: item.available ? 'none' : `1px solid ${COLORS.danger}`, fontSize:'1rem', boxShadow:'0 2px 4px rgba(0,0,0,0.1)'}}>
+                            {item.nom} {item.available ? '✅' : '❌'}
+                        </button>
+                    ))}
+                </div>
           </div>
 
-          <h3 style={{marginBottom:'15px'}}>📦 Gestion du Menu</h3>
+          <h3 style={{marginBottom:'15px'}}>📦 Gestion de la Carte (Produits)</h3>
           <div style={{background:'white', padding:'20px', borderRadius:'15px'}}>
              <div style={{ overflowX: 'auto', display:'flex', gap:'10px', paddingBottom:'15px', marginBottom:'15px' }}>
-              {Array.isArray(menu) && [...new Set(menu.map(p=>p.categorie))].map(c => <button key={c} onClick={() => setAdminCategorie(c)} style={{padding:'8px 15px', borderRadius:'20px', border:'none', background: adminCategorie===c?COLORS.secondary:'#eee', color:adminCategorie===c?'white':'black', cursor:'pointer', whiteSpace:'nowrap'}}>{c}</button>)}
+              {TOUTES_CATEGORIES.map(c => <button key={c} onClick={() => setAdminCategorie(c)} style={{padding:'10px 20px', borderRadius:'20px', border:'none', background: adminCategorie===c?COLORS.secondary:'#eee', color:adminCategorie===c?'white':'black', cursor:'pointer', fontWeight:'bold'}}>{c}</button>)}
              </div>
 
              {menu.filter(p => p.categorie === adminCategorie).map(p => (
-              <div key={p.id} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px', borderBottom:'1px solid #f0f0f0', background: p.available === false ? '#FFF5F5' : 'white'}}>
-                <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
-                  <button onClick={() => toggleAvailability(p)} style={{padding:'5px 10px', border:'none', borderRadius:'5px', background:p.available?COLORS.success:'#ccc', color:'white'}}>{p.available ? 'ON' : 'OFF'}</button>
-                  <div style={{fontWeight:'bold', textDecoration: p.available === false ? 'line-through' : 'none'}}>{p.nom} - {p.variantes?.length>0 ? 'Multi' : p.prix+' DH'}</div>
+              <div key={p.id} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'15px', borderBottom:'1px solid #f0f0f0', background: p.available === false ? '#FFF5F5' : 'white'}}>
+                <div style={{display:'flex', alignItems:'center', gap:'15px'}}>
+                  <button onClick={() => toggleAvailability(p)} style={{padding:'8px 15px', border:'none', borderRadius:'8px', background:p.available?COLORS.success:COLORS.danger, color:'white', fontWeight:'bold', cursor:'pointer'}}>{p.available ? 'EN LIGNE' : 'RUPTURE'}</button>
+                  <div style={{fontWeight:'bold', fontSize:'1.1rem', textDecoration: p.available === false ? 'line-through' : 'none'}}>{p.nom} <span style={{color:COLORS.textLight, fontWeight:'normal'}}>- {p.variantes?.length>0 ? 'Multi-tailles' : p.prix+' DH'}</span></div>
                 </div>
-                <div style={{display:'flex', gap:'10px'}}>
-                    <button onClick={() => {setEditId(p.id); setFormProd({nom: p.nom, description: p.description||'', categorie: p.categorie, prixBase: p.prix, variantes: p.variantes||[]}); window.scrollTo(0,0);}} style={{border:'none', background:'transparent', fontSize:'1.2rem', cursor:'pointer'}}>✏️</button>
-                    <button onClick={()=>supprimerProduit(p.id)} style={{color:'red', border:'none', background:'transparent', cursor:'pointer'}}>X</button>
+                <div style={{display:'flex', gap:'15px'}}>
+                    <button onClick={() => {setEditId(p.id); setFormProd({nom: p.nom, description: p.description||'', categorie: p.categorie, prixBase: p.prix, variantes: p.variantes||[]}); window.scrollTo(0,0);}} style={{border:'none', background:'#f0f2f5', padding:'8px 12px', borderRadius:'8px', fontSize:'1.1rem', cursor:'pointer'}}>✏️ Modifier</button>
+                    <button onClick={()=>supprimerProduit(p.id)} style={{color:'white', border:'none', background:COLORS.danger, padding:'8px 12px', borderRadius:'8px', cursor:'pointer', fontWeight:'bold'}}>X</button>
                 </div>
               </div>
             ))}
+          </div>
+
+          <div style={{marginTop:'30px', background:'white', padding:'25px', borderRadius:'15px', boxShadow:'0 4px 6px rgba(0,0,0,0.05)'}}>
+             <h3 style={{marginTop:0}}>{editId ? '✏️ Mettre à jour le produit' : '➕ Ajouter un Produit'}</h3>
+             <div style={{display:'flex', flexDirection:'column', gap:'15px'}}>
+                 <input placeholder="Nom du produit" value={formProd.nom} onChange={e=>setFormProd({...formProd, nom: e.target.value})} style={{padding:'12px', borderRadius:'8px', border:'1px solid #ddd', fontSize:'1rem'}} />
+                 <select value={formProd.categorie} onChange={e=>setFormProd({...formProd, categorie: e.target.value})} style={{padding:'12px', borderRadius:'8px', border:'1px solid #ddd', fontSize:'1rem'}}>
+                     {TOUTES_CATEGORIES.map(cat => <option key={cat}>{cat}</option>)}
+                 </select>
+                 <input type="number" placeholder="Prix (ex: 45)" value={formProd.prixBase} onChange={e=>setFormProd({...formProd, prixBase: e.target.value})} style={{padding:'12px', borderRadius:'8px', border:'1px solid #ddd', fontSize:'1rem'}} />
+                 <div style={{display:'flex', gap:'10px'}}>
+                    <button onClick={saveProduit} style={{flex:1, padding:'15px', background:COLORS.primary, color:'white', border:'none', borderRadius:'10px', fontSize:'1.1rem', fontWeight:'bold', cursor:'pointer'}}>{editId ? 'Enregistrer les modifications' : 'Ajouter à la carte'}</button>
+                    {editId && <button onClick={() => {setEditId(null); setFormProd({nom:'', description:'', categorie:'Burgers', prixBase:'', variantes:[]});}} style={{padding:'15px 25px', background:'#9CA3AF', color:'white', border:'none', borderRadius:'10px', fontSize:'1.1rem', fontWeight:'bold', cursor:'pointer'}}>Annuler</button>}
+                 </div>
+             </div>
           </div>
       </div>
     </div>
   );
 }
 
-// STYLES D'IMPRESSION (À ajouter manuellement dans ton App.css si le JS ne suffit pas, mais géré ici)
 const printStyles = `
   @media print {
     .no-print { display: none !important; }
