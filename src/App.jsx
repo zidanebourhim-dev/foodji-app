@@ -12,7 +12,7 @@ const INIT_SAUCES = [{ nom: "Algérienne", available: true }, { nom: "Biggy", av
 const INIT_PATES = [{ nom: "Penne", available: true }, { nom: "Tagliatelle", available: true }, { nom: "Spaghetti", available: true }];
 const INIT_TAILLES_PIZZA = [{ nom: "M", available: true }, { nom: "L", available: true }];
 
-// PURGE DES CATÉGORIES : Strictement ce que tu vends
+// PURGE STRICTE DES CATÉGORIES
 const TOUTES_CATEGORIES = ["Tacos", "Pizzas", "Burgers", "Pâtes", "Sides", "Boissons"];
 
 const STOCK_TABS = [
@@ -141,7 +141,7 @@ function FoodjiSystem() {
           commentaire: posNote,
           items: posCart,
           total: totalCart,
-          status: "Terminé", // En POS, on sert souvent direct ou on donne un biper. On peut mettre "En attente" si tu as un écran cuisine.
+          status: "Terminé", 
           methodePaiement: methodePaiement,
           date: new Date()
       };
@@ -149,8 +149,15 @@ function FoodjiSystem() {
       try {
           const docRef = await addDoc(collection(db, "commandes"), newCmd);
           newCmd.id = docRef.id;
+          
+          // Déclenchement de l'impression
           setOrderToPrint(newCmd);
-          setTimeout(() => { window.print(); setOrderToPrint(null); }, 500);
+          setTimeout(() => { 
+              window.print(); 
+              // On attend un peu après l'ordre d'impression avant d'effacer le ticket de l'écran
+              setTimeout(() => setOrderToPrint(null), 1000);
+          }, 500);
+          
           setPosCart([]); setPosPhone(''); setPosNote(''); setPosClientName('Client Comptoir');
       } catch(e) { alert("Erreur création commande."); }
       setLoading(false);
@@ -185,15 +192,18 @@ function FoodjiSystem() {
 
   const renderTickets = () => {
       if (!orderToPrint) return null;
-      const d = new Date(); const heure = `${d.getHours()}:${d.getMinutes().toString().padStart(2, '0')}`;
+      const d = new Date(); 
+      const heure = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+      
       return (
           <div className="print-only">
+              {/* TICKET CUISINE */}
               <div className="ticket-80mm">
-                  <h1 style={{textAlign:'center', fontSize:'24px', borderBottom:'2px solid black', paddingBottom:'10px'}}>CUISINE - #{orderToPrint.id.substring(0,4).toUpperCase()}</h1>
-                  <p style={{textAlign:'center', fontSize:'18px', fontWeight:'bold'}}>{orderToPrint.type === 'sur_place' ? 'SUR PLACE / EMPORTER' : 'LIVRAISON'}</p>
-                  <p style={{textAlign:'center'}}>{d.toLocaleDateString()} - {heure}</p>
+                  <h1 style={{textAlign:'center', fontSize:'24px', borderBottom:'2px solid black', paddingBottom:'10px', margin: '0 0 10px 0'}}>CUISINE - #{orderToPrint.id.substring(0,4).toUpperCase()}</h1>
+                  <p style={{textAlign:'center', fontSize:'18px', fontWeight:'bold', margin: '5px 0'}}>{orderToPrint.type === 'sur_place' ? 'SUR PLACE / EMPORTER' : 'LIVRAISON'}</p>
+                  <p style={{textAlign:'center', margin: '5px 0'}}>{d.toLocaleDateString()} - {heure}</p>
                   {orderToPrint.commentaire && <div style={{border:'2px dashed black', padding:'10px', margin:'10px 0', fontWeight:'bold', fontSize:'18px'}}>NOTE: {orderToPrint.commentaire}</div>}
-                  <ul style={{listStyle:'none', padding:0, marginTop:'20px'}}>
+                  <ul style={{listStyle:'none', padding:0, marginTop:'20px', margin:0}}>
                       {orderToPrint.items.map((it, i) => (
                           <li key={i} style={{fontSize:'16px', fontWeight:'bold', borderBottom:'1px dotted black', padding:'10px 0'}}>
                               <div>{it.nom}</div>
@@ -203,114 +213,118 @@ function FoodjiSystem() {
                       ))}
                   </ul>
               </div>
+
               <div className="page-break"></div>
+
+              {/* TICKET CLIENT */}
               <div className="ticket-80mm">
-                  <h1 style={{textAlign:'center', fontSize:'28px'}}>FOODJI</h1>
-                  <p style={{textAlign:'center', fontSize:'14px'}}>Sala Al Jadida</p>
-                  <p style={{textAlign:'center', fontSize:'14px'}}>Tél: 06 00 00 00 00</p>
-                  <hr style={{borderTop:'2px dashed black'}}/>
-                  <p>Date: {d.toLocaleDateString()} {heure}</p>
-                  <p>Client: {orderToPrint.client}</p>
-                  <hr style={{borderTop:'2px dashed black'}}/>
+                  <h1 style={{textAlign:'center', fontSize:'28px', margin: '0 0 5px 0'}}>FOODJI</h1>
+                  <p style={{textAlign:'center', fontSize:'14px', margin: '2px 0'}}>Sala Al Jadida</p>
+                  <p style={{textAlign:'center', fontSize:'14px', margin: '2px 0'}}>Tél: 06 00 00 00 00</p>
+                  <hr style={{borderTop:'2px dashed black', margin: '10px 0'}}/>
+                  <p style={{margin: '2px 0'}}>Date: {d.toLocaleDateString()} {heure}</p>
+                  <p style={{margin: '2px 0'}}>Client: {orderToPrint.client}</p>
+                  <hr style={{borderTop:'2px dashed black', margin: '10px 0'}}/>
                   <table style={{width:'100%', fontSize:'14px', marginBottom:'20px'}}>
                       <tbody>{orderToPrint.items.map((it, i) => (<tr key={i}><td style={{paddingTop:'5px'}}>{it.nom}</td><td style={{textAlign:'right', paddingTop:'5px'}}>{it.prixFinal} DH</td></tr>))}</tbody>
                   </table>
-                  <hr style={{borderTop:'2px dashed black'}}/>
-                  <h2 style={{textAlign:'right', fontSize:'24px'}}>TOTAL: {orderToPrint.total} DH</h2>
-                  <p style={{textAlign:'right', fontSize:'14px'}}>Paiement: {orderToPrint.methodePaiement || 'Non spécifié'}</p>
-                  <p style={{textAlign:'center', marginTop:'30px', fontWeight:'bold'}}>Merci de votre visite !</p>
+                  <hr style={{borderTop:'2px dashed black', margin: '10px 0'}}/>
+                  <h2 style={{textAlign:'right', fontSize:'24px', margin: '10px 0'}}>TOTAL: {orderToPrint.total} DH</h2>
+                  <p style={{textAlign:'right', fontSize:'14px', margin: '2px 0'}}>Paiement: {orderToPrint.methodePaiement || 'Non spécifié'}</p>
+                  <p style={{textAlign:'center', marginTop:'30px', fontWeight:'bold', margin: '30px 0 0 0'}}>Merci de votre visite !</p>
               </div>
           </div>
       );
   };
 
   // ==========================================
-  // CAISSE TACTILE (POS) - LAYOUT CORRIGÉ ET VERROUILLÉ
+  // CAISSE TACTILE (POS)
   // ==========================================
   if (appMode === 'POS') {
       return (
-          <div className="pos-container no-print" style={{display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', background: '#f0f2f5', fontFamily: 'sans-serif'}}>
+          <>
+              {/* Le rendu du ticket est SORTI de la div "no-print" pour ne plus être masqué par erreur */}
               {renderTickets()}
               
-              {/* COLONNE GAUCHE (MENU) : Prend tout l'espace libre, scrollable individuellement */}
-              <div style={{flex: 1, display: 'flex', flexDirection: 'column', padding: '10px', height: '100%', overflowY: 'auto'}}>
-                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', background:'white', padding:'15px', borderRadius:'10px', marginBottom:'10px', flexShrink: 0}}>
-                      <h2 style={{margin:0, color:COLORS.primary}}>🍔 Foodji POS</h2>
-                      <button onClick={()=>setAppMode('ADMIN')} style={{padding:'10px 20px', background:COLORS.secondary, color:'white', borderRadius:'8px', border:'none', cursor:'pointer'}}>Quitter Caisse</button>
-                  </div>
+              <div className="no-print" style={{display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', background: '#f0f2f5', fontFamily: 'sans-serif'}}>
                   
-                  <div style={{display:'flex', gap:'10px', overflowX:'auto', paddingBottom:'10px', marginBottom:'10px', flexShrink: 0, scrollbarWidth:'none'}}>
-                      {TOUTES_CATEGORIES.map(c => (
-                          <button key={c} onClick={()=>setPosCategory(c)} style={{padding:'15px 25px', fontSize:'1.1rem', fontWeight:'bold', borderRadius:'10px', border:'none', background: posCategory===c ? COLORS.primary : 'white', color: posCategory===c ? 'white' : 'black', cursor:'pointer', flexShrink:0, boxShadow:'0 2px 5px rgba(0,0,0,0.05)'}}>{c}</button>
-                      ))}
-                  </div>
+                  {/* COLONNE GAUCHE (MENU) */}
+                  <div style={{flex: 1, display: 'flex', flexDirection: 'column', padding: '10px', height: '100%', overflowY: 'auto'}}>
+                      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', background:'white', padding:'15px', borderRadius:'10px', marginBottom:'10px', flexShrink: 0}}>
+                          <h2 style={{margin:0, color:COLORS.primary}}>🍔 Foodji POS</h2>
+                          <button onClick={()=>setAppMode('ADMIN')} style={{padding:'10px 20px', background:COLORS.secondary, color:'white', borderRadius:'8px', border:'none', cursor:'pointer'}}>Quitter Caisse</button>
+                      </div>
+                      
+                      <div style={{display:'flex', gap:'10px', overflowX:'auto', paddingBottom:'10px', marginBottom:'10px', flexShrink: 0, scrollbarWidth:'none'}}>
+                          {TOUTES_CATEGORIES.map(c => (
+                              <button key={c} onClick={()=>setPosCategory(c)} style={{padding:'15px 25px', fontSize:'1.1rem', fontWeight:'bold', borderRadius:'10px', border:'none', background: posCategory===c ? COLORS.primary : 'white', color: posCategory===c ? 'white' : 'black', cursor:'pointer', flexShrink:0, boxShadow:'0 2px 5px rgba(0,0,0,0.05)'}}>{c}</button>
+                          ))}
+                      </div>
 
-                  <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(160px, 1fr))', gap:'10px'}}>
-                      {menu.filter(p => p.categorie === posCategory && p.available !== false).map(p => (
-                          <div key={p.id} style={{background:'white', borderRadius:'10px', overflow:'hidden', boxShadow:'0 2px 5px rgba(0,0,0,0.1)', cursor:'pointer', border:'2px solid transparent'}}>
-                              {p.variantes?.length > 0 ? (
-                                  <div style={{padding:'10px'}}>
-                                      <div style={{fontWeight:'bold', textAlign:'center', marginBottom:'10px', fontSize:'1.1rem'}}>{p.nom}</div>
-                                      <div style={{display:'flex', flexDirection:'column', gap:'5px'}}>
-                                          {p.variantes.filter(v=>v.available !== false).map((v, i) => (
-                                              <button key={i} onClick={()=>addToCart(p, v)} style={{padding:'10px', background:'#f8f9fa', border:'1px solid #ddd', borderRadius:'5px', fontWeight:'bold', cursor:'pointer'}}>{v.nom} <span style={{color:COLORS.primary}}>{v.prix}DH</span></button>
-                                          ))}
+                      <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(160px, 1fr))', gap:'10px'}}>
+                          {menu.filter(p => p.categorie === posCategory && p.available !== false).map(p => (
+                              <div key={p.id} style={{background:'white', borderRadius:'10px', overflow:'hidden', boxShadow:'0 2px 5px rgba(0,0,0,0.1)', cursor:'pointer', border:'2px solid transparent'}}>
+                                  {p.variantes?.length > 0 ? (
+                                      <div style={{padding:'10px'}}>
+                                          <div style={{fontWeight:'bold', textAlign:'center', marginBottom:'10px', fontSize:'1.1rem'}}>{p.nom}</div>
+                                          <div style={{display:'flex', flexDirection:'column', gap:'5px'}}>
+                                              {p.variantes.filter(v=>v.available !== false).map((v, i) => (
+                                                  <button key={i} onClick={()=>addToCart(p, v)} style={{padding:'10px', background:'#f8f9fa', border:'1px solid #ddd', borderRadius:'5px', fontWeight:'bold', cursor:'pointer'}}>{v.nom} <span style={{color:COLORS.primary}}>{v.prix}DH</span></button>
+                                              ))}
+                                          </div>
                                       </div>
-                                  </div>
-                              ) : (
-                                  <div onClick={()=>addToCart(p)} style={{padding:'20px 10px', textAlign:'center', height:'100%', display:'flex', flexDirection:'column', justifyContent:'center'}}>
-                                      <div style={{fontWeight:'bold', fontSize:'1.1rem'}}>{p.nom}</div>
-                                      <div style={{color:COLORS.primary, fontWeight:'bold', marginTop:'5px', fontSize:'1.2rem'}}>{p.prix} DH</div>
-                                  </div>
-                              )}
-                          </div>
-                      ))}
-                  </div>
-              </div>
-
-              {/* COLONNE DROITE (PANIER) : Largeur FIXE, hauteur 100%, impossible à écraser */}
-              <div style={{width: '400px', flexShrink: 0, background: 'white', display: 'flex', flexDirection: 'column', height: '100%', borderLeft: '2px solid #ddd', boxShadow: '-5px 0 15px rgba(0,0,0,0.05)'}}>
-                  
-                  {/* Entête du panier */}
-                  <div style={{padding:'15px', borderBottom:'1px solid #eee', background:COLORS.secondary, color:'white', flexShrink: 0}}>
-                      <input type="text" placeholder="Nom Client (ex: Salle / Ali)" value={posClientName} onChange={e=>setPosClientName(e.target.value)} style={{width:'100%', padding:'12px', borderRadius:'8px', border:'none', marginBottom:'10px', fontSize:'1rem', boxSizing:'border-box'}}/>
-                      <input type="tel" placeholder="N° Tél (Optionnel)" value={posPhone} onChange={e=>setPosPhone(e.target.value)} style={{width:'100%', padding:'12px', borderRadius:'8px', border:'none', fontSize:'1rem', boxSizing:'border-box'}}/>
-                  </div>
-
-                  {/* Liste des articles du panier : C'EST LA SEULE PARTIE QUI SCROLLE ICI */}
-                  <div style={{flex: 1, overflowY: 'auto', padding: '10px'}}>
-                      {posCart.length === 0 ? <div style={{textAlign:'center', color:'#999', marginTop:'50px', fontSize:'1.2rem'}}>Panier vide</div> : null}
-                      {posCart.map(item => (
-                          <div key={item.idCart} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px', borderBottom:'1px dashed #ddd', background:'#fafafa', borderRadius:'8px', marginBottom:'5px'}}>
-                              <div style={{fontWeight:'bold', fontSize:'1.1rem'}}>{item.nom}</div>
-                              <div style={{display:'flex', alignItems:'center', gap:'15px'}}>
-                                  <span style={{fontWeight:'bold', color:COLORS.primary}}>{item.prixFinal} DH</span>
-                                  <button onClick={()=>removeFromCart(item.idCart)} style={{background:'#fee2e2', color:'red', border:'none', padding:'8px 12px', borderRadius:'5px', cursor:'pointer', fontWeight:'bold'}}>X</button>
+                                  ) : (
+                                      <div onClick={()=>addToCart(p)} style={{padding:'20px 10px', textAlign:'center', height:'100%', display:'flex', flexDirection:'column', justifyContent:'center'}}>
+                                          <div style={{fontWeight:'bold', fontSize:'1.1rem'}}>{p.nom}</div>
+                                          <div style={{color:COLORS.primary, fontWeight:'bold', marginTop:'5px', fontSize:'1.2rem'}}>{p.prix} DH</div>
+                                      </div>
+                                  )}
                               </div>
-                          </div>
-                      ))}
+                          ))}
+                      </div>
                   </div>
 
-                  {/* Boutons de validation : TOUJOURS VISIBLES EN BAS */}
-                  <div style={{padding: '20px', borderTop: '2px solid #eee', background: '#fff', flexShrink: 0}}>
-                      <textarea placeholder="Note cuisine (ex: Sans frites)" value={posNote} onChange={e=>setPosNote(e.target.value)} style={{width:'100%', padding:'10px', borderRadius:'8px', border:'1px solid #ddd', marginBottom:'15px', resize:'none', boxSizing:'border-box'}}/>
-                      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'15px', fontSize:'1.8rem', fontWeight:'bold'}}>
-                          <span>TOTAL</span>
-                          <span style={{color:COLORS.primary}}>{totalCart} DH</span>
+                  {/* COLONNE DROITE (PANIER) */}
+                  <div style={{width: '400px', flexShrink: 0, background: 'white', display: 'flex', flexDirection: 'column', height: '100%', borderLeft: '2px solid #ddd', boxShadow: '-5px 0 15px rgba(0,0,0,0.05)'}}>
+                      
+                      <div style={{padding:'15px', borderBottom:'1px solid #eee', background:COLORS.secondary, color:'white', flexShrink: 0}}>
+                          <input type="text" placeholder="Nom Client (ex: Salle / Ali)" value={posClientName} onChange={e=>setPosClientName(e.target.value)} style={{width:'100%', padding:'12px', borderRadius:'8px', border:'none', marginBottom:'10px', fontSize:'1rem', boxSizing:'border-box'}}/>
+                          <input type="tel" placeholder="N° Tél (Optionnel)" value={posPhone} onChange={e=>setPosPhone(e.target.value)} style={{width:'100%', padding:'12px', borderRadius:'8px', border:'none', fontSize:'1rem', boxSizing:'border-box'}}/>
                       </div>
-                      <div style={{display:'flex', gap:'10px', marginBottom:'10px'}}>
-                          <button onClick={()=>validerCommandePOS('Espèces')} disabled={loading || posCart.length===0} style={{flex:1, padding:'20px 10px', background:COLORS.success, color:'white', border:'none', borderRadius:'10px', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer', opacity: posCart.length===0?0.5:1}}>💵 ESPÈCES</button>
-                          <button onClick={()=>validerCommandePOS('TPE')} disabled={loading || posCart.length===0} style={{flex:1, padding:'20px 10px', background:'#3B82F6', color:'white', border:'none', borderRadius:'10px', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer', opacity: posCart.length===0?0.5:1}}>💳 TPE</button>
+
+                      <div style={{flex: 1, overflowY: 'auto', padding: '10px'}}>
+                          {posCart.length === 0 ? <div style={{textAlign:'center', color:'#999', marginTop:'50px', fontSize:'1.2rem'}}>Panier vide</div> : null}
+                          {posCart.map(item => (
+                              <div key={item.idCart} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px', borderBottom:'1px dashed #ddd', background:'#fafafa', borderRadius:'8px', marginBottom:'5px'}}>
+                                  <div style={{fontWeight:'bold', fontSize:'1.1rem'}}>{item.nom}</div>
+                                  <div style={{display:'flex', alignItems:'center', gap:'15px'}}>
+                                      <span style={{fontWeight:'bold', color:COLORS.primary}}>{item.prixFinal} DH</span>
+                                      <button onClick={()=>removeFromCart(item.idCart)} style={{background:'#fee2e2', color:'red', border:'none', padding:'8px 12px', borderRadius:'5px', cursor:'pointer', fontWeight:'bold'}}>X</button>
+                                  </div>
+                              </div>
+                          ))}
                       </div>
-                      <button onClick={()=>setPosCart([])} style={{width:'100%', padding:'15px', background:'#fee2e2', color:'red', border:'none', borderRadius:'10px', fontWeight:'bold', cursor:'pointer', fontSize:'1rem'}}>🗑️ Vider le panier</button>
+
+                      <div style={{padding: '20px', borderTop: '2px solid #eee', background: '#fff', flexShrink: 0}}>
+                          <textarea placeholder="Note cuisine (ex: Sans frites)" value={posNote} onChange={e=>setPosNote(e.target.value)} style={{width:'100%', padding:'10px', borderRadius:'8px', border:'1px solid #ddd', marginBottom:'15px', resize:'none', boxSizing:'border-box'}}/>
+                          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'15px', fontSize:'1.8rem', fontWeight:'bold'}}>
+                              <span>TOTAL</span>
+                              <span style={{color:COLORS.primary}}>{totalCart} DH</span>
+                          </div>
+                          <div style={{display:'flex', gap:'10px', marginBottom:'10px'}}>
+                              <button onClick={()=>validerCommandePOS('Espèces')} disabled={loading || posCart.length===0} style={{flex:1, padding:'20px 10px', background:COLORS.success, color:'white', border:'none', borderRadius:'10px', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer', opacity: posCart.length===0?0.5:1}}>💵 ESPÈCES</button>
+                              <button onClick={()=>validerCommandePOS('TPE')} disabled={loading || posCart.length===0} style={{flex:1, padding:'20px 10px', background:'#3B82F6', color:'white', border:'none', borderRadius:'10px', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer', opacity: posCart.length===0?0.5:1}}>💳 TPE</button>
+                          </div>
+                          <button onClick={()=>setPosCart([])} style={{width:'100%', padding:'15px', background:'#fee2e2', color:'red', border:'none', borderRadius:'10px', fontWeight:'bold', cursor:'pointer', fontSize:'1rem'}}>🗑️ Vider le panier</button>
+                      </div>
                   </div>
               </div>
-          </div>
+          </>
       );
   }
 
   // ==========================================
-  // RENDU ADMIN & STOCKS (Affichés en grand, fini le menu caché)
+  // RENDU ADMIN & STOCKS 
   // ==========================================
   const zData = genererZDeCaisse();
 
@@ -345,7 +359,60 @@ function FoodjiSystem() {
               </div>
           )}
 
-          {/* GESTION DES STOCKS : AFFICHÉE EN GRAND, COMME DANS LE SYSTÈME EXCELLENT D'AVANT */}
+          {/* STATUS BOUTIQUE */}
+          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(250px, 1fr))', gap:'20px', marginBottom:'30px'}}>
+            <div style={{background: 'white', padding: '20px', borderRadius: '16px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', textAlign:'center'}}>
+                <h3 style={{marginTop:0, marginBottom:'15px', fontSize:'1rem'}}>Service Client</h3>
+                <button onClick={() => updateDoc(doc(db, "parametres", "horaires"), { isOuvert: !parametres.isOuvert })} style={{width:'100%', padding:'15px', borderRadius:'10px', border: parametres.isOuvert ? `2px solid ${COLORS.success}` : '1px solid #ddd', background: parametres.isOuvert ? '#ECFDF5' : 'white', color: parametres.isOuvert ? COLORS.success : 'black', fontWeight:'bold', cursor:'pointer'}}>
+                    {parametres.isOuvert ? '🟢 OUVERT' : '🔴 FERMÉ'}
+                </button>
+            </div>
+            <div style={{background: 'white', padding: '20px', borderRadius: '16px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', textAlign:'center'}}>
+                <h3 style={{marginTop:0, marginBottom:'15px', fontSize:'1rem'}}>Mode Rush</h3>
+                <select value={parametres.rushMode} onChange={(e) => updateDoc(doc(db, "parametres", "status"), { mode: e.target.value })} style={{width:'100%', padding:'15px', borderRadius:'10px', border:'1px solid #ddd', fontSize:'1rem'}}>
+                    <option value="standard">✅ Standard</option>
+                    <option value="rush">⚠️ Rush (30min+)</option>
+                    <option value="gros_rush">🔥 Gros Rush (1h+)</option>
+                </select>
+            </div>
+          </div>
+
+          <h3 style={{marginBottom:'15px'}}>Commandes Web & App ({commandes.filter(c => c.status !== 'Terminé' && c.status !== 'Annulé').length})</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '20px', marginBottom:'40px' }}>
+            {commandes.slice(0, 50).map(cmd => (
+              <div key={cmd.id} style={{ background:'white', borderRadius:'16px', padding:'15px', borderLeft: cmd.status === 'Terminé' ? '5px solid #ccc' : (cmd.status === 'Annulé' ? `5px solid ${COLORS.danger}` : `5px solid ${COLORS.success}`), opacity: cmd.status === 'Annulé' ? 0.6 : 1 }}>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'start', borderBottom:'1px solid #f0f0f0', paddingBottom:'10px', marginBottom:'10px'}}>
+                  <div>
+                      <strong style={{fontSize:'1.2rem'}}>{cmd.client || 'Client'}</strong>
+                      <div style={{color: COLORS.textLight}}>📞 {cmd.tel || 'N/A'}</div>
+                      <div style={{fontSize:'0.8rem', color: '#666'}}>{cmd.methodePaiement ? `💳 ${cmd.methodePaiement}` : '🌐 App/Web'}</div>
+                  </div>
+                  <div style={{textAlign:'right'}}>
+                    <div style={{fontSize:'1.3rem', fontWeight:'bold', color: COLORS.primary}}>{cmd.total} DH</div>
+                    <div style={{fontSize:'0.8rem', color:cmd.status==='Annulé'?'red':'#666'}}>{cmd.status}</div>
+                  </div>
+                </div>
+                
+                {cmd.commentaire && <div style={{background: COLORS.warning, color:'white', padding:'8px', borderRadius:'8px', fontSize:'0.9rem', fontWeight:'bold', marginBottom:'10px'}}>📝 {cmd.commentaire}</div>}
+                
+                <ul style={{listStyle:'none', padding:0, marginBottom:'15px'}}>
+                  {cmd.items?.map((it, i) => (
+                    <li key={i} style={{padding:'5px 0', borderBottom:'1px dashed #eee', display:'flex', justifyContent:'space-between'}}>
+                      <span><strong>{it.nom}</strong> <span style={{fontSize:'0.8rem', color:'#666'}}>{it.varianteNom ? `(${it.varianteNom})` : ''}</span></span>
+                      <span>{it.prixFinal} DH</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <div style={{display:'flex', gap:'10px'}}>
+                  {cmd.status !== 'Terminé' && cmd.status !== 'Annulé' && <button onClick={()=>changerStatus(cmd.id, 'Terminé')} style={{flex:1, padding:'10px', background: COLORS.success, color:'white', border:'none', borderRadius:'8px', fontWeight:'bold'}}>✅ SERVI</button>}
+                  {cmd.status !== 'Annulé' && <button onClick={()=>changerStatus(cmd.id, 'Annulé')} style={{flex:1, padding:'10px', background: COLORS.danger, color:'white', border:'none', borderRadius:'8px', fontWeight:'bold'}}>❌ ANNULER</button>}
+                  <button onClick={()=>supprimerCmd(cmd.id)} style={{padding:'10px', background:'#fee2e2', color:'red', border:'none', borderRadius:'8px'}}>🗑️</button>
+                </div>
+              </div>
+            ))}
+          </div>
+
           <div style={{background:'white', padding:'25px', borderRadius:'15px', marginBottom:'40px', border:`2px solid ${COLORS.primary}`}}>
                 <h3 style={{marginTop:0, color: COLORS.primary, fontSize:'1.3rem'}}>🥕 GESTION RAPIDE DES STOCKS (RUPTURES)</h3>
                 <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '10px', display:'flex', gap:'10px', marginBottom:'20px', scrollbarWidth:'none' }}>
@@ -407,15 +474,39 @@ function FoodjiSystem() {
   );
 }
 
+// ==========================================
+// CSS STRIQUE D'IMPRESSION (CORRIGE L'ECRAN BLANC)
+// ==========================================
 const printStyles = `
   @media print {
-    .no-print { display: none !important; }
-    .print-only { display: block !important; width: 80mm; font-family: 'Courier New', monospace; color: black; background: white; padding: 0; margin: 0; }
+    @page { margin: 0; size: 80mm auto; }
+    body, html, #root {
+      background: white !important;
+      height: auto !important;
+      min-height: auto !important;
+      overflow: visible !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+    .no-print { 
+      display: none !important; 
+    }
+    .print-only { 
+      display: block !important; 
+      position: absolute !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 80mm !important;
+      color: black !important;
+      background: white !important;
+      font-family: 'Courier New', monospace;
+    }
     .ticket-80mm { width: 75mm; margin: 0 auto; padding-bottom: 20px; }
     .page-break { page-break-after: always; }
-    body, html { background: white; width: 80mm; margin: 0; padding: 0; }
   }
-  @media screen { .print-only { display: none !important; } }
+  @media screen { 
+    .print-only { display: none !important; } 
+  }
 `;
 
 export default function App() { 
