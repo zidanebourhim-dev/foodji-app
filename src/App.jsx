@@ -12,10 +12,14 @@ const INIT_SAUCES = [{ nom: "Algérienne", available: true }, { nom: "Biggy", av
 const INIT_PATES = [{ nom: "Penne", available: true }, { nom: "Tagliatelle", available: true }, { nom: "Spaghetti", available: true }];
 const INIT_TAILLES_PIZZA = [{ nom: "M", available: true }, { nom: "L", available: true }];
 
-const TOUTES_CATEGORIES = ["Tacos", "Pizzas", "Burgers", "Panuozzo", "Pâtes", "Sides", "Les Burritos", "Koniks", "Plats", "Salades", "Boissons"];
+const TOUTES_CATEGORIES = ["Tacos", "Pizzas", "Burgers", "Panuozzo", "Pâtes", "Sides", "Les Burritos", "Koniks", "Plats", "Salades", "Boissons", "Suppléments"];
 const STOCK_TABS = [{ id: 'viandes', label: '🌮 Viandes' }, { id: 'garnitures', label: '🍕 Garnitures' }, { id: 'sauces', label: '🥣 Sauces' }, { id: 'pates', label: '🍝 Pâtes' }, { id: 'tailles_pizza', label: '📏 Tailles Pizza' }];
 const CAISSIERES = ["Rim", "Amal", "Manager"];
 const NOTIF_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
+
+// TARIFS DES EXTRAS CODÉS EN DUR SELON TES RÈGLES
+const PIZZA_EXTRAS_BASE = { "Champignons": 10, "Mozzarella": 10, "Parmesan": 15, "Cheddar": 15 };
+const TACOS_EXTRAS = { "Sauce Fromagère": 10, "Supplément Cheddar": 7, "Supplément Mozzarella": 7, "Gratinage": 7 };
 
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { hasError: false, errorMsg: '' }; }
@@ -35,7 +39,6 @@ function FoodjiSystem() {
   const [commandes, setCommandes] = useState([]);
   const [parametres, setParametres] = useState({ isOuvert: true, rushMode: 'standard', stocks: { viandes: INIT_VIANDES, garnitures: INIT_GARNITURES_PIZZA, sauces: INIT_SAUCES, pates: INIT_PATES, tailles_pizza: INIT_TAILLES_PIZZA } });
   
-  // SESSIONS & Z
   const [sessionCaisse, setSessionCaisse] = useState({ isActive: false, caissiere: '', startTime: null });
   const [serviceGlobal, setServiceGlobal] = useState({ lastZDate: null });
   
@@ -56,13 +59,13 @@ function FoodjiSystem() {
   const [remiseGlobale, setRemiseGlobale] = useState(0);
   
   const [orderToPrint, setOrderToPrint] = useState(null);
-  const [customizeItem, setCustomizeItem] = useState(null); 
-  const [selectedOptions, setSelectedOptions] = useState([]);
-
-  // NUMPAD & MODALS
   const [numpad, setNumpad] = useState({ active: false, mode: '', targetId: null, label: '', value: '' });
-  const [showBilanPos, setShowBilanPos] = useState(false); // Bilan du shift (X)
-  const [showBilanGlobal, setShowBilanGlobal] = useState(false); // Bilan de la journée (Z)
+  const [showBilanPos, setShowBilanPos] = useState(false); 
+  const [showBilanGlobal, setShowBilanGlobal] = useState(false); 
+
+  // ETAT COMPLEXE DE PERSONNALISATION
+  const [customizeItem, setCustomizeItem] = useState(null); 
+  const [customOptions, setCustomOptions] = useState({ garnitures: [], sauces: [], viandes: [], extras: [], cheesyCrust: false });
 
   const prevCommandesLength = useRef(0);
   const audioRef = useRef(null);
@@ -86,14 +89,10 @@ function FoodjiSystem() {
         if (s.exists()) setParametres(prev => ({...prev, stocks: s.data()}));
         else setDoc(doc(db, "parametres", "stocks"), parametres.stocks);
     });
-    
-    // Écoute du Shift en cours (X)
     const unsubSession = onSnapshot(doc(db, "parametres", "session_caisse"), (s) => {
         if (s.exists()) setSessionCaisse(s.data());
         else setDoc(doc(db, "parametres", "session_caisse"), { isActive: false, caissiere: '', startTime: null });
     });
-
-    // Écoute du Point Zéro global de la journée (Z)
     const unsubServiceGlobal = onSnapshot(doc(db, "parametres", "service_global"), (s) => {
         if (s.exists()) setServiceGlobal(s.data());
         else setDoc(doc(db, "parametres", "service_global"), { lastZDate: new Date() });
@@ -130,20 +129,25 @@ function FoodjiSystem() {
   const changerStatus = async (id, st) => await updateDoc(doc(db, "commandes", id), { status: st });
   const supprimerCmd = async (id) => confirm("Supprimer commande ?") && await deleteDoc(doc(db, "commandes", id));
   
+  const handleCategoryChange = (e) => {
+      const cat = e.target.value;
+      let vars = [];
+      if (cat === 'Tacos') vars = [{nom: 'L', prix: '', available: true}, {nom: 'XL', prix: '', available: true}, {nom: 'XXL', prix: '', available: true}];
+      else if (cat === 'Pizzas') vars = [{nom: 'M', prix: '', available: true}, {nom: 'L', prix: '', available: true}];
+      setFormProd({...formProd, categorie: cat, variantes: vars, prixBase: ''});
+  };
+
   const saveProduit = async () => {
     if(!formProd.nom) return; setLoading(true);
     const data = { nom: formProd.nom, description: formProd.description, categorie: formProd.categorie, prix: formProd.variantes.length > 0 ? 0 : Number(formProd.prixBase), variantes: formProd.variantes, available: true, date: new Date() };
     if(formProd.image) data.image = formProd.image;
     if (editId) { await updateDoc(doc(db, "produits", editId), data); alert("Modifié !"); setEditId(null); } else { await addDoc(collection(db, "produits"), data); alert("Ajouté !"); }
-    setFormProd({ nom: '', description: '', image: '', categorie: 'Panuozzo', prixBase: '', variantes: [] }); setLoading(false);
+    setFormProd({ nom: '', description: '', image: '', categorie: 'Burgers', prixBase: '', variantes: [] }); setLoading(false);
   };
 
-  // --- GESTION DES SESSIONS ET DU Z ---
-  const ouvrirCaisse = async (nomCaissiere) => {
-      await updateDoc(doc(db, "parametres", "session_caisse"), { isActive: true, caissiere: nomCaissiere, startTime: new Date() });
-  };
+  // --- SESSIONS ---
+  const ouvrirCaisse = async (nomCaissiere) => await updateDoc(doc(db, "parametres", "session_caisse"), { isActive: true, caissiere: nomCaissiere, startTime: new Date() });
 
-  // Bilan du Shift Actuel (Le X)
   const genererBilanShift = () => {
       if (!sessionCaisse.startTime) return null;
       const startT = sessionCaisse.startTime.seconds ? new Date(sessionCaisse.startTime.seconds * 1000) : new Date(sessionCaisse.startTime);
@@ -151,7 +155,6 @@ function FoodjiSystem() {
           const d = c.date?.seconds ? new Date(c.date.seconds * 1000) : new Date(c.date);
           return d >= startT && c.status !== 'Refusé' && c.status !== 'Annulé' && c.caissiere === sessionCaisse.caissiere;
       });
-
       let totalEspeces = 0, totalTPE = 0, totalDépenses = 0, totalLivrApp = 0;
       cmdsSession.forEach(c => {
           if (c.type === 'depense') totalDépenses += Math.abs(c.total);
@@ -159,17 +162,13 @@ function FoodjiSystem() {
           else if (c.methodePaiement === 'TPE') totalTPE += c.total;
           else totalLivrApp += c.total; 
       });
-
       return { startT, totalGeneral: (totalEspeces + totalTPE + totalLivrApp), totalEspeces, totalTPE, totalDépenses, totalLivrApp, netEnCaisse: (totalEspeces - totalDépenses), nbCommandes: cmdsSession.length };
   };
 
   const cloturerShift = async () => {
-      if (!confirm(`⚠️ Clôturer le shift de ${sessionCaisse.caissiere} ? (Cela n'efface pas les compteurs globaux de la journée)`)) return;
-      const bilan = genererBilanShift();
-      if (!bilan) return;
-
+      if (!confirm(`⚠️ Clôturer le shift de ${sessionCaisse.caissiere} ? (N'efface pas les compteurs de la journée)`)) return;
+      const bilan = genererBilanShift(); if (!bilan) return;
       const xData = { isX: true, caissiere: sessionCaisse.caissiere, date: new Date(), ...bilan };
-      
       setOrderToPrint(xData);
       setTimeout(async () => { 
           window.print(); 
@@ -178,17 +177,13 @@ function FoodjiSystem() {
       }, 500);
   };
 
-  // Bilan Global depuis le dernier Z
   const genererBilanGlobalZ = () => {
       if (!serviceGlobal.lastZDate) return null;
       const startT = serviceGlobal.lastZDate.seconds ? new Date(serviceGlobal.lastZDate.seconds * 1000) : new Date(serviceGlobal.lastZDate);
-      
       const cmdsZ = commandes.filter(c => {
           const d = c.date?.seconds ? new Date(c.date.seconds * 1000) : new Date(c.date);
-          // On filtre strictement toutes les commandes DEPUIS le dernier Z
           return d >= startT && c.status !== 'Refusé' && c.status !== 'Annulé';
       });
-
       let totalEspeces = 0, totalTPE = 0, totalDépenses = 0, totalLivrApp = 0;
       cmdsZ.forEach(c => {
           if (c.type === 'depense') totalDépenses += Math.abs(c.total);
@@ -196,59 +191,99 @@ function FoodjiSystem() {
           else if (c.methodePaiement === 'TPE') totalTPE += c.total;
           else totalLivrApp += c.total; 
       });
-
       return { startT, totalGeneral: (totalEspeces + totalTPE + totalLivrApp), totalEspeces, totalTPE, totalDépenses, totalLivrApp, netEnCaisse: (totalEspeces - totalDépenses), nbCommandes: cmdsZ.length };
   };
 
   const cloturerZDefinitif = async () => {
-      if (!confirm("⚠️ ATTENTION : Cela va imprimer le bilan final et REMETTRE TOUS LES COMPTEURS À ZÉRO pour le lendemain. Tu confirmes ?")) return;
-      const bilan = genererBilanGlobalZ();
-      if(!bilan) return;
-
+      if (!confirm("⚠️ ATTENTION : Cela va imprimer le bilan final et REMETTRE TOUS LES COMPTEURS À ZÉRO. Confirmer ?")) return;
+      const bilan = genererBilanGlobalZ(); if(!bilan) return;
       const now = new Date();
       const zData = { isZ: true, date: now, ...bilan };
-      
       setOrderToPrint(zData);
       setTimeout(async () => { 
           window.print(); 
-          // C'est ICI qu'on remet à Zéro pour le lendemain :
           await updateDoc(doc(db, "parametres", "service_global"), { lastZDate: now });
-          // Si un shift était en cours, on le ferme de force
-          if(sessionCaisse.isActive) {
-              await updateDoc(doc(db, "parametres", "session_caisse"), { isActive: false, caissiere: '', startTime: null });
-          }
+          if(sessionCaisse.isActive) await updateDoc(doc(db, "parametres", "session_caisse"), { isActive: false, caissiere: '', startTime: null });
           setShowBilanGlobal(false);
           setTimeout(() => setOrderToPrint(null), 1000);
       }, 500);
   };
 
-  // --- LOGIQUE PANIER & CAISSE ---
+  // --- LOGIQUE PANIER & PERSONNALISATION ---
   const triggerAddToCart = (produit, variante = null) => {
-      const nomPizza = produit.nom.toLowerCase();
-      const isPizzaPersonnalisable = produit.categorie === 'Pizzas' && (nomPizza.includes('2 saisons') || nomPizza.includes('4 saisons') || nomPizza.includes('deux') || nomPizza.includes('quatre'));
-
-      if (produit.categorie === 'Tacos' || isPizzaPersonnalisable) {
+      if (produit.categorie === 'Tacos' || produit.categorie === 'Pizzas') {
           setCustomizeItem({ produit, variante });
-          setSelectedOptions([]); 
+          setCustomOptions({ garnitures: [], sauces: [], viandes: [], extras: [], cheesyCrust: false });
       } else {
-          addToCartFinal(produit, variante, []);
+          addToCartFinal(produit, variante, { garnitures: [], sauces: [], viandes: [], extras: [], cheesyCrust: false });
       }
   };
 
-  const toggleOption = (optName) => {
-      if (selectedOptions.includes(optName)) setSelectedOptions(selectedOptions.filter(o => o !== optName));
-      else setSelectedOptions([...selectedOptions, optName]);
+  const toggleArrOption = (type, value) => {
+      setCustomOptions(prev => {
+          const arr = prev[type];
+          return { ...prev, [type]: arr.includes(value) ? arr.filter(v => v !== value) : [...arr, value] };
+      });
+  };
+
+  const validerEtAjouter = () => {
+      const prod = customizeItem.produit;
+      const vari = customizeItem.variante;
+      const isMixte = prod.categorie === 'Tacos' && prod.nom.toLowerCase().includes('mixte');
+      
+      // Sécurité Viandes Tacos Mixte
+      if (isMixte) {
+          const maxViandes = vari?.nom === 'XXL' ? 4 : vari?.nom === 'XL' ? 3 : 2;
+          if (customOptions.viandes.length !== maxViandes) {
+              return alert(`Action refusée : Tu dois sélectionner EXACTEMENT ${maxViandes} viandes pour ce Tacos Mixte.`);
+          }
+      }
+      addToCartFinal(prod, vari, customOptions);
   };
 
   const addToCartFinal = (produit, variante, options) => {
-      const prixFinal = variante ? variante.prix : produit.prix;
-      const nomComplet = variante ? `${produit.nom} (${variante.nom})` : produit.nom;
-      
-      let sauces = []; let optionsChoisies = [];
-      if (produit.categorie === 'Tacos') sauces = options;
-      if (produit.categorie === 'Pizzas') optionsChoisies = options;
+      let basePrice = variante ? variante.prix : produit.prix;
+      let extraPrice = 0;
+      let details = [];
 
-      setPosCart([...posCart, { ...produit, nom: nomComplet, prixOriginal: prixFinal, prixFinal, sauces, optionsChoisies, idCart: Date.now() + Math.random() }]);
+      // PIZZA CALCULATIONS
+      if (produit.categorie === 'Pizzas') {
+          if (options.garnitures?.length > 0) details.push(`Garnitures: ${options.garnitures.join(', ')}`);
+          if (options.cheesyCrust) {
+              const crustPrice = variante?.nom === 'L' ? 25 : 15;
+              extraPrice += crustPrice;
+              details.push(`Cheesy Crust (+${crustPrice}DH)`);
+          }
+          options.extras?.forEach(ext => {
+              // Si taille L, le prix est augmenté de 70% (x1.7)
+              const extPrice = (variante?.nom === 'L') ? Math.round(PIZZA_EXTRAS_BASE[ext] * 1.7) : PIZZA_EXTRAS_BASE[ext];
+              extraPrice += extPrice;
+              details.push(`+ ${ext} (+${extPrice}DH)`);
+          });
+      }
+      
+      // TACOS CALCULATIONS
+      if (produit.categorie === 'Tacos') {
+          if (options.viandes?.length > 0) details.push(`Viandes: ${options.viandes.join(', ')}`);
+          if (options.sauces?.length > 0) details.push(`Sauces: ${options.sauces.join(', ')}`);
+          options.extras?.forEach(ext => {
+              const extPrice = TACOS_EXTRAS[ext];
+              extraPrice += extPrice;
+              details.push(`+ ${ext} (+${extPrice}DH)`);
+          });
+      }
+
+      const finalPrice = basePrice + extraPrice;
+      const nomComplet = variante ? `${produit.nom} (${variante.nom})` : produit.nom;
+
+      setPosCart([...posCart, {
+          ...produit, 
+          nom: nomComplet, 
+          prixFinal: finalPrice, 
+          isPrixModifie: false,
+          detailsTxt: details,
+          idCart: Date.now() + Math.random() 
+      }]);
       setCustomizeItem(null);
   };
 
@@ -256,27 +291,21 @@ function FoodjiSystem() {
   const sousTotalCart = posCart.reduce((sum, item) => sum + Number(item.prixFinal), 0);
   const totalCart = Math.max(0, sousTotalCart - remiseGlobale);
 
+  // --- NUMPAD & PAIEMENT ---
   const openNumpad = (mode, label, targetId = null) => { setNumpad({ active: true, mode, label, targetId, value: '' }); };
   const handleNumpadKey = (val) => {
       if (val === 'DEL') setNumpad({...numpad, value: numpad.value.slice(0, -1)});
       else if (val === 'OK') applyNumpadValue();
       else setNumpad({...numpad, value: numpad.value + val});
   };
-
   const applyNumpadValue = async () => {
       const valNum = Number(numpad.value) || 0;
-      
-      if (numpad.mode === 'remise_globale') {
-          setRemiseGlobale(valNum);
-      } 
-      else if (numpad.mode === 'prix_article') {
-          setPosCart(posCart.map(it => it.idCart === numpad.targetId ? { ...it, prixFinal: valNum, isPrixModifie: true } : it));
-      } 
+      if (numpad.mode === 'remise_globale') setRemiseGlobale(valNum);
+      else if (numpad.mode === 'prix_article') setPosCart(posCart.map(it => it.idCart === numpad.targetId ? { ...it, prixFinal: valNum, isPrixModifie: true } : it));
       else if (numpad.mode === 'depense') {
           if (valNum <= 0) return alert("Montant invalide");
           const motif = prompt("Motif de la dépense (ex: Eau, Fournitures...) :");
           if (!motif) return;
-          
           setLoading(true);
           const newDepense = {
               client: "DÉCAISSEMENT", caissiere: sessionCaisse.caissiere || "Manager", type: "depense", commentaire: motif,
@@ -284,9 +313,7 @@ function FoodjiSystem() {
           };
           const docRef = await addDoc(collection(db, "commandes"), newDepense);
           newDepense.id = docRef.id; newDepense.isDepense = true;
-          
-          setOrderToPrint(newDepense);
-          setTimeout(() => { window.print(); setTimeout(() => setOrderToPrint(null), 1000); }, 500);
+          setOrderToPrint(newDepense); setTimeout(() => { window.print(); setTimeout(() => setOrderToPrint(null), 1000); }, 500);
           setLoading(false);
       }
       setNumpad({ active: false, mode: '', targetId: null, label: '', value: '' });
@@ -295,7 +322,6 @@ function FoodjiSystem() {
   const validerCommandePOS = async (methodePaiement) => {
       if (posCart.length === 0) return alert("Panier vide !");
       if (posOrderType === 'livraison' && !posAddress.trim()) return alert("Adresse de livraison obligatoire !");
-      
       setLoading(true);
       const newCmd = {
           client: posClientName.trim() ? posClientName : "Non spécifié",
@@ -312,14 +338,10 @@ function FoodjiSystem() {
           methodePaiement: methodePaiement,
           date: new Date()
       };
-      
       try {
           const docRef = await addDoc(collection(db, "commandes"), newCmd);
           newCmd.id = docRef.id;
-          
-          setOrderToPrint(newCmd);
-          setTimeout(() => { window.print(); setTimeout(() => setOrderToPrint(null), 1000); }, 500);
-          
+          setOrderToPrint(newCmd); setTimeout(() => { window.print(); setTimeout(() => setOrderToPrint(null), 1000); }, 500);
           setPosCart([]); setPosPhone(''); setPosNote(''); setPosClientName(''); setPosAddress(''); setPosOrderType('sur_place'); setRemiseGlobale(0);
       } catch(e) { alert("Erreur création commande."); }
       setLoading(false);
@@ -345,7 +367,6 @@ function FoodjiSystem() {
   const renderTickets = () => {
       if (!orderToPrint) return null;
 
-      // MODE Z (FIN DE JOURNÉE) ou X (FIN DE SHIFT)
       if (orderToPrint.isZ || orderToPrint.isX) {
           const dCloture = orderToPrint.date;
           const titre = orderToPrint.isX ? "X DE CAISSE (SHIFT)" : "Z DE CAISSE (JOURNÉE)";
@@ -356,11 +377,9 @@ function FoodjiSystem() {
                       <p style={{textAlign:'center'}}>Imprimé le {dCloture.toLocaleDateString()} à {dCloture.getHours().toString().padStart(2, '0')}:{dCloture.getMinutes().toString().padStart(2, '0')}</p>
                       {orderToPrint.isX && <p style={{textAlign:'center', fontWeight:'bold', fontSize:'18px'}}>Caissière : {orderToPrint.caissiere}</p>}
                       <hr style={{borderTop:'2px dashed black', margin: '15px 0'}}/>
-                      
                       <p style={{fontSize:'14px'}}>Depuis : {orderToPrint.startT.toLocaleDateString()} à {orderToPrint.startT.getHours().toString().padStart(2,'0')}:{orderToPrint.startT.getMinutes().toString().padStart(2,'0')}</p>
                       <p style={{fontSize:'14px'}}>Jusqu'à : {dCloture.toLocaleDateString()} à {dCloture.getHours().toString().padStart(2,'0')}:{dCloture.getMinutes().toString().padStart(2,'0')}</p>
                       <p>Nb Commandes: {orderToPrint.nbCommandes}</p>
-                      
                       <hr style={{borderTop:'2px dashed black', margin: '15px 0'}}/>
                       <table style={{width:'100%', fontSize:'16px'}}>
                           <tbody>
@@ -400,7 +419,6 @@ function FoodjiSystem() {
 
       const d = orderToPrint.date?.seconds ? new Date(orderToPrint.date.seconds * 1000) : new Date(); 
       const heure = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
-      
       let typeLabel = "SUR PLACE";
       if(orderToPrint.type === 'emporter') typeLabel = "À EMPORTER";
       if(orderToPrint.type === 'livraison') typeLabel = "LIVRAISON";
@@ -408,6 +426,7 @@ function FoodjiSystem() {
 
       return (
           <div className="print-only">
+              {/* TICKET CUISINE */}
               <div className="ticket-80mm">
                   <h1 style={{textAlign:'center', fontSize:'24px', borderBottom:'2px solid black', paddingBottom:'10px', margin: '0 0 10px 0'}}>CUISINE - #{orderToPrint.id.substring(0,4).toUpperCase()}</h1>
                   <p style={{textAlign:'center', fontSize:'22px', fontWeight:'bold', margin: '5px 0', border:'2px solid black', padding:'5px'}}>{typeLabel}</p>
@@ -418,8 +437,11 @@ function FoodjiSystem() {
                       {orderToPrint.items.map((it, i) => (
                           <li key={i} style={{fontSize:'16px', fontWeight:'bold', borderBottom:'1px dotted black', padding:'10px 0'}}>
                               <div>{it.nom}</div>
-                              {it.optionsChoisies?.length > 0 && <div style={{fontSize:'14px', marginLeft:'10px'}}>+ {it.optionsChoisies.join(', ')}</div>}
-                              {it.sauces?.length > 0 && <div style={{fontSize:'14px', marginLeft:'10px'}}>Sauces: {it.sauces.join(', ')}</div>}
+                              {it.detailsTxt?.length > 0 && (
+                                  <div style={{fontSize:'14px', marginLeft:'10px', fontWeight:'normal'}}>
+                                      {it.detailsTxt.map((dt, j) => <div key={j}>• {dt}</div>)}
+                                  </div>
+                              )}
                           </li>
                       ))}
                   </ul>
@@ -427,6 +449,7 @@ function FoodjiSystem() {
 
               <div className="page-break"></div>
 
+              {/* TICKET CLIENT */}
               <div className="ticket-80mm">
                   <div style={{textAlign:'center', marginBottom:'10px'}}><img src="/logo-ticket.png" alt="FOODJI" style={{maxWidth:'180px', maxHeight:'80px', filter:'grayscale(100%) contrast(1000%)'}} /></div>
                   <p style={{textAlign:'center', fontSize:'14px', margin: '2px 0'}}>Sala Al Jadida</p>
@@ -450,11 +473,11 @@ function FoodjiSystem() {
                                     <td style={{paddingTop:'5px'}}><strong>{it.nom}</strong></td>
                                     <td style={{textAlign:'right', paddingTop:'5px'}}><strong>{it.prixFinal} DH</strong></td>
                                 </tr>
-                                {(it.optionsChoisies?.length > 0 || it.sauces?.length > 0 || it.isPrixModifie) && (
+                                {(it.detailsTxt?.length > 0 || it.isPrixModifie) && (
                                     <tr>
                                         <td colSpan="2" style={{fontSize:'12px', paddingLeft:'10px', paddingBottom:'5px', color:'#333'}}>
-                                            {it.optionsChoisies?.join(', ')} {it.sauces?.join(', ')}
-                                            {it.isPrixModifie && <span style={{display:'block', color:'red'}}>*Prix manuel</span>}
+                                            {it.detailsTxt?.join(' / ')}
+                                            {it.isPrixModifie && <span style={{display:'block', color:'red'}}>*Prix manuel appliqué</span>}
                                         </td>
                                     </tr>
                                 )}
@@ -547,26 +570,109 @@ function FoodjiSystem() {
                   </div>
               )}
 
-              <div className="no-print" style={{display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', background: '#f0f2f5', fontFamily: 'sans-serif'}}>
-                  
-                  {/* MODAL PERSONNALISATION ARTICLES */}
-                  {customizeItem && (
-                      <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:2000}}>
-                          <div style={{background:'white', width:'90%', maxWidth:'600px', borderRadius:'15px', padding:'20px', display:'flex', flexDirection:'column', maxHeight:'90vh'}}>
-                              <h2 style={{marginTop:0, borderBottom:'2px solid #eee', paddingBottom:'10px', color:COLORS.primary}}>Options pour {customizeItem.produit.nom}</h2>
-                              <div style={{flex:1, overflowY:'auto', padding:'10px 0', display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(140px, 1fr))', gap:'10px'}}>
-                                  {(customizeItem.produit.categorie === 'Pizzas' ? parametres.stocks.garnitures : parametres.stocks.sauces).filter(opt => opt.available).map((opt, idx) => (
-                                          <button key={idx} onClick={() => toggleOption(opt.nom)} style={{padding:'15px', borderRadius:'10px', fontWeight:'bold', cursor:'pointer', fontSize:'1rem', background: selectedOptions.includes(opt.nom) ? COLORS.primary : '#f0f2f5', color: selectedOptions.includes(opt.nom) ? 'white' : 'black', border: selectedOptions.includes(opt.nom) ? `2px solid ${COLORS.primary}` : '2px solid transparent', boxShadow: '0 2px 4px rgba(0,0,0,0.1)'}}>{opt.nom}</button>
-                                  ))}
-                              </div>
-                              <div style={{display:'flex', gap:'10px', marginTop:'20px', borderTop:'2px solid #eee', paddingTop:'20px'}}>
-                                  <button onClick={() => setCustomizeItem(null)} style={{flex:1, padding:'15px', background:'#9CA3AF', color:'white', borderRadius:'10px', border:'none', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer'}}>Annuler</button>
-                                  <button onClick={() => addToCartFinal(customizeItem.produit, customizeItem.variante, selectedOptions)} style={{flex:2, padding:'15px', background:COLORS.success, color:'white', borderRadius:'10px', border:'none', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer'}}>✅ Valider</button>
-                              </div>
+              {/* MODAL PERSONNALISATION (PIZZAS & TACOS AVEC PRIX) */}
+              {customizeItem && (
+                  <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:2000}}>
+                      <div style={{background:'white', width:'90%', maxWidth:'800px', borderRadius:'15px', padding:'20px', display:'flex', flexDirection:'column', maxHeight:'90vh'}}>
+                          <h2 style={{marginTop:0, borderBottom:'2px solid #eee', paddingBottom:'10px', color:COLORS.primary}}>
+                              Préparation : {customizeItem.produit.nom} {customizeItem.variante?.nom ? `(Taille ${customizeItem.variante.nom})` : ''}
+                          </h2>
+                          
+                          <div style={{flex:1, overflowY:'auto', padding:'10px 0'}}>
+                              {/* CAS PIZZAS */}
+                              {customizeItem.produit.categorie === 'Pizzas' && (
+                                  <>
+                                      {/* Garnitures gratuites si 2 ou 4 Saisons */}
+                                      {(customizeItem.produit.nom.toLowerCase().includes('saison') || customizeItem.produit.nom.toLowerCase().includes('moitié')) && (
+                                          <div style={{marginBottom:'20px'}}>
+                                              <h3 style={{fontSize:'1.1rem', marginBottom:'10px'}}>🍕 Choix des garnitures</h3>
+                                              <div style={{display:'flex', flexWrap:'wrap', gap:'10px'}}>
+                                                  {parametres.stocks.garnitures.filter(opt => opt.available).map((opt, idx) => (
+                                                      <button key={idx} onClick={() => toggleArrOption('garnitures', opt.nom)} style={{padding:'10px 15px', borderRadius:'8px', fontWeight:'bold', cursor:'pointer', background: customOptions.garnitures.includes(opt.nom) ? COLORS.primary : '#f0f2f5', color: customOptions.garnitures.includes(opt.nom) ? 'white' : 'black', border:'none'}}>{opt.nom}</button>
+                                                  ))}
+                                              </div>
+                                          </div>
+                                      )}
+                                      
+                                      <div style={{marginBottom:'20px'}}>
+                                          <h3 style={{fontSize:'1.1rem', marginBottom:'10px'}}>🧀 Bords Fourrés</h3>
+                                          <button onClick={() => setCustomOptions(p => ({...p, cheesyCrust: !p.cheesyCrust}))} style={{width:'100%', padding:'15px', borderRadius:'8px', fontWeight:'bold', cursor:'pointer', fontSize:'1.1rem', display:'flex', justifyContent:'space-between', background: customOptions.cheesyCrust ? COLORS.promo : '#f0f2f5', color: customOptions.cheesyCrust ? 'white' : 'black', border:'none'}}>
+                                              <span>Cheesy Crust</span>
+                                              <span>+ {customizeItem.variante?.nom === 'L' ? 25 : 15} DH</span>
+                                          </button>
+                                      </div>
+
+                                      <div style={{marginBottom:'20px'}}>
+                                          <h3 style={{fontSize:'1.1rem', marginBottom:'10px'}}>➕ Extras (Payants)</h3>
+                                          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(200px, 1fr))', gap:'10px'}}>
+                                              {Object.keys(PIZZA_EXTRAS_BASE).map(ext => {
+                                                  const isL = customizeItem.variante?.nom === 'L';
+                                                  const price = isL ? Math.round(PIZZA_EXTRAS_BASE[ext] * 1.7) : PIZZA_EXTRAS_BASE[ext];
+                                                  return (
+                                                      <button key={ext} onClick={() => toggleArrOption('extras', ext)} style={{padding:'15px', borderRadius:'8px', fontWeight:'bold', cursor:'pointer', display:'flex', justifyContent:'space-between', background: customOptions.extras.includes(ext) ? '#10B981' : '#f0f2f5', color: customOptions.extras.includes(ext) ? 'white' : 'black', border:'none'}}>
+                                                          <span>{ext}</span><span>+ {price} DH</span>
+                                                      </button>
+                                                  )
+                                              })}
+                                          </div>
+                                      </div>
+                                  </>
+                              )}
+
+                              {/* CAS TACOS */}
+                              {customizeItem.produit.categorie === 'Tacos' && (
+                                  <>
+                                      {/* Viandes pour Mixte */}
+                                      {customizeItem.produit.nom.toLowerCase().includes('mixte') && (() => {
+                                          const maxV = customizeItem.variante?.nom === 'XXL' ? 4 : customizeItem.variante?.nom === 'XL' ? 3 : 2;
+                                          return (
+                                              <div style={{marginBottom:'20px', background:'#fef3c7', padding:'15px', borderRadius:'10px'}}>
+                                                  <h3 style={{fontSize:'1.1rem', margin:'0 0 10px 0', color:'#92400e'}}>🥩 Choix des Viandes ({customOptions.viandes.length} / {maxV} obligatoires)</h3>
+                                                  <div style={{display:'flex', flexWrap:'wrap', gap:'10px'}}>
+                                                      {parametres.stocks.viandes.filter(opt => opt.available).map((opt, idx) => {
+                                                          const isSelected = customOptions.viandes.includes(opt.nom);
+                                                          const isDisabled = !isSelected && customOptions.viandes.length >= maxV;
+                                                          return (
+                                                              <button key={idx} disabled={isDisabled} onClick={() => toggleArrOption('viandes', opt.nom)} style={{padding:'10px 15px', borderRadius:'8px', fontWeight:'bold', cursor: isDisabled?'not-allowed':'pointer', background: isSelected ? '#92400e' : '#fff', color: isSelected ? 'white' : 'black', border:'1px solid #d97706', opacity: isDisabled?0.5:1}}>{opt.nom}</button>
+                                                          )
+                                                      })}
+                                                  </div>
+                                              </div>
+                                          )
+                                      })()}
+
+                                      <div style={{marginBottom:'20px'}}>
+                                          <h3 style={{fontSize:'1.1rem', marginBottom:'10px'}}>🥣 Sauces (Incluses)</h3>
+                                          <div style={{display:'flex', flexWrap:'wrap', gap:'10px'}}>
+                                              {parametres.stocks.sauces.filter(opt => opt.available).map((opt, idx) => (
+                                                  <button key={idx} onClick={() => toggleArrOption('sauces', opt.nom)} style={{padding:'10px 15px', borderRadius:'8px', fontWeight:'bold', cursor:'pointer', background: customOptions.sauces.includes(opt.nom) ? COLORS.secondary : '#f0f2f5', color: customOptions.sauces.includes(opt.nom) ? 'white' : 'black', border:'none'}}>{opt.nom}</button>
+                                              ))}
+                                          </div>
+                                      </div>
+
+                                      <div style={{marginBottom:'20px'}}>
+                                          <h3 style={{fontSize:'1.1rem', marginBottom:'10px'}}>➕ Extras & Gratinage</h3>
+                                          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(200px, 1fr))', gap:'10px'}}>
+                                              {Object.keys(TACOS_EXTRAS).map(ext => (
+                                                  <button key={ext} onClick={() => toggleArrOption('extras', ext)} style={{padding:'15px', borderRadius:'8px', fontWeight:'bold', cursor:'pointer', display:'flex', justifyContent:'space-between', background: customOptions.extras.includes(ext) ? '#10B981' : '#f0f2f5', color: customOptions.extras.includes(ext) ? 'white' : 'black', border:'none'}}>
+                                                      <span>{ext}</span><span>+ {TACOS_EXTRAS[ext]} DH</span>
+                                                  </button>
+                                              ))}
+                                          </div>
+                                      </div>
+                                  </>
+                              )}
+                          </div>
+                          
+                          <div style={{display:'flex', gap:'10px', marginTop:'20px', borderTop:'2px solid #eee', paddingTop:'20px'}}>
+                              <button onClick={() => setCustomizeItem(null)} style={{flex:1, padding:'15px', background:'#9CA3AF', color:'white', borderRadius:'10px', border:'none', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer'}}>Annuler</button>
+                              <button onClick={validerEtAjouter} style={{flex:2, padding:'15px', background:COLORS.success, color:'white', borderRadius:'10px', border:'none', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer'}}>✅ Valider le produit</button>
                           </div>
                       </div>
-                  )}
+                  </div>
+              )}
 
+              <div className="no-print" style={{display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', background: '#f0f2f5', fontFamily: 'sans-serif'}}>
                   {/* COLONNE GAUCHE (MENU) */}
                   <div style={{flex: 1, display: 'flex', flexDirection: 'column', padding: '10px', height: '100%', overflowY: 'auto'}}>
                       <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', background:'white', padding:'15px', borderRadius:'10px', marginBottom:'10px', flexShrink: 0}}>
@@ -620,24 +726,20 @@ function FoodjiSystem() {
                               <button onClick={()=>setPosOrderType('emporter')} style={{flex:1, padding:'8px', borderRadius:'5px', border:'none', fontWeight:'bold', cursor:'pointer', background: posOrderType==='emporter' ? COLORS.promo : 'transparent', color: posOrderType==='emporter' ? 'white' : '#ccc'}}>Emporter</button>
                               <button onClick={()=>setPosOrderType('livraison')} style={{flex:1, padding:'8px', borderRadius:'5px', border:'none', fontWeight:'bold', cursor:'pointer', background: posOrderType==='livraison' ? '#3B82F6' : 'transparent', color: posOrderType==='livraison' ? 'white' : '#ccc'}}>Livraison</button>
                           </div>
-
                           <input type="text" placeholder="Nom Client (Optionnel)" value={posClientName} onChange={e=>setPosClientName(e.target.value)} style={{width:'100%', padding:'12px', borderRadius:'8px', border:'none', marginBottom:'10px', fontSize:'1rem', boxSizing:'border-box'}}/>
                           <input type="tel" placeholder="N° Tél (Imprimé sur ticket)" value={posPhone} onChange={e=>setPosPhone(e.target.value)} style={{width:'100%', padding:'12px', borderRadius:'8px', border:'none', fontSize:'1rem', boxSizing:'border-box', marginBottom: posOrderType==='livraison'?'10px':'0'}}/>
-                          
-                          {posOrderType === 'livraison' && (
-                              <input type="text" placeholder="Adresse complète..." value={posAddress} onChange={e=>setPosAddress(e.target.value)} style={{width:'100%', padding:'12px', borderRadius:'8px', border:'2px solid #3B82F6', fontSize:'1rem', boxSizing:'border-box'}}/>
-                          )}
+                          {posOrderType === 'livraison' && <input type="text" placeholder="Adresse complète..." value={posAddress} onChange={e=>setPosAddress(e.target.value)} style={{width:'100%', padding:'12px', borderRadius:'8px', border:'2px solid #3B82F6', fontSize:'1rem', boxSizing:'border-box'}}/>}
                       </div>
 
                       <div style={{flex: 1, overflowY: 'auto', padding: '10px'}}>
                           {posCart.length === 0 ? <div style={{textAlign:'center', color:'#999', marginTop:'50px', fontSize:'1.2rem'}}>Panier vide</div> : null}
                           {posCart.map(item => (
                               <div key={item.idCart} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px', borderBottom:'1px dashed #ddd', background:'#fafafa', borderRadius:'8px', marginBottom:'5px'}}>
-                                  <div style={{flex:1, cursor:'pointer'}} onClick={()=>openNumpad('prix_article', `Modifier prix : ${item.nom}`, item.idCart)}>
+                                  <div style={{flex:1, cursor:'pointer'}} onClick={()=>openNumpad('prix_article', `Modifier prix global : ${item.nom}`, item.idCart)}>
                                     <div style={{fontWeight:'bold', fontSize:'1.1rem', color: item.isPrixModifie ? COLORS.promo : 'black'}}>{item.nom}</div>
-                                    {(item.optionsChoisies?.length > 0 || item.sauces?.length > 0) && (
+                                    {item.detailsTxt?.length > 0 && (
                                         <div style={{fontSize:'0.85rem', color:COLORS.textLight, marginTop:'4px'}}>
-                                            {item.optionsChoisies?.join(', ')} {item.sauces?.join(', ')}
+                                            {item.detailsTxt.map((txt, j) => <div key={j}>• {txt}</div>)}
                                         </div>
                                     )}
                                   </div>
@@ -698,7 +800,6 @@ function FoodjiSystem() {
                 </div>
             </div>
 
-            {/* MODAL DU Z GLOBAL (AVEC REMISE A ZERO) */}
             {showBilanGlobal && (
                 <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:4000}}>
                     <div style={{background:'white', padding:'30px', borderRadius:'15px', width:'90%', maxWidth:'450px', boxShadow:'0 10px 25px rgba(0,0,0,0.2)'}}>
@@ -803,11 +904,6 @@ function FoodjiSystem() {
                               <li key={i} style={{padding:'5px 0', borderBottom:'1px dashed #eee', display:'flex', justifyContent:'space-between'}}>
                                 <div>
                                     <strong>{it.nom}</strong> <span style={{fontSize:'0.8rem', color:'#666'}}>{it.varianteNom ? `(${it.varianteNom})` : ''}</span>
-                                    {(it.optionsChoisies?.length > 0 || it.sauces?.length > 0) && (
-                                        <div style={{fontSize:'0.8rem', color:COLORS.textLight}}>
-                                            + {it.optionsChoisies?.join(', ')} {it.sauces?.join(', ')}
-                                        </div>
-                                    )}
                                 </div>
                                 <span>{it.prixFinal} DH</span>
                               </li>
@@ -860,7 +956,7 @@ function FoodjiSystem() {
                     <div style={{fontWeight:'bold', fontSize:'1.1rem', textDecoration: p.available === false ? 'line-through' : 'none'}}>{p.nom} <span style={{color:COLORS.textLight, fontWeight:'normal'}}>- {p.variantes?.length>0 ? 'Multi-tailles' : p.prix+' DH'}</span></div>
                   </div>
                   <div style={{display:'flex', gap:'15px'}}>
-                      <button onClick={() => {setEditId(p.id); setFormProd({nom: p.nom, description: p.description||'', categorie: p.categorie, prixBase: p.prix, variantes: p.variantes||[]}); window.scrollTo(0,0);}} style={{border:'none', background:'#f0f2f5', padding:'8px 12px', borderRadius:'8px', fontSize:'1.1rem', cursor:'pointer'}}>✏️ Modifier</button>
+                      <button onClick={() => {setEditId(p.id); setFormProd({nom: p.nom, description: p.description||'', categorie: p.categorie, prixBase: p.prix||'', variantes: p.variantes||[]}); window.scrollTo(0,0);}} style={{border:'none', background:'#f0f2f5', padding:'8px 12px', borderRadius:'8px', fontSize:'1.1rem', cursor:'pointer'}}>✏️ Modifier</button>
                       <button onClick={()=>supprimerProduit(p.id)} style={{color:'white', border:'none', background:COLORS.danger, padding:'8px 12px', borderRadius:'8px', cursor:'pointer', fontWeight:'bold'}}>X</button>
                   </div>
                 </div>
@@ -871,10 +967,34 @@ function FoodjiSystem() {
                <h3 style={{marginTop:0}}>{editId ? '✏️ Mettre à jour le produit' : '➕ Ajouter un Produit'}</h3>
                <div style={{display:'flex', flexDirection:'column', gap:'15px'}}>
                    <input placeholder="Nom du produit" value={formProd.nom} onChange={e=>setFormProd({...formProd, nom: e.target.value})} style={{padding:'12px', borderRadius:'8px', border:'1px solid #ddd', fontSize:'1rem'}} />
-                   <select value={formProd.categorie} onChange={e=>setFormProd({...formProd, categorie: e.target.value})} style={{padding:'12px', borderRadius:'8px', border:'1px solid #ddd', fontSize:'1rem'}}>
+                   <select value={formProd.categorie} onChange={handleCategoryChange} style={{padding:'12px', borderRadius:'8px', border:'1px solid #ddd', fontSize:'1rem'}}>
                        {TOUTES_CATEGORIES.map(cat => <option key={cat}>{cat}</option>)}
                    </select>
-                   <input type="number" placeholder="Prix (ex: 45)" value={formProd.prixBase} onChange={e=>setFormProd({...formProd, prixBase: e.target.value})} style={{padding:'12px', borderRadius:'8px', border:'1px solid #ddd', fontSize:'1rem'}} />
+                   
+                   {formProd.variantes && formProd.variantes.length > 0 ? (
+                       <div style={{display:'flex', gap:'10px', flexWrap:'wrap'}}>
+                           {formProd.variantes.map((v, index) => (
+                               <div key={index} style={{flex:1, minWidth:'120px', background:'#f9fafb', padding:'10px', borderRadius:'8px', border:'1px solid #eee'}}>
+                                   <label style={{fontSize:'0.9rem', fontWeight:'bold'}}>{v.nom}</label>
+                                   <input type="number" placeholder="Prix" value={v.prix} onChange={(e) => {
+                                       const newVars = [...formProd.variantes];
+                                       newVars[index].prix = Number(e.target.value);
+                                       setFormProd({...formProd, variantes: newVars});
+                                   }} style={{width:'100%', padding:'8px', borderRadius:'5px', border:'1px solid #ccc', marginTop:'5px', boxSizing:'border-box'}} />
+                                   <label style={{fontSize:'0.9rem', display:'flex', alignItems:'center', gap:'5px', marginTop:'8px', cursor:'pointer'}}>
+                                       <input type="checkbox" checked={v.available !== false} onChange={(e) => {
+                                           const newVars = [...formProd.variantes];
+                                           newVars[index].available = e.target.checked;
+                                           setFormProd({...formProd, variantes: newVars});
+                                       }} style={{width:'18px', height:'18px'}} /> Dispo
+                                   </label>
+                               </div>
+                           ))}
+                       </div>
+                   ) : (
+                       <input type="number" placeholder="Prix unique (ex: 45)" value={formProd.prixBase} onChange={e=>setFormProd({...formProd, prixBase: e.target.value})} style={{padding:'12px', borderRadius:'8px', border:'1px solid #ddd', fontSize:'1rem'}} />
+                   )}
+
                    <div style={{display:'flex', gap:'10px'}}>
                       <button onClick={saveProduit} style={{flex:1, padding:'15px', background:COLORS.primary, color:'white', border:'none', borderRadius:'10px', fontSize:'1.1rem', fontWeight:'bold', cursor:'pointer'}}>{editId ? 'Enregistrer les modifications' : 'Ajouter à la carte'}</button>
                       {editId && <button onClick={() => {setEditId(null); setFormProd({nom:'', description:'', categorie:'Panuozzo', prixBase:'', variantes:[]});}} style={{padding:'15px 25px', background:'#9CA3AF', color:'white', border:'none', borderRadius:'10px', fontSize:'1.1rem', fontWeight:'bold', cursor:'pointer'}}>Annuler</button>}
