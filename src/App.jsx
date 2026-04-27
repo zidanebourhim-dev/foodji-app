@@ -59,13 +59,15 @@ function FoodjiSystem() {
   // NUMPAD
   const [numpad, setNumpad] = useState({ active: false, mode: '', targetId: null, label: '', value: '' });
 
+  // NOUVEAU MODAL : Bilan en cours (Flash Caisse)
+  const [showBilanPos, setShowBilanPos] = useState(false);
+
   const prevCommandesLength = useRef(0);
   const audioRef = useRef(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   
-  // CODE MANAGER
   const SYNC_ID_VERSION = "053700";
 
   useEffect(() => {
@@ -113,7 +115,6 @@ function FoodjiSystem() {
   };
   const checkManagerAuth = () => { const code = prompt("🔒 Code Manager requis :"); if (code === SYNC_ID_VERSION) return true; alert("❌ Code incorrect !"); return false; };
 
-  // --- ACTIONS ADMIN ---
   const toggleAvailability = async (item) => await updateDoc(doc(db, "produits", item.id), { available: !item.available });
   const supprimerProduit = async (id) => { if (!checkManagerAuth()) return; if(confirm("Supprimer définitivement ?")) await deleteDoc(doc(db, "produits", id)); };
   const toggleStockItem = async (listName, index) => { const newList = [...parametres.stocks[listName]]; newList[index].available = !newList[index].available; await updateDoc(doc(db, "parametres", "stocks"), { ...parametres.stocks, [listName]: newList }); };
@@ -129,14 +130,12 @@ function FoodjiSystem() {
     setFormProd({ nom: '', description: '', image: '', categorie: 'Panuozzo', prixBase: '', variantes: [] }); setLoading(false);
   };
 
-  // --- GESTION DE SESSION (X & Z) ---
   const ouvrirCaisse = async (nomCaissiere) => {
       await updateDoc(doc(db, "parametres", "session_caisse"), { isActive: true, caissiere: nomCaissiere, startTime: new Date() });
   };
 
-  const cloturerShift = async () => {
-      if (!confirm(`⚠️ Clôturer le shift de ${sessionCaisse.caissiere} ?`)) return;
-      
+  const genererBilanSession = () => {
+      if (!sessionCaisse.startTime) return null;
       const startT = sessionCaisse.startTime.seconds ? new Date(sessionCaisse.startTime.seconds * 1000) : new Date(sessionCaisse.startTime);
       const cmdsSession = commandes.filter(c => {
           const d = c.date?.seconds ? new Date(c.date.seconds * 1000) : new Date(c.date);
@@ -151,15 +150,25 @@ function FoodjiSystem() {
           else totalLivrApp += c.total; 
       });
 
-      const xData = {
-          isX: true,
-          caissiere: sessionCaisse.caissiere,
-          startT: startT,
-          date: new Date(),
+      return {
+          startT,
           totalGeneral: (totalEspeces + totalTPE + totalLivrApp), 
           totalEspeces, totalTPE, totalDépenses, totalLivrApp, 
           netEnCaisse: (totalEspeces - totalDépenses), 
           nbCommandes: cmdsSession.length
+      };
+  };
+
+  const cloturerShift = async () => {
+      if (!confirm(`⚠️ Clôturer le shift de ${sessionCaisse.caissiere} ?`)) return;
+      const bilan = genererBilanSession();
+      if (!bilan) return;
+
+      const xData = {
+          isX: true,
+          caissiere: sessionCaisse.caissiere,
+          date: new Date(),
+          ...bilan
       };
       
       setOrderToPrint(xData);
@@ -195,7 +204,6 @@ function FoodjiSystem() {
       setTimeout(() => { window.print(); setTimeout(() => setOrderToPrint(null), 1000); }, 500);
   };
 
-  // --- LOGIQUE PANIER & CAISSE ---
   const triggerAddToCart = (produit, variante = null) => {
       const nomPizza = produit.nom.toLowerCase();
       const isPizzaPersonnalisable = produit.categorie === 'Pizzas' && (nomPizza.includes('2 saisons') || nomPizza.includes('4 saisons'));
@@ -229,7 +237,6 @@ function FoodjiSystem() {
   const sousTotalCart = posCart.reduce((sum, item) => sum + Number(item.prixFinal), 0);
   const totalCart = Math.max(0, sousTotalCart - remiseGlobale);
 
-  // --- NUMPAD LOGIC ---
   const openNumpad = (mode, label, targetId = null) => { setNumpad({ active: true, mode, label, targetId, value: '' }); };
   const handleNumpadKey = (val) => {
       if (val === 'DEL') setNumpad({...numpad, value: numpad.value.slice(0, -1)});
@@ -266,7 +273,6 @@ function FoodjiSystem() {
       setNumpad({ active: false, mode: '', targetId: null, label: '', value: '' });
   };
 
-  // --- VALIDATION POS ---
   const validerCommandePOS = async (methodePaiement) => {
       if (posCart.length === 0) return alert("Panier vide !");
       if (posOrderType === 'livraison' && !posAddress.trim()) return alert("Adresse de livraison obligatoire !");
@@ -314,13 +320,9 @@ function FoodjiSystem() {
       </div>
   );
 
-  // ==========================================
-  // RENDUS D'IMPRESSION (X, Z, DEPENSE, TICKET)
-  // ==========================================
   const renderTickets = () => {
       if (!orderToPrint) return null;
 
-      // MODE Z DE CAISSE (JOURNÉE) ou X DE CAISSE (SHIFT)
       if (orderToPrint.isZ || orderToPrint.isX) {
           const dCloture = orderToPrint.date;
           const titre = orderToPrint.isX ? "X DE CAISSE (SHIFT)" : "Z DE CAISSE (JOURNÉE)";
@@ -329,11 +331,9 @@ function FoodjiSystem() {
                   <div className="ticket-80mm">
                       <h1 style={{textAlign:'center', fontSize:'24px', borderBottom:'2px solid black', paddingBottom:'10px'}}>{titre}</h1>
                       <p style={{textAlign:'center'}}>Imprimé le {dCloture.toLocaleDateString()} à {dCloture.getHours().toString().padStart(2, '0')}:{dCloture.getMinutes().toString().padStart(2, '0')}</p>
-                      
                       {orderToPrint.isX && <p style={{textAlign:'center', fontWeight:'bold', fontSize:'18px'}}>Caissière : {orderToPrint.caissiere}</p>}
-                      
                       <hr style={{borderTop:'2px dashed black', margin: '15px 0'}}/>
-                      <p>Période: {orderToPrint.isX ? `Depuis ${orderToPrint.startT.getHours()}:${orderToPrint.startT.getMinutes()}` : `Journée du ${orderToPrint.today.toLocaleDateString()}`}</p>
+                      <p>Période: {orderToPrint.isX ? `Depuis ${orderToPrint.startT.getHours().toString().padStart(2,'0')}:${orderToPrint.startT.getMinutes().toString().padStart(2,'0')}` : `Journée du ${orderToPrint.today.toLocaleDateString()}`}</p>
                       <p>Nb Commandes: {orderToPrint.nbCommandes}</p>
                       <hr style={{borderTop:'2px dashed black', margin: '15px 0'}}/>
                       <table style={{width:'100%', fontSize:'16px'}}>
@@ -354,7 +354,6 @@ function FoodjiSystem() {
           );
       }
 
-      // MODE DÉPENSE
       if (orderToPrint.isDepense) {
           const d = orderToPrint.date;
           return (
@@ -373,7 +372,6 @@ function FoodjiSystem() {
           );
       }
 
-      // MODE TICKET CLIENT / CUISINE
       const d = orderToPrint.date?.seconds ? new Date(orderToPrint.date.seconds * 1000) : new Date(); 
       const heure = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
       
@@ -384,7 +382,6 @@ function FoodjiSystem() {
 
       return (
           <div className="print-only">
-              {/* TICKET CUISINE */}
               <div className="ticket-80mm">
                   <h1 style={{textAlign:'center', fontSize:'24px', borderBottom:'2px solid black', paddingBottom:'10px', margin: '0 0 10px 0'}}>CUISINE - #{orderToPrint.id.substring(0,4).toUpperCase()}</h1>
                   <p style={{textAlign:'center', fontSize:'22px', fontWeight:'bold', margin: '5px 0', border:'2px solid black', padding:'5px'}}>{typeLabel}</p>
@@ -404,7 +401,6 @@ function FoodjiSystem() {
 
               <div className="page-break"></div>
 
-              {/* TICKET CLIENT */}
               <div className="ticket-80mm">
                   <div style={{textAlign:'center', marginBottom:'10px'}}><img src="/logo-ticket.png" alt="FOODJI" style={{maxWidth:'180px', maxHeight:'80px', filter:'grayscale(100%) contrast(1000%)'}} /></div>
                   <p style={{textAlign:'center', fontSize:'14px', margin: '2px 0'}}>Sala Al Jadida</p>
@@ -470,7 +466,7 @@ function FoodjiSystem() {
                               <button key={nom} onClick={() => ouvrirCaisse(nom)} style={{padding:'20px', fontSize:'1.5rem', fontWeight:'bold', borderRadius:'10px', border:'2px solid #ddd', background:'#f9fafb', cursor:'pointer'}}>{nom}</button>
                           ))}
                       </div>
-                      <button onClick={() => { if(checkManagerAuth()) setAppMode('ADMIN'); }} style={{marginTop:'30px', padding:'10px', border:'none', background:'transparent', color:COLORS.textLight, textDecoration:'underline', cursor:'pointer'}}>⚙️ Retour Administration</button>
+                      <button onClick={() => setAppMode('ADMIN')} style={{marginTop:'30px', padding:'10px', border:'none', background:'transparent', color:COLORS.textLight, textDecoration:'underline', cursor:'pointer'}}>⚙️ Retour Administration</button>
                   </div>
               </div>
           );
@@ -495,6 +491,33 @@ function FoodjiSystem() {
                               <button onClick={()=>handleNumpadKey('OK')} style={{padding:'20px', fontSize:'1.5rem', fontWeight:'bold', borderRadius:'10px', border:'none', background:COLORS.success, color:'white', cursor:'pointer'}}>OK</button>
                           </div>
                           <button onClick={()=>setNumpad({active:false, mode:'', targetId:null, label:'', value:''})} style={{marginTop:'20px', padding:'15px', background:'#9CA3AF', color:'white', border:'none', borderRadius:'10px', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer'}}>Annuler</button>
+                      </div>
+                  </div>
+              )}
+
+              {/* MODAL BILAN EN COURS (FLASH CAISSE) */}
+              {showBilanPos && (
+                  <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:4000}}>
+                      <div style={{background:'white', padding:'30px', borderRadius:'15px', width:'90%', maxWidth:'400px', boxShadow:'0 10px 25px rgba(0,0,0,0.2)'}}>
+                          <h2 style={{marginTop:0, textAlign:'center'}}>👁️ Bilan en cours</h2>
+                          <p style={{textAlign:'center', color:'#666'}}>Session de <strong>{sessionCaisse.caissiere}</strong></p>
+                          <hr style={{margin:'20px 0'}}/>
+                          {(() => {
+                              const bilan = genererBilanSession();
+                              if (!bilan) return <p>Aucune donnée disponible.</p>;
+                              return (
+                                  <>
+                                      <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', fontSize:'1.2rem'}}><span>Espèces (Tiroir) :</span> <strong>{bilan.totalEspeces} DH</strong></div>
+                                      <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', fontSize:'1.2rem'}}><span>TPE (Carte) :</span> <strong>{bilan.totalTPE} DH</strong></div>
+                                      <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', fontSize:'1.2rem', color:'#666'}}><span>Livr. App/Web :</span> <strong>{bilan.totalLivrApp} DH</strong></div>
+                                      <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', fontSize:'1.2rem', color:'red'}}><span>Décaissements :</span> <strong>- {bilan.totalDépenses} DH</strong></div>
+                                      <hr style={{margin:'20px 0'}}/>
+                                      <div style={{display:'flex', justifyContent:'space-between', fontSize:'1.5rem', color:COLORS.primary}}><span>NET EN CAISSE :</span> <strong>{bilan.netEnCaisse} DH</strong></div>
+                                      <div style={{textAlign:'center', marginTop:'10px', color:'#666'}}>Commandes : {bilan.nbCommandes}</div>
+                                  </>
+                              );
+                          })()}
+                          <button onClick={()=>setShowBilanPos(false)} style={{width:'100%', padding:'15px', background:COLORS.secondary, color:'white', border:'none', borderRadius:'10px', marginTop:'25px', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer'}}>Fermer</button>
                       </div>
                   </div>
               )}
@@ -526,10 +549,12 @@ function FoodjiSystem() {
                               <h2 style={{margin:0, color:COLORS.primary}}>🍔 Foodji POS</h2>
                               <span style={{background:'#e0e7ff', color:'#3730a3', padding:'5px 10px', borderRadius:'20px', fontWeight:'bold', fontSize:'0.9rem'}}>👤 {sessionCaisse.caissiere}</span>
                           </div>
-                          <div style={{display:'flex', gap:'10px'}}>
-                              <button onClick={()=>openNumpad('depense', 'Saisir le montant retiré de la caisse')} style={{padding:'10px 15px', background:'#fef3c7', color:'#92400e', borderRadius:'8px', border:'1px solid #f59e0b', cursor:'pointer', fontWeight:'bold'}}>💸 Sortie Caisse</button>
-                              <button onClick={cloturerShift} style={{padding:'10px 15px', background:COLORS.warning, color:'white', borderRadius:'8px', border:'none', cursor:'pointer', fontWeight:'bold'}}>🛑 Fin de Shift (X)</button>
-                              <button onClick={() => { if(checkManagerAuth()) setAppMode('ADMIN'); }} style={{padding:'10px 15px', background:COLORS.secondary, color:'white', borderRadius:'8px', border:'none', cursor:'pointer', fontWeight:'bold'}}>⚙️ BACK-OFFICE</button>
+                          {/* NOUVEAUX BOUTONS SANS SÉCURITÉ */}
+                          <div style={{display:'flex', gap:'8px'}}>
+                              <button onClick={()=>openNumpad('depense', 'Saisir le montant retiré')} style={{padding:'10px 15px', background:'#fef3c7', color:'#92400e', borderRadius:'8px', border:'1px solid #f59e0b', cursor:'pointer', fontWeight:'bold'}}>💸 Sortie</button>
+                              <button onClick={()=>setShowBilanPos(true)} style={{padding:'10px 15px', background:'#e0e7ff', color:'#3730a3', borderRadius:'8px', border:'none', cursor:'pointer', fontWeight:'bold'}}>👁️ Bilan Actuel</button>
+                              <button onClick={cloturerShift} style={{padding:'10px 15px', background:COLORS.warning, color:'white', borderRadius:'8px', border:'none', cursor:'pointer', fontWeight:'bold'}}>🛑 Fin Shift</button>
+                              <button onClick={() => setAppMode('ADMIN')} style={{padding:'10px 15px', background:COLORS.secondary, color:'white', borderRadius:'8px', border:'none', cursor:'pointer', fontWeight:'bold'}}>⚙️ BACK-OFFICE</button>
                           </div>
                       </div>
                       
@@ -539,8 +564,7 @@ function FoodjiSystem() {
                           ))}
                       </div>
 
-                      {/* AFFICHAGE DES ARTICLES (BOUTONS TAILLES SUR LA CARTE) */}
-                      <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(180px, 1fr))', gap:'10px'}}>
+                      <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(160px, 1fr))', gap:'10px'}}>
                           {menu.filter(p => p.categorie === posCategory && p.available !== false).map(p => (
                               <div key={p.id} style={{background:'white', borderRadius:'10px', overflow:'hidden', boxShadow:'0 2px 5px rgba(0,0,0,0.1)', border:'2px solid transparent'}}>
                                   {p.variantes?.length > 0 ? (
@@ -619,7 +643,7 @@ function FoodjiSystem() {
                           </div>
                           
                           <div style={{display:'flex', gap:'10px', marginBottom:'10px'}}>
-                              <button onClick={()=>validerCommandePOS('Espèces')} disabled={loading || posCart.length===0} style={{flex:2, padding:'20px 10px', background:COLORS.success, color:'white', border:'none', borderRadius:'10px', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer', opacity: posCart.length===0?0.5:1}}>💵 ENCAISSER (ESPÈCES)</button>
+                              <button onClick={()=>validerCommandePOS('Espèces')} disabled={loading || posCart.length===0} style={{flex:2, padding:'20px 10px', background:COLORS.success, color:'white', border:'none', borderRadius:'10px', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer', opacity: posCart.length===0?0.5:1}}>💵 ENCAISSER EN ESPÈCES</button>
                               <button onClick={()=>openNumpad('remise_globale', 'Saisir la remise totale (en DH)')} disabled={loading || posCart.length===0} style={{flex:1, padding:'20px 10px', background:'#fef3c7', color:'#b45309', border:'none', borderRadius:'10px', fontSize:'1rem', fontWeight:'bold', cursor:'pointer', opacity: posCart.length===0?0.5:1}}>🎁 REMISE</button>
                           </div>
                           
@@ -632,7 +656,7 @@ function FoodjiSystem() {
   }
 
   // ==========================================
-  // RENDU ADMIN & STOCKS (BACK-OFFICE)
+  // RENDU ADMIN & STOCKS 
   // ==========================================
   return (
     <>
