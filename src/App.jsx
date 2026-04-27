@@ -34,26 +34,23 @@ function FoodjiSystem() {
   const [commandes, setCommandes] = useState([]);
   const [parametres, setParametres] = useState({ isOuvert: true, rushMode: 'standard', stocks: { viandes: INIT_VIANDES, garnitures: INIT_GARNITURES_PIZZA, sauces: INIT_SAUCES, pates: INIT_PATES, tailles_pizza: INIT_TAILLES_PIZZA } });
   
-  // ÉTATS ADMIN
   const [adminCategorie, setAdminCategorie] = useState('Tacos'); 
   const [activeStockTab, setActiveStockTab] = useState('viandes');
   const [newItemName, setNewItemName] = useState('');
   const [editId, setEditId] = useState(null); 
   const [formProd, setFormProd] = useState({ nom: '', description: '', image: '', categorie: 'Burgers', prixBase: '', variantes: [] });
   const [showZDeCaisse, setShowZDeCaisse] = useState(false);
-  const [showHistory, setShowHistory] = useState(false); // Toggle pour l'historique
+  const [showHistory, setShowHistory] = useState(false); 
   
-  // ÉTATS POS (CAISSE)
   const [posCart, setPosCart] = useState([]);
   const [posPhone, setPosPhone] = useState('');
   const [posNote, setPosNote] = useState('');
-  const [posClientName, setPosClientName] = useState('Client Comptoir');
+  const [posClientName, setPosClientName] = useState('');
   const [posCategory, setPosCategory] = useState('Tacos');
-  const [posOrderType, setPosOrderType] = useState('sur_place'); // sur_place, emporter, livraison
+  const [posOrderType, setPosOrderType] = useState('sur_place'); 
   const [posAddress, setPosAddress] = useState('');
   const [orderToPrint, setOrderToPrint] = useState(null);
 
-  // ÉTATS DE PERSONNALISATION (MODAL POS)
   const [customizeItem, setCustomizeItem] = useState(null); 
   const [selectedOptions, setSelectedOptions] = useState([]);
 
@@ -121,14 +118,11 @@ function FoodjiSystem() {
     setFormProd({ nom: '', description: '', image: '', categorie: 'Burgers', prixBase: '', variantes: [] }); setLoading(false);
   };
 
-  // --- LOGIQUE DE PERSONNALISATION CAISSE ---
   const triggerAddToCart = (produit, variante = null) => {
-      // Ouvre le modal si c'est une Pizza ou un Tacos
       if (produit.categorie === 'Pizzas' || produit.categorie === 'Tacos') {
           setCustomizeItem({ produit, variante });
-          setSelectedOptions([]); // Reset des options
+          setSelectedOptions([]); 
       } else {
-          // Ajout direct au panier pour le reste
           addToCartFinal(produit, variante, []);
       }
   };
@@ -164,16 +158,17 @@ function FoodjiSystem() {
   const removeFromCart = (idCart) => { setPosCart(posCart.filter(item => item.idCart !== idCart)); };
   const totalCart = posCart.reduce((sum, item) => sum + Number(item.prixFinal), 0);
 
+  // Impression à partir de la caisse (POS)
   const validerCommandePOS = async (methodePaiement) => {
       if (posCart.length === 0) return alert("Panier vide !");
       if (posOrderType === 'livraison' && !posAddress.trim()) return alert("Adresse de livraison obligatoire !");
       
       setLoading(true);
       const newCmd = {
-          client: posClientName,
-          tel: posPhone || "Comptoir",
+          client: posClientName.trim() ? posClientName : "Non spécifié",
+          tel: posPhone.trim() ? posPhone : "",
           adresse: posOrderType === 'livraison' ? posAddress : "Sur place",
-          type: posOrderType, // sur_place, emporter, livraison
+          type: posOrderType,
           commentaire: posNote,
           items: posCart,
           total: totalCart,
@@ -192,9 +187,18 @@ function FoodjiSystem() {
               setTimeout(() => setOrderToPrint(null), 1000);
           }, 500);
           
-          setPosCart([]); setPosPhone(''); setPosNote(''); setPosClientName('Client Comptoir'); setPosAddress(''); setPosOrderType('sur_place');
+          setPosCart([]); setPosPhone(''); setPosNote(''); setPosClientName(''); setPosAddress(''); setPosOrderType('sur_place');
       } catch(e) { alert("Erreur création commande."); }
       setLoading(false);
+  };
+
+  // Impression rapide d'une commande Web/App existante
+  const imprimerCommandeExistante = (cmd) => {
+      setOrderToPrint(cmd);
+      setTimeout(() => {
+          window.print();
+          setTimeout(() => setOrderToPrint(null), 1000);
+      }, 500);
   };
 
   const genererZDeCaisse = () => {
@@ -212,9 +216,6 @@ function FoodjiSystem() {
       return { totalGeneral: totalEspeces + totalTPE + totalLivrApp, totalEspeces, totalTPE, totalLivrApp, nbCommandes: cmdsDuJour.length };
   };
 
-  // ==========================================
-  // RENDUS
-  // ==========================================
   if (authState === "LOADING") return <div style={{ background: COLORS.secondary, height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}><h3>Chargement...</h3></div>;
   if (authState === null) return (
       <div style={{ background: COLORS.bg, height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -229,12 +230,15 @@ function FoodjiSystem() {
 
   const renderTickets = () => {
       if (!orderToPrint) return null;
-      const d = new Date(); 
+      const d = orderToPrint.date?.seconds ? new Date(orderToPrint.date.seconds * 1000) : new Date(); 
       const heure = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
       
       let typeLabel = "SUR PLACE";
       if(orderToPrint.type === 'emporter') typeLabel = "À EMPORTER";
       if(orderToPrint.type === 'livraison') typeLabel = "LIVRAISON";
+
+      // Fallback pour le paiement si c'est une commande Web
+      const paiementStatus = orderToPrint.methodePaiement || (orderToPrint.type === 'livraison' ? 'À régler à la livraison' : 'En ligne / Non spécifié');
 
       return (
           <div className="print-only">
@@ -259,16 +263,23 @@ function FoodjiSystem() {
 
               <div className="page-break"></div>
 
-              {/* TICKET CLIENT */}
+              {/* TICKET CLIENT AVEC LOGO ET TELEPHONE */}
               <div className="ticket-80mm">
-                  <h1 style={{textAlign:'center', fontSize:'28px', margin: '0 0 5px 0'}}>FOODJI</h1>
+                  <div style={{textAlign:'center', marginBottom:'10px'}}>
+                      <img src="/logo-ticket.png" alt="FOODJI" style={{maxWidth:'180px', maxHeight:'80px', filter:'grayscale(100%) contrast(1000%)'}} />
+                  </div>
+                  
                   <p style={{textAlign:'center', fontSize:'14px', margin: '2px 0'}}>Sala Al Jadida</p>
                   <p style={{textAlign:'center', fontSize:'14px', margin: '2px 0'}}>Tél: 06 00 00 00 00</p>
                   <hr style={{borderTop:'2px dashed black', margin: '10px 0'}}/>
+                  
                   <p style={{textAlign:'center', fontSize:'18px', fontWeight:'bold', margin: '5px 0'}}>{typeLabel}</p>
-                  <p style={{margin: '2px 0'}}>Date: {d.toLocaleDateString()} {heure}</p>
-                  <p style={{margin: '2px 0'}}>Client: {orderToPrint.client}</p>
-                  {orderToPrint.type === 'livraison' && <p style={{margin: '2px 0', fontWeight:'bold'}}>Adr: {orderToPrint.adresse}</p>}
+                  <p style={{margin: '2px 0', fontSize:'12px'}}>Date: {d.toLocaleDateString()} {heure}</p>
+                  
+                  {orderToPrint.client && orderToPrint.client !== "Non spécifié" && <p style={{margin: '2px 0', fontWeight:'bold', fontSize:'16px'}}>Client: {orderToPrint.client}</p>}
+                  {orderToPrint.tel && <p style={{margin: '5px 0', fontWeight:'bold', fontSize:'18px'}}>Tél: {orderToPrint.tel}</p>}
+                  {orderToPrint.type === 'livraison' && orderToPrint.adresse && <p style={{margin: '2px 0', fontWeight:'bold'}}>Adr: {orderToPrint.adresse}</p>}
+                  
                   <hr style={{borderTop:'2px dashed black', margin: '10px 0'}}/>
                   
                   <table style={{width:'100%', fontSize:'14px', marginBottom:'20px'}}>
@@ -292,7 +303,7 @@ function FoodjiSystem() {
                   </table>
                   <hr style={{borderTop:'2px dashed black', margin: '10px 0'}}/>
                   <h2 style={{textAlign:'right', fontSize:'24px', margin: '10px 0'}}>TOTAL: {orderToPrint.total} DH</h2>
-                  <p style={{textAlign:'right', fontSize:'14px', margin: '2px 0'}}>Paiement: {orderToPrint.methodePaiement || 'Non spécifié'}</p>
+                  <p style={{textAlign:'right', fontSize:'14px', margin: '2px 0'}}>Paiement: {paiementStatus}</p>
                   <p style={{textAlign:'center', marginTop:'30px', fontWeight:'bold', margin: '30px 0 0 0'}}>Merci de votre visite !</p>
               </div>
           </div>
@@ -309,7 +320,7 @@ function FoodjiSystem() {
               
               <div className="no-print" style={{display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', background: '#f0f2f5', fontFamily: 'sans-serif'}}>
                   
-                  {/* MODAL DE PERSONNALISATION (PIZZA/TACOS) */}
+                  {/* MODAL DE PERSONNALISATION */}
                   {customizeItem && (
                       <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:2000}}>
                           <div style={{background:'white', width:'90%', maxWidth:'600px', borderRadius:'15px', padding:'20px', display:'flex', flexDirection:'column', maxHeight:'90vh'}}>
@@ -318,7 +329,6 @@ function FoodjiSystem() {
                               </h2>
                               
                               <div style={{flex:1, overflowY:'auto', padding:'10px 0', display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(140px, 1fr))', gap:'10px'}}>
-                                  {/* Liste des options selon catégorie */}
                                   {(customizeItem.produit.categorie === 'Pizzas' ? parametres.stocks.garnitures : parametres.stocks.sauces)
                                       .filter(opt => opt.available)
                                       .map((opt, idx) => (
@@ -339,7 +349,7 @@ function FoodjiSystem() {
 
                               <div style={{display:'flex', gap:'10px', marginTop:'20px', borderTop:'2px solid #eee', paddingTop:'20px'}}>
                                   <button onClick={() => setCustomizeItem(null)} style={{flex:1, padding:'15px', background:'#9CA3AF', color:'white', borderRadius:'10px', border:'none', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer'}}>Annuler</button>
-                                  <button onClick={() => addToCartFinal(customizeItem.produit, customizeItem.variante, selectedOptions)} style={{flex:2, padding:'15px', background:COLORS.success, color:'white', borderRadius:'10px', border:'none', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer'}}>✅ Valider & Ajouter</button>
+                                  <button onClick={() => addToCartFinal(customizeItem.produit, customizeItem.variante, selectedOptions)} style={{flex:2, padding:'15px', background:COLORS.success, color:'white', borderRadius:'10px', border:'none', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer'}}>✅ Valider</button>
                               </div>
                           </div>
                       </div>
@@ -385,15 +395,14 @@ function FoodjiSystem() {
                   <div style={{width: '400px', flexShrink: 0, background: 'white', display: 'flex', flexDirection: 'column', height: '100%', borderLeft: '2px solid #ddd', boxShadow: '-5px 0 15px rgba(0,0,0,0.05)'}}>
                       
                       <div style={{padding:'15px', borderBottom:'1px solid #eee', background:COLORS.secondary, color:'white', flexShrink: 0}}>
-                          {/* TYPE DE COMMANDE */}
                           <div style={{display:'flex', gap:'5px', marginBottom:'15px', background:'#374151', padding:'5px', borderRadius:'8px'}}>
                               <button onClick={()=>setPosOrderType('sur_place')} style={{flex:1, padding:'8px', borderRadius:'5px', border:'none', fontWeight:'bold', cursor:'pointer', background: posOrderType==='sur_place' ? COLORS.success : 'transparent', color: posOrderType==='sur_place' ? 'white' : '#ccc'}}>S. Place</button>
                               <button onClick={()=>setPosOrderType('emporter')} style={{flex:1, padding:'8px', borderRadius:'5px', border:'none', fontWeight:'bold', cursor:'pointer', background: posOrderType==='emporter' ? COLORS.promo : 'transparent', color: posOrderType==='emporter' ? 'white' : '#ccc'}}>Emporter</button>
                               <button onClick={()=>setPosOrderType('livraison')} style={{flex:1, padding:'8px', borderRadius:'5px', border:'none', fontWeight:'bold', cursor:'pointer', background: posOrderType==='livraison' ? '#3B82F6' : 'transparent', color: posOrderType==='livraison' ? 'white' : '#ccc'}}>Livraison</button>
                           </div>
 
-                          <input type="text" placeholder="Nom Client" value={posClientName} onChange={e=>setPosClientName(e.target.value)} style={{width:'100%', padding:'12px', borderRadius:'8px', border:'none', marginBottom:'10px', fontSize:'1rem', boxSizing:'border-box'}}/>
-                          <input type="tel" placeholder="N° Tél (Optionnel)" value={posPhone} onChange={e=>setPosPhone(e.target.value)} style={{width:'100%', padding:'12px', borderRadius:'8px', border:'none', fontSize:'1rem', boxSizing:'border-box', marginBottom: posOrderType==='livraison'?'10px':'0'}}/>
+                          <input type="text" placeholder="Nom Client (Laisser vide si aucun)" value={posClientName} onChange={e=>setPosClientName(e.target.value)} style={{width:'100%', padding:'12px', borderRadius:'8px', border:'none', marginBottom:'10px', fontSize:'1rem', boxSizing:'border-box'}}/>
+                          <input type="tel" placeholder="N° Tél (Imprimé sur ticket)" value={posPhone} onChange={e=>setPosPhone(e.target.value)} style={{width:'100%', padding:'12px', borderRadius:'8px', border:'none', fontSize:'1rem', boxSizing:'border-box', marginBottom: posOrderType==='livraison'?'10px':'0'}}/>
                           
                           {posOrderType === 'livraison' && (
                               <input type="text" placeholder="Adresse complète..." value={posAddress} onChange={e=>setPosAddress(e.target.value)} style={{width:'100%', padding:'12px', borderRadius:'8px', border:'2px solid #3B82F6', fontSize:'1rem', boxSizing:'border-box'}}/>
@@ -426,10 +435,11 @@ function FoodjiSystem() {
                               <span>TOTAL</span>
                               <span style={{color:COLORS.primary}}>{totalCart} DH</span>
                           </div>
+                          
                           <div style={{display:'flex', gap:'10px', marginBottom:'10px'}}>
-                              <button onClick={()=>validerCommandePOS('Espèces')} disabled={loading || posCart.length===0} style={{flex:1, padding:'20px 10px', background:COLORS.success, color:'white', border:'none', borderRadius:'10px', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer', opacity: posCart.length===0?0.5:1}}>💵 ESPÈCES</button>
-                              <button onClick={()=>validerCommandePOS('TPE')} disabled={loading || posCart.length===0} style={{flex:1, padding:'20px 10px', background:'#3B82F6', color:'white', border:'none', borderRadius:'10px', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer', opacity: posCart.length===0?0.5:1}}>💳 TPE</button>
+                              <button onClick={()=>validerCommandePOS('Espèces')} disabled={loading || posCart.length===0} style={{flex:1, padding:'20px 10px', background:COLORS.success, color:'white', border:'none', borderRadius:'10px', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer', opacity: posCart.length===0?0.5:1}}>💵 ENCAISSER EN ESPÈCES</button>
                           </div>
+                          
                           <button onClick={()=>setPosCart([])} style={{width:'100%', padding:'15px', background:'#fee2e2', color:'red', border:'none', borderRadius:'10px', fontWeight:'bold', cursor:'pointer', fontSize:'1rem'}}>🗑️ Vider le panier</button>
                       </div>
                   </div>
@@ -439,222 +449,212 @@ function FoodjiSystem() {
   }
 
   // ==========================================
-  // RENDU ADMIN & STOCKS 
+  // RENDU ADMIN & STOCKS (Avec Impression incluse)
   // ==========================================
   const zData = genererZDeCaisse();
 
   return (
-    <div className="no-print" style={{ background: COLORS.bg, minHeight: '100vh', paddingBottom: '100px', color: COLORS.secondary }}>
-      <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
-          
-          <div style={{marginBottom:'20px', display:'flex', flexWrap:'wrap', gap:'10px', alignItems:'center', justifyContent:'space-between'}}>
-              <h2 style={{margin:0}}>⚙️ Tableau de Bord</h2>
-              <div style={{display:'flex', gap:'10px'}}>
-                  <button onClick={()=>setShowHistory(!showHistory)} style={{padding:'10px 15px', borderRadius:'8px', border:`2px solid ${COLORS.secondary}`, background: showHistory ? COLORS.secondary : 'transparent', color: showHistory ? 'white' : COLORS.secondary, fontWeight:'bold', cursor:'pointer'}}>🕒 Historique</button>
-                  <button onClick={()=>setShowZDeCaisse(true)} style={{padding:'10px 15px', borderRadius:'8px', border:'none', background:'#3B82F6', color:'white', fontWeight:'bold', cursor:'pointer'}}>📊 Z de Caisse</button>
-                  <button onClick={()=>setAppMode('POS')} style={{padding:'10px 15px', borderRadius:'8px', border:'none', background:COLORS.primary, color:'white', fontWeight:'bold', cursor:'pointer', fontSize:'1.1rem'}}>🍔 OUVRIR LA CAISSE</button>
-                  <button onClick={() => auth.signOut()} style={{padding:'10px 15px', borderRadius:'8px', border:'none', background:'#eee', cursor:'pointer'}}>Déconnexion</button>
-              </div>
-          </div>
+    <>
+      {renderTickets()}
+      <div className="no-print" style={{ background: COLORS.bg, minHeight: '100vh', paddingBottom: '100px', color: COLORS.secondary }}>
+        <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
+            
+            <div style={{marginBottom:'20px', display:'flex', flexWrap:'wrap', gap:'10px', alignItems:'center', justifyContent:'space-between'}}>
+                <h2 style={{margin:0}}>⚙️ Tableau de Bord</h2>
+                <div style={{display:'flex', gap:'10px'}}>
+                    <button onClick={()=>setShowHistory(!showHistory)} style={{padding:'10px 15px', borderRadius:'8px', border:`2px solid ${COLORS.secondary}`, background: showHistory ? COLORS.secondary : 'transparent', color: showHistory ? 'white' : COLORS.secondary, fontWeight:'bold', cursor:'pointer'}}>🕒 Historique</button>
+                    <button onClick={()=>setShowZDeCaisse(true)} style={{padding:'10px 15px', borderRadius:'8px', border:'none', background:'#3B82F6', color:'white', fontWeight:'bold', cursor:'pointer'}}>📊 Z de Caisse</button>
+                    <button onClick={()=>setAppMode('POS')} style={{padding:'10px 15px', borderRadius:'8px', border:'none', background:COLORS.primary, color:'white', fontWeight:'bold', cursor:'pointer', fontSize:'1.1rem'}}>🍔 OUVRIR LA CAISSE</button>
+                    <button onClick={() => auth.signOut()} style={{padding:'10px 15px', borderRadius:'8px', border:'none', background:'#eee', cursor:'pointer'}}>Déconnexion</button>
+                </div>
+            </div>
 
-          {/* MODAL Z DE CAISSE */}
-          {showZDeCaisse && (
-              <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000}}>
-                  <div style={{background:'white', padding:'30px', borderRadius:'15px', width:'90%', maxWidth:'400px'}}>
-                      <h2 style={{marginTop:0, textAlign:'center'}}>📊 Fin de Service</h2>
-                      <p style={{textAlign:'center', color:'#666'}}>Aujourd'hui ({new Date().toLocaleDateString()})</p>
-                      <hr style={{margin:'20px 0'}}/>
-                      <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', fontSize:'1.2rem'}}><span>Espèces (Tiroir) :</span> <strong>{zData.totalEspeces} DH</strong></div>
-                      <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', fontSize:'1.2rem'}}><span>TPE (Carte) :</span> <strong>{zData.totalTPE} DH</strong></div>
-                      <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', fontSize:'1.2rem', color:'#666'}}><span>Livr. App/Web :</span> <strong>{zData.totalLivrApp} DH</strong></div>
-                      <hr style={{margin:'20px 0'}}/>
-                      <div style={{display:'flex', justifyContent:'space-between', fontSize:'1.5rem', color:COLORS.primary}}><span>TOTAL JOUR :</span> <strong>{zData.totalGeneral} DH</strong></div>
-                      <div style={{textAlign:'center', marginTop:'10px', color:'#666'}}>Nombre de commandes : {zData.nbCommandes}</div>
-                      <button onClick={()=>setShowZDeCaisse(false)} style={{width:'100%', padding:'15px', background:COLORS.secondary, color:'white', border:'none', borderRadius:'10px', marginTop:'20px', fontSize:'1.1rem', cursor:'pointer'}}>Fermer</button>
-                  </div>
-              </div>
-          )}
+            {/* MODAL Z DE CAISSE */}
+            {showZDeCaisse && (
+                <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000}}>
+                    <div style={{background:'white', padding:'30px', borderRadius:'15px', width:'90%', maxWidth:'400px'}}>
+                        <h2 style={{marginTop:0, textAlign:'center'}}>📊 Fin de Service</h2>
+                        <p style={{textAlign:'center', color:'#666'}}>Aujourd'hui ({new Date().toLocaleDateString()})</p>
+                        <hr style={{margin:'20px 0'}}/>
+                        <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', fontSize:'1.2rem'}}><span>Espèces (Tiroir) :</span> <strong>{zData.totalEspeces} DH</strong></div>
+                        <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', fontSize:'1.2rem'}}><span>TPE (Carte) :</span> <strong>{zData.totalTPE} DH</strong></div>
+                        <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', fontSize:'1.2rem', color:'#666'}}><span>Livr. App/Web :</span> <strong>{zData.totalLivrApp} DH</strong></div>
+                        <hr style={{margin:'20px 0'}}/>
+                        <div style={{display:'flex', justifyContent:'space-between', fontSize:'1.5rem', color:COLORS.primary}}><span>TOTAL JOUR :</span> <strong>{zData.totalGeneral} DH</strong></div>
+                        <div style={{textAlign:'center', marginTop:'10px', color:'#666'}}>Nombre de commandes : {zData.nbCommandes}</div>
+                        <button onClick={()=>setShowZDeCaisse(false)} style={{width:'100%', padding:'15px', background:COLORS.secondary, color:'white', border:'none', borderRadius:'10px', marginTop:'20px', fontSize:'1.1rem', cursor:'pointer'}}>Fermer</button>
+                    </div>
+                </div>
+            )}
 
-          {/* VUE HISTORIQUE */}
-          {showHistory ? (
-              <div style={{background:'white', padding:'25px', borderRadius:'15px', marginBottom:'40px'}}>
-                  <h3 style={{marginTop:0, color: COLORS.secondary}}>🕒 50 Dernières Commandes (Terminées / Annulées)</h3>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '20px' }}>
-                    {commandes.filter(c => c.status === 'Terminé' || c.status === 'Annulé').slice(0, 50).map(cmd => (
-                      <div key={cmd.id} style={{ border:`1px solid #ddd`, borderRadius:'10px', padding:'15px', opacity: cmd.status === 'Annulé' ? 0.6 : 1, background: cmd.status === 'Annulé' ? '#fef2f2' : '#f9fafb' }}>
-                        <div style={{display:'flex', justifyContent:'space-between', borderBottom:'1px solid #eee', paddingBottom:'10px', marginBottom:'10px'}}>
+            {/* VUE HISTORIQUE */}
+            {showHistory ? (
+                <div style={{background:'white', padding:'25px', borderRadius:'15px', marginBottom:'40px'}}>
+                    <h3 style={{marginTop:0, color: COLORS.secondary}}>🕒 50 Dernières Commandes (Terminées / Annulées)</h3>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '20px' }}>
+                      {commandes.filter(c => c.status === 'Terminé' || c.status === 'Annulé').slice(0, 50).map(cmd => (
+                        <div key={cmd.id} style={{ border:`1px solid #ddd`, borderRadius:'10px', padding:'15px', opacity: cmd.status === 'Annulé' ? 0.6 : 1, background: cmd.status === 'Annulé' ? '#fef2f2' : '#f9fafb' }}>
+                          <div style={{display:'flex', justifyContent:'space-between', borderBottom:'1px solid #eee', paddingBottom:'10px', marginBottom:'10px'}}>
+                              <div>
+                                  <strong>{cmd.client}</strong>
+                                  <div style={{fontSize:'0.8rem', color:'#666'}}>{cmd.date?.seconds ? new Date(cmd.date.seconds * 1000).toLocaleString() : 'Date inconnue'}</div>
+                              </div>
+                              <div style={{textAlign:'right'}}>
+                                  <strong style={{color:COLORS.primary}}>{cmd.total} DH</strong>
+                                  <div style={{fontSize:'0.8rem', fontWeight:'bold', color: cmd.status === 'Annulé' ? COLORS.danger : COLORS.success}}>{cmd.status}</div>
+                              </div>
+                          </div>
+                          <ul style={{listStyle:'none', padding:0, margin:0, fontSize:'0.9rem'}}>
+                              {cmd.items?.map((it, i) => (
+                                  <li key={i} style={{display:'flex', justifyContent:'space-between', borderBottom:'1px dashed #e5e7eb', padding:'5px 0'}}>
+                                      <span>{it.nom} {it.varianteNom ? `(${it.varianteNom})` : ''}</span>
+                                  </li>
+                              ))}
+                          </ul>
+                          {/* BOUTON RE-IMPRIMER L'HISTORIQUE */}
+                          <div style={{marginTop:'15px'}}>
+                              <button onClick={()=>imprimerCommandeExistante(cmd)} style={{width:'100%', padding:'8px', background: COLORS.secondary, color:'white', border:'none', borderRadius:'5px', cursor:'pointer'}}>🖨️ RE-IMPRIMER</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                </div>
+            ) : (
+                <>
+                    <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(250px, 1fr))', gap:'20px', marginBottom:'30px'}}>
+                      <div style={{background: 'white', padding: '20px', borderRadius: '16px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', textAlign:'center'}}>
+                          <h3 style={{marginTop:0, marginBottom:'15px', fontSize:'1rem'}}>Service Client</h3>
+                          <button onClick={() => updateDoc(doc(db, "parametres", "horaires"), { isOuvert: !parametres.isOuvert })} style={{width:'100%', padding:'15px', borderRadius:'10px', border: parametres.isOuvert ? `2px solid ${COLORS.success}` : '1px solid #ddd', background: parametres.isOuvert ? '#ECFDF5' : 'white', color: parametres.isOuvert ? COLORS.success : 'black', fontWeight:'bold', cursor:'pointer'}}>
+                              {parametres.isOuvert ? '🟢 OUVERT' : '🔴 FERMÉ'}
+                          </button>
+                      </div>
+                      <div style={{background: 'white', padding: '20px', borderRadius: '16px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', textAlign:'center'}}>
+                          <h3 style={{marginTop:0, marginBottom:'15px', fontSize:'1rem'}}>Mode Rush</h3>
+                          <select value={parametres.rushMode} onChange={(e) => updateDoc(doc(db, "parametres", "status"), { mode: e.target.value })} style={{width:'100%', padding:'15px', borderRadius:'10px', border:'1px solid #ddd', fontSize:'1rem'}}>
+                              <option value="standard">✅ Standard</option>
+                              <option value="rush">⚠️ Rush (30min+)</option>
+                              <option value="gros_rush">🔥 Gros Rush (1h+)</option>
+                          </select>
+                      </div>
+                    </div>
+
+                    <h3 style={{marginBottom:'15px'}}>Commandes Web & App ({commandes.filter(c => c.status !== 'Terminé' && c.status !== 'Annulé').length})</h3>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '20px', marginBottom:'40px' }}>
+                      {commandes.filter(c => c.status !== 'Terminé' && c.status !== 'Annulé').map(cmd => (
+                        <div key={cmd.id} style={{ background:'white', borderRadius:'16px', padding:'15px', borderLeft: `5px solid ${COLORS.pending}` }}>
+                          <div style={{display:'flex', justifyContent:'space-between', alignItems:'start', borderBottom:'1px solid #f0f0f0', paddingBottom:'10px', marginBottom:'10px'}}>
                             <div>
-                                <strong>{cmd.client}</strong>
-                                <div style={{fontSize:'0.8rem', color:'#666'}}>{cmd.date?.seconds ? new Date(cmd.date.seconds * 1000).toLocaleString() : 'Date inconnue'}</div>
+                                <strong style={{fontSize:'1.2rem'}}>{cmd.client || 'Client'}</strong>
+                                <div style={{color: COLORS.textLight}}>📞 {cmd.tel || 'N/A'}</div>
+                                <div style={{fontSize:'0.8rem', color: '#666'}}>
+                                    {cmd.type === 'livraison' ? `🛵 Livraison : ${cmd.adresse}` : '🛍️ Emporter / Sur Place'}
+                                </div>
                             </div>
                             <div style={{textAlign:'right'}}>
-                                <strong style={{color:COLORS.primary}}>{cmd.total} DH</strong>
-                                <div style={{fontSize:'0.8rem', fontWeight:'bold', color: cmd.status === 'Annulé' ? COLORS.danger : COLORS.success}}>{cmd.status}</div>
+                              <div style={{fontSize:'1.3rem', fontWeight:'bold', color: COLORS.primary}}>{cmd.total} DH</div>
+                              <div style={{fontSize:'0.8rem', color:'#666'}}>{cmd.status}</div>
                             </div>
-                        </div>
-                        <ul style={{listStyle:'none', padding:0, margin:0, fontSize:'0.9rem'}}>
+                          </div>
+                          
+                          {cmd.commentaire && <div style={{background: COLORS.warning, color:'white', padding:'8px', borderRadius:'8px', fontSize:'0.9rem', fontWeight:'bold', marginBottom:'10px'}}>📝 {cmd.commentaire}</div>}
+                          
+                          <ul style={{listStyle:'none', padding:0, marginBottom:'15px'}}>
                             {cmd.items?.map((it, i) => (
-                                <li key={i} style={{display:'flex', justifyContent:'space-between', borderBottom:'1px dashed #e5e7eb', padding:'5px 0'}}>
-                                    <span>{it.nom} {it.varianteNom ? `(${it.varianteNom})` : ''}</span>
-                                </li>
+                              <li key={i} style={{padding:'5px 0', borderBottom:'1px dashed #eee', display:'flex', justifyContent:'space-between'}}>
+                                <div>
+                                    <strong>{it.nom}</strong> <span style={{fontSize:'0.8rem', color:'#666'}}>{it.varianteNom ? `(${it.varianteNom})` : ''}</span>
+                                    {(it.optionsChoisies?.length > 0 || it.sauces?.length > 0) && (
+                                        <div style={{fontSize:'0.8rem', color:COLORS.textLight}}>
+                                            + {it.optionsChoisies?.join(', ')} {it.sauces?.join(', ')}
+                                        </div>
+                                    )}
+                                </div>
+                                <span>{it.prixFinal} DH</span>
+                              </li>
                             ))}
-                        </ul>
-                      </div>
-                    ))}
-                  </div>
-              </div>
-          ) : (
-              <>
-                  {/* STATUS BOUTIQUE & COMMANDES EN COURS SEULEMENT SI HISTORIQUE EST MASQUÉ */}
-                  <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(250px, 1fr))', gap:'20px', marginBottom:'30px'}}>
-                    <div style={{background: 'white', padding: '20px', borderRadius: '16px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', textAlign:'center'}}>
-                        <h3 style={{marginTop:0, marginBottom:'15px', fontSize:'1rem'}}>Service Client</h3>
-                        <button onClick={() => updateDoc(doc(db, "parametres", "horaires"), { isOuvert: !parametres.isOuvert })} style={{width:'100%', padding:'15px', borderRadius:'10px', border: parametres.isOuvert ? `2px solid ${COLORS.success}` : '1px solid #ddd', background: parametres.isOuvert ? '#ECFDF5' : 'white', color: parametres.isOuvert ? COLORS.success : 'black', fontWeight:'bold', cursor:'pointer'}}>
-                            {parametres.isOuvert ? '🟢 OUVERT' : '🔴 FERMÉ'}
-                        </button>
-                    </div>
-                    <div style={{background: 'white', padding: '20px', borderRadius: '16px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', textAlign:'center'}}>
-                        <h3 style={{marginTop:0, marginBottom:'15px', fontSize:'1rem'}}>Mode Rush</h3>
-                        <select value={parametres.rushMode} onChange={(e) => updateDoc(doc(db, "parametres", "status"), { mode: e.target.value })} style={{width:'100%', padding:'15px', borderRadius:'10px', border:'1px solid #ddd', fontSize:'1rem'}}>
-                            <option value="standard">✅ Standard</option>
-                            <option value="rush">⚠️ Rush (30min+)</option>
-                            <option value="gros_rush">🔥 Gros Rush (1h+)</option>
-                        </select>
-                    </div>
-                  </div>
+                          </ul>
 
-                  <h3 style={{marginBottom:'15px'}}>Commandes Web & App ({commandes.filter(c => c.status !== 'Terminé' && c.status !== 'Annulé').length})</h3>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '20px', marginBottom:'40px' }}>
-                    {commandes.filter(c => c.status !== 'Terminé' && c.status !== 'Annulé').map(cmd => (
-                      <div key={cmd.id} style={{ background:'white', borderRadius:'16px', padding:'15px', borderLeft: `5px solid ${COLORS.pending}` }}>
-                        <div style={{display:'flex', justifyContent:'space-between', alignItems:'start', borderBottom:'1px solid #f0f0f0', paddingBottom:'10px', marginBottom:'10px'}}>
-                          <div>
-                              <strong style={{fontSize:'1.2rem'}}>{cmd.client || 'Client'}</strong>
-                              <div style={{color: COLORS.textLight}}>📞 {cmd.tel || 'N/A'}</div>
-                              <div style={{fontSize:'0.8rem', color: '#666'}}>
-                                  {cmd.type === 'livraison' ? `🛵 Livraison : ${cmd.adresse}` : '🛍️ Emporter / Sur Place'}
-                              </div>
-                          </div>
-                          <div style={{textAlign:'right'}}>
-                            <div style={{fontSize:'1.3rem', fontWeight:'bold', color: COLORS.primary}}>{cmd.total} DH</div>
-                            <div style={{fontSize:'0.8rem', color:'#666'}}>{cmd.status}</div>
+                          {/* LIGNE DES ACTIONS ADMIN : INCLUT L'IMPRESSION RAPIDE */}
+                          <div style={{display:'flex', gap:'10px', flexWrap:'wrap'}}>
+                            <button onClick={()=>imprimerCommandeExistante(cmd)} style={{width:'100%', padding:'10px', background: COLORS.secondary, color:'white', border:'none', borderRadius:'8px', fontWeight:'bold', cursor:'pointer', marginBottom:'5px'}}>🖨️ IMPRIMER LE TICKET</button>
+                            
+                            <button onClick={()=>changerStatus(cmd.id, 'Terminé')} style={{flex:1, padding:'10px', background: COLORS.success, color:'white', border:'none', borderRadius:'8px', fontWeight:'bold'}}>✅ SERVI</button>
+                            <button onClick={()=>changerStatus(cmd.id, 'Annulé')} style={{flex:1, padding:'10px', background: COLORS.danger, color:'white', border:'none', borderRadius:'8px', fontWeight:'bold'}}>❌ ANNULER</button>
                           </div>
                         </div>
-                        
-                        {cmd.commentaire && <div style={{background: COLORS.warning, color:'white', padding:'8px', borderRadius:'8px', fontSize:'0.9rem', fontWeight:'bold', marginBottom:'10px'}}>📝 {cmd.commentaire}</div>}
-                        
-                        <ul style={{listStyle:'none', padding:0, marginBottom:'15px'}}>
-                          {cmd.items?.map((it, i) => (
-                            <li key={i} style={{padding:'5px 0', borderBottom:'1px dashed #eee', display:'flex', justifyContent:'space-between'}}>
-                              <div>
-                                  <strong>{it.nom}</strong> <span style={{fontSize:'0.8rem', color:'#666'}}>{it.varianteNom ? `(${it.varianteNom})` : ''}</span>
-                                  {(it.optionsChoisies?.length > 0 || it.sauces?.length > 0) && (
-                                      <div style={{fontSize:'0.8rem', color:COLORS.textLight}}>
-                                          + {it.optionsChoisies?.join(', ')} {it.sauces?.join(', ')}
-                                      </div>
-                                  )}
-                              </div>
-                              <span>{it.prixFinal} DH</span>
-                            </li>
-                          ))}
-                        </ul>
+                      ))}
+                    </div>
+                </>
+            )}
 
-                        <div style={{display:'flex', gap:'10px'}}>
-                          <button onClick={()=>changerStatus(cmd.id, 'Terminé')} style={{flex:1, padding:'10px', background: COLORS.success, color:'white', border:'none', borderRadius:'8px', fontWeight:'bold'}}>✅ SERVI</button>
-                          <button onClick={()=>changerStatus(cmd.id, 'Annulé')} style={{flex:1, padding:'10px', background: COLORS.danger, color:'white', border:'none', borderRadius:'8px', fontWeight:'bold'}}>❌ ANNULER</button>
-                        </div>
-                      </div>
-                    ))}
+            <div style={{background:'white', padding:'25px', borderRadius:'15px', marginBottom:'40px', border:`2px solid ${COLORS.primary}`}}>
+                  <h3 style={{marginTop:0, color: COLORS.primary, fontSize:'1.3rem'}}>🥕 GESTION RAPIDE DES STOCKS (RUPTURES)</h3>
+                  <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '10px', display:'flex', gap:'10px', marginBottom:'20px', scrollbarWidth:'none' }}>
+                      {STOCK_TABS.map(tab => (
+                          <button key={tab.id} onClick={() => setActiveStockTab(tab.id)} style={{padding:'10px 20px', borderRadius:'25px', background: activeStockTab === tab.id ? COLORS.secondary : '#f0f2f5', color: activeStockTab === tab.id ? 'white' : 'black', fontWeight:'bold', border:'none', cursor: 'pointer', fontSize:'1rem'}}>{tab.label}</button>
+                      ))}
                   </div>
-              </>
-          )}
+                  
+                  <div style={{display:'flex', gap:'10px', marginBottom:'20px'}}>
+                      <input type="text" placeholder={`Ajouter dans ${STOCK_TABS.find(t=>t.id===activeStockTab).label}...`} value={newItemName} onChange={(e) => setNewItemName(e.target.value)} style={{flex:1, padding:'12px', borderRadius:'8px', border:'1px solid #ddd', fontSize:'1rem'}} />
+                      <button onClick={addNewStockItem} style={{padding:'12px 20px', background:COLORS.success, color:'white', border:'none', borderRadius:'8px', fontWeight:'bold', cursor:'pointer'}}>Ajouter</button>
+                  </div>
 
-          <div style={{background:'white', padding:'25px', borderRadius:'15px', marginBottom:'40px', border:`2px solid ${COLORS.primary}`}}>
-                <h3 style={{marginTop:0, color: COLORS.primary, fontSize:'1.3rem'}}>🥕 GESTION RAPIDE DES STOCKS (RUPTURES)</h3>
-                <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '10px', display:'flex', gap:'10px', marginBottom:'20px', scrollbarWidth:'none' }}>
-                    {STOCK_TABS.map(tab => (
-                        <button key={tab.id} onClick={() => setActiveStockTab(tab.id)} style={{padding:'10px 20px', borderRadius:'25px', background: activeStockTab === tab.id ? COLORS.secondary : '#f0f2f5', color: activeStockTab === tab.id ? 'white' : 'black', fontWeight:'bold', border:'none', cursor: 'pointer', fontSize:'1rem'}}>{tab.label}</button>
-                    ))}
-                </div>
-                
-                <div style={{display:'flex', gap:'10px', marginBottom:'20px'}}>
-                    <input type="text" placeholder={`Ajouter dans ${STOCK_TABS.find(t=>t.id===activeStockTab).label}...`} value={newItemName} onChange={(e) => setNewItemName(e.target.value)} style={{flex:1, padding:'12px', borderRadius:'8px', border:'1px solid #ddd', fontSize:'1rem'}} />
-                    <button onClick={addNewStockItem} style={{padding:'12px 20px', background:COLORS.success, color:'white', border:'none', borderRadius:'8px', fontWeight:'bold', cursor:'pointer'}}>Ajouter</button>
-                </div>
+                  <div style={{display:'flex', flexWrap:'wrap', gap:'10px'}}>
+                      {parametres.stocks[activeStockTab] && parametres.stocks[activeStockTab].map((item, index) => (
+                          <button key={index} onClick={() => toggleStockItem(activeStockTab, index)} style={{padding:'12px 20px', borderRadius:'25px', cursor:'pointer', fontWeight:'bold', background: item.available ? COLORS.success : '#fef2f2', color: item.available ? 'white' : COLORS.danger, border: item.available ? 'none' : `1px solid ${COLORS.danger}`, fontSize:'1rem', boxShadow:'0 2px 4px rgba(0,0,0,0.1)'}}>
+                              {item.nom} {item.available ? '✅' : '❌'}
+                          </button>
+                      ))}
+                  </div>
+            </div>
 
-                <div style={{display:'flex', flexWrap:'wrap', gap:'10px'}}>
-                    {parametres.stocks[activeStockTab] && parametres.stocks[activeStockTab].map((item, index) => (
-                        <button key={index} onClick={() => toggleStockItem(activeStockTab, index)} style={{padding:'12px 20px', borderRadius:'25px', cursor:'pointer', fontWeight:'bold', background: item.available ? COLORS.success : '#fef2f2', color: item.available ? 'white' : COLORS.danger, border: item.available ? 'none' : `1px solid ${COLORS.danger}`, fontSize:'1rem', boxShadow:'0 2px 4px rgba(0,0,0,0.1)'}}>
-                            {item.nom} {item.available ? '✅' : '❌'}
-                        </button>
-                    ))}
-                </div>
-          </div>
+            <h3 style={{marginBottom:'15px'}}>📦 Gestion de la Carte (Produits)</h3>
+            <div style={{background:'white', padding:'20px', borderRadius:'15px'}}>
+               <div style={{ overflowX: 'auto', display:'flex', gap:'10px', paddingBottom:'15px', marginBottom:'15px' }}>
+                {TOUTES_CATEGORIES.map(c => <button key={c} onClick={() => setAdminCategorie(c)} style={{padding:'10px 20px', borderRadius:'20px', border:'none', background: adminCategorie===c?COLORS.secondary:'#eee', color:adminCategorie===c?'white':'black', cursor:'pointer', fontWeight:'bold'}}>{c}</button>)}
+               </div>
 
-          <h3 style={{marginBottom:'15px'}}>📦 Gestion de la Carte (Produits)</h3>
-          <div style={{background:'white', padding:'20px', borderRadius:'15px'}}>
-             <div style={{ overflowX: 'auto', display:'flex', gap:'10px', paddingBottom:'15px', marginBottom:'15px' }}>
-              {TOUTES_CATEGORIES.map(c => <button key={c} onClick={() => setAdminCategorie(c)} style={{padding:'10px 20px', borderRadius:'20px', border:'none', background: adminCategorie===c?COLORS.secondary:'#eee', color:adminCategorie===c?'white':'black', cursor:'pointer', fontWeight:'bold'}}>{c}</button>)}
-             </div>
-
-             {menu.filter(p => p.categorie === adminCategorie).map(p => (
-              <div key={p.id} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'15px', borderBottom:'1px solid #f0f0f0', background: p.available === false ? '#FFF5F5' : 'white'}}>
-                <div style={{display:'flex', alignItems:'center', gap:'15px'}}>
-                  <button onClick={() => toggleAvailability(p)} style={{padding:'8px 15px', border:'none', borderRadius:'8px', background:p.available?COLORS.success:COLORS.danger, color:'white', fontWeight:'bold', cursor:'pointer'}}>{p.available ? 'EN LIGNE' : 'RUPTURE'}</button>
-                  <div style={{fontWeight:'bold', fontSize:'1.1rem', textDecoration: p.available === false ? 'line-through' : 'none'}}>{p.nom} <span style={{color:COLORS.textLight, fontWeight:'normal'}}>- {p.variantes?.length>0 ? 'Multi-tailles' : p.prix+' DH'}</span></div>
+               {menu.filter(p => p.categorie === adminCategorie).map(p => (
+                <div key={p.id} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'15px', borderBottom:'1px solid #f0f0f0', background: p.available === false ? '#FFF5F5' : 'white'}}>
+                  <div style={{display:'flex', alignItems:'center', gap:'15px'}}>
+                    <button onClick={() => toggleAvailability(p)} style={{padding:'8px 15px', border:'none', borderRadius:'8px', background:p.available?COLORS.success:COLORS.danger, color:'white', fontWeight:'bold', cursor:'pointer'}}>{p.available ? 'EN LIGNE' : 'RUPTURE'}</button>
+                    <div style={{fontWeight:'bold', fontSize:'1.1rem', textDecoration: p.available === false ? 'line-through' : 'none'}}>{p.nom} <span style={{color:COLORS.textLight, fontWeight:'normal'}}>- {p.variantes?.length>0 ? 'Multi-tailles' : p.prix+' DH'}</span></div>
+                  </div>
+                  <div style={{display:'flex', gap:'15px'}}>
+                      <button onClick={() => {setEditId(p.id); setFormProd({nom: p.nom, description: p.description||'', categorie: p.categorie, prixBase: p.prix, variantes: p.variantes||[]}); window.scrollTo(0,0);}} style={{border:'none', background:'#f0f2f5', padding:'8px 12px', borderRadius:'8px', fontSize:'1.1rem', cursor:'pointer'}}>✏️ Modifier</button>
+                      <button onClick={()=>supprimerProduit(p.id)} style={{color:'white', border:'none', background:COLORS.danger, padding:'8px 12px', borderRadius:'8px', cursor:'pointer', fontWeight:'bold'}}>X</button>
+                  </div>
                 </div>
-                <div style={{display:'flex', gap:'15px'}}>
-                    <button onClick={() => {setEditId(p.id); setFormProd({nom: p.nom, description: p.description||'', categorie: p.categorie, prixBase: p.prix, variantes: p.variantes||[]}); window.scrollTo(0,0);}} style={{border:'none', background:'#f0f2f5', padding:'8px 12px', borderRadius:'8px', fontSize:'1.1rem', cursor:'pointer'}}>✏️ Modifier</button>
-                    <button onClick={()=>supprimerProduit(p.id)} style={{color:'white', border:'none', background:COLORS.danger, padding:'8px 12px', borderRadius:'8px', cursor:'pointer', fontWeight:'bold'}}>X</button>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
 
-          <div style={{marginTop:'30px', background:'white', padding:'25px', borderRadius:'15px', boxShadow:'0 4px 6px rgba(0,0,0,0.05)'}}>
-             <h3 style={{marginTop:0}}>{editId ? '✏️ Mettre à jour le produit' : '➕ Ajouter un Produit'}</h3>
-             <div style={{display:'flex', flexDirection:'column', gap:'15px'}}>
-                 <input placeholder="Nom du produit" value={formProd.nom} onChange={e=>setFormProd({...formProd, nom: e.target.value})} style={{padding:'12px', borderRadius:'8px', border:'1px solid #ddd', fontSize:'1rem'}} />
-                 <select value={formProd.categorie} onChange={e=>setFormProd({...formProd, categorie: e.target.value})} style={{padding:'12px', borderRadius:'8px', border:'1px solid #ddd', fontSize:'1rem'}}>
-                     {TOUTES_CATEGORIES.map(cat => <option key={cat}>{cat}</option>)}
-                 </select>
-                 <input type="number" placeholder="Prix (ex: 45)" value={formProd.prixBase} onChange={e=>setFormProd({...formProd, prixBase: e.target.value})} style={{padding:'12px', borderRadius:'8px', border:'1px solid #ddd', fontSize:'1rem'}} />
-                 <div style={{display:'flex', gap:'10px'}}>
-                    <button onClick={saveProduit} style={{flex:1, padding:'15px', background:COLORS.primary, color:'white', border:'none', borderRadius:'10px', fontSize:'1.1rem', fontWeight:'bold', cursor:'pointer'}}>{editId ? 'Enregistrer les modifications' : 'Ajouter à la carte'}</button>
-                    {editId && <button onClick={() => {setEditId(null); setFormProd({nom:'', description:'', categorie:'Burgers', prixBase:'', variantes:[]});}} style={{padding:'15px 25px', background:'#9CA3AF', color:'white', border:'none', borderRadius:'10px', fontSize:'1.1rem', fontWeight:'bold', cursor:'pointer'}}>Annuler</button>}
-                 </div>
-             </div>
-          </div>
+            <div style={{marginTop:'30px', background:'white', padding:'25px', borderRadius:'15px', boxShadow:'0 4px 6px rgba(0,0,0,0.05)'}}>
+               <h3 style={{marginTop:0}}>{editId ? '✏️ Mettre à jour le produit' : '➕ Ajouter un Produit'}</h3>
+               <div style={{display:'flex', flexDirection:'column', gap:'15px'}}>
+                   <input placeholder="Nom du produit" value={formProd.nom} onChange={e=>setFormProd({...formProd, nom: e.target.value})} style={{padding:'12px', borderRadius:'8px', border:'1px solid #ddd', fontSize:'1rem'}} />
+                   <select value={formProd.categorie} onChange={e=>setFormProd({...formProd, categorie: e.target.value})} style={{padding:'12px', borderRadius:'8px', border:'1px solid #ddd', fontSize:'1rem'}}>
+                       {TOUTES_CATEGORIES.map(cat => <option key={cat}>{cat}</option>)}
+                   </select>
+                   <input type="number" placeholder="Prix (ex: 45)" value={formProd.prixBase} onChange={e=>setFormProd({...formProd, prixBase: e.target.value})} style={{padding:'12px', borderRadius:'8px', border:'1px solid #ddd', fontSize:'1rem'}} />
+                   <div style={{display:'flex', gap:'10px'}}>
+                      <button onClick={saveProduit} style={{flex:1, padding:'15px', background:COLORS.primary, color:'white', border:'none', borderRadius:'10px', fontSize:'1.1rem', fontWeight:'bold', cursor:'pointer'}}>{editId ? 'Enregistrer les modifications' : 'Ajouter à la carte'}</button>
+                      {editId && <button onClick={() => {setEditId(null); setFormProd({nom:'', description:'', categorie:'Burgers', prixBase:'', variantes:[]});}} style={{padding:'15px 25px', background:'#9CA3AF', color:'white', border:'none', borderRadius:'10px', fontSize:'1.1rem', fontWeight:'bold', cursor:'pointer'}}>Annuler</button>}
+                   </div>
+               </div>
+            </div>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
-// ==========================================
-// CSS STRIQUE D'IMPRESSION
-// ==========================================
 const printStyles = `
   @media print {
     @page { margin: 0; size: 80mm auto; }
-    body, html, #root {
-      background: white !important;
-      height: auto !important;
-      min-height: auto !important;
-      overflow: visible !important;
-      margin: 0 !important;
-      padding: 0 !important;
-    }
+    body, html, #root { background: white !important; height: auto !important; min-height: auto !important; overflow: visible !important; margin: 0 !important; padding: 0 !important; }
     .no-print { display: none !important; }
-    .print-only { 
-      display: block !important; 
-      position: absolute !important;
-      top: 0 !important;
-      left: 0 !important;
-      width: 80mm !important;
-      color: black !important;
-      background: white !important;
-      font-family: 'Courier New', monospace;
-    }
+    .print-only { display: block !important; position: absolute !important; top: 0 !important; left: 0 !important; width: 80mm !important; color: black !important; background: white !important; font-family: 'Courier New', monospace; }
     .ticket-80mm { width: 75mm; margin: 0 auto; padding-bottom: 20px; }
     .page-break { page-break-after: always; }
   }
