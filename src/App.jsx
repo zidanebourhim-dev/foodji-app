@@ -12,7 +12,8 @@ const INIT_SAUCES = [{ nom: "Algérienne", available: true }, { nom: "Biggy", av
 const INIT_PATES = [{ nom: "Penne", available: true }, { nom: "Tagliatelle", available: true }, { nom: "Spaghetti", available: true }];
 const INIT_TAILLES_PIZZA = [{ nom: "M", available: true }, { nom: "L", available: true }];
 
-const TOUTES_CATEGORIES = ["Tacos", "Pizzas", "Burgers", "Pâtes", "Sides", "Boissons"];
+// RETOUR DE TOUTES LES CATÉGORIES + AJOUT PANUOZZO (SANS DESSERTS)
+const TOUTES_CATEGORIES = ["Tacos", "Pizzas", "Burgers", "Panuozzo", "Pâtes", "Sides", "Les Burritos", "Koniks", "Plats", "Salades", "Boissons"];
 const STOCK_TABS = [{ id: 'viandes', label: '🌮 Viandes' }, { id: 'garnitures', label: '🍕 Garnitures' }, { id: 'sauces', label: '🥣 Sauces' }, { id: 'pates', label: '🍝 Pâtes' }, { id: 'tailles_pizza', label: '📏 Tailles Pizza' }];
 const NOTIF_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
 
@@ -115,11 +116,15 @@ function FoodjiSystem() {
     const data = { nom: formProd.nom, description: formProd.description, categorie: formProd.categorie, prix: formProd.variantes.length > 0 ? 0 : Number(formProd.prixBase), variantes: formProd.variantes, available: true, date: new Date() };
     if(formProd.image) data.image = formProd.image;
     if (editId) { await updateDoc(doc(db, "produits", editId), data); alert("Modifié !"); setEditId(null); } else { await addDoc(collection(db, "produits"), data); alert("Ajouté !"); }
-    setFormProd({ nom: '', description: '', image: '', categorie: 'Burgers', prixBase: '', variantes: [] }); setLoading(false);
+    setFormProd({ nom: '', description: '', image: '', categorie: 'Panuozzo', prixBase: '', variantes: [] }); setLoading(false);
   };
 
+  // --- LOGIQUE CORRIGÉE : UNIQUEMENT 2 SAISONS / 4 SAISONS POUR LA PIZZA ---
   const triggerAddToCart = (produit, variante = null) => {
-      if (produit.categorie === 'Pizzas' || produit.categorie === 'Tacos') {
+      const nomPizza = produit.nom.toLowerCase();
+      const isPizzaPersonnalisable = produit.categorie === 'Pizzas' && (nomPizza.includes('2 saisons') || nomPizza.includes('4 saisons') || nomPizza.includes('deux saisons') || nomPizza.includes('quatre saisons'));
+
+      if (produit.categorie === 'Tacos' || isPizzaPersonnalisable) {
           setCustomizeItem({ produit, variante });
           setSelectedOptions([]); 
       } else {
@@ -158,7 +163,6 @@ function FoodjiSystem() {
   const removeFromCart = (idCart) => { setPosCart(posCart.filter(item => item.idCart !== idCart)); };
   const totalCart = posCart.reduce((sum, item) => sum + Number(item.prixFinal), 0);
 
-  // Impression à partir de la caisse (POS)
   const validerCommandePOS = async (methodePaiement) => {
       if (posCart.length === 0) return alert("Panier vide !");
       if (posOrderType === 'livraison' && !posAddress.trim()) return alert("Adresse de livraison obligatoire !");
@@ -192,7 +196,6 @@ function FoodjiSystem() {
       setLoading(false);
   };
 
-  // Impression rapide d'une commande Web/App existante
   const imprimerCommandeExistante = (cmd) => {
       setOrderToPrint(cmd);
       setTimeout(() => {
@@ -237,7 +240,6 @@ function FoodjiSystem() {
       if(orderToPrint.type === 'emporter') typeLabel = "À EMPORTER";
       if(orderToPrint.type === 'livraison') typeLabel = "LIVRAISON";
 
-      // Fallback pour le paiement si c'est une commande Web
       const paiementStatus = orderToPrint.methodePaiement || (orderToPrint.type === 'livraison' ? 'À régler à la livraison' : 'En ligne / Non spécifié');
 
       return (
@@ -449,7 +451,7 @@ function FoodjiSystem() {
   }
 
   // ==========================================
-  // RENDU ADMIN & STOCKS (Avec Impression incluse)
+  // RENDU ADMIN & STOCKS 
   // ==========================================
   const zData = genererZDeCaisse();
 
@@ -477,7 +479,6 @@ function FoodjiSystem() {
                         <p style={{textAlign:'center', color:'#666'}}>Aujourd'hui ({new Date().toLocaleDateString()})</p>
                         <hr style={{margin:'20px 0'}}/>
                         <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', fontSize:'1.2rem'}}><span>Espèces (Tiroir) :</span> <strong>{zData.totalEspeces} DH</strong></div>
-                        <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', fontSize:'1.2rem'}}><span>TPE (Carte) :</span> <strong>{zData.totalTPE} DH</strong></div>
                         <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', fontSize:'1.2rem', color:'#666'}}><span>Livr. App/Web :</span> <strong>{zData.totalLivrApp} DH</strong></div>
                         <hr style={{margin:'20px 0'}}/>
                         <div style={{display:'flex', justifyContent:'space-between', fontSize:'1.5rem', color:COLORS.primary}}><span>TOTAL JOUR :</span> <strong>{zData.totalGeneral} DH</strong></div>
@@ -511,7 +512,6 @@ function FoodjiSystem() {
                                   </li>
                               ))}
                           </ul>
-                          {/* BOUTON RE-IMPRIMER L'HISTORIQUE */}
                           <div style={{marginTop:'15px'}}>
                               <button onClick={()=>imprimerCommandeExistante(cmd)} style={{width:'100%', padding:'8px', background: COLORS.secondary, color:'white', border:'none', borderRadius:'5px', cursor:'pointer'}}>🖨️ RE-IMPRIMER</button>
                           </div>
@@ -574,7 +574,6 @@ function FoodjiSystem() {
                             ))}
                           </ul>
 
-                          {/* LIGNE DES ACTIONS ADMIN : INCLUT L'IMPRESSION RAPIDE */}
                           <div style={{display:'flex', gap:'10px', flexWrap:'wrap'}}>
                             <button onClick={()=>imprimerCommandeExistante(cmd)} style={{width:'100%', padding:'10px', background: COLORS.secondary, color:'white', border:'none', borderRadius:'8px', fontWeight:'bold', cursor:'pointer', marginBottom:'5px'}}>🖨️ IMPRIMER LE TICKET</button>
                             
@@ -639,7 +638,7 @@ function FoodjiSystem() {
                    <input type="number" placeholder="Prix (ex: 45)" value={formProd.prixBase} onChange={e=>setFormProd({...formProd, prixBase: e.target.value})} style={{padding:'12px', borderRadius:'8px', border:'1px solid #ddd', fontSize:'1rem'}} />
                    <div style={{display:'flex', gap:'10px'}}>
                       <button onClick={saveProduit} style={{flex:1, padding:'15px', background:COLORS.primary, color:'white', border:'none', borderRadius:'10px', fontSize:'1.1rem', fontWeight:'bold', cursor:'pointer'}}>{editId ? 'Enregistrer les modifications' : 'Ajouter à la carte'}</button>
-                      {editId && <button onClick={() => {setEditId(null); setFormProd({nom:'', description:'', categorie:'Burgers', prixBase:'', variantes:[]});}} style={{padding:'15px 25px', background:'#9CA3AF', color:'white', border:'none', borderRadius:'10px', fontSize:'1.1rem', fontWeight:'bold', cursor:'pointer'}}>Annuler</button>}
+                      {editId && <button onClick={() => {setEditId(null); setFormProd({nom:'', description:'', categorie:'Panuozzo', prixBase:'', variantes:[]});}} style={{padding:'15px 25px', background:'#9CA3AF', color:'white', border:'none', borderRadius:'10px', fontSize:'1.1rem', fontWeight:'bold', cursor:'pointer'}}>Annuler</button>}
                    </div>
                </div>
             </div>
