@@ -17,7 +17,6 @@ const STOCK_TABS = [{ id: 'viandes', label: '🌮 Viandes' }, { id: 'garnitures'
 const CAISSIERES = ["Rim", "Amal", "Manager"];
 const NOTIF_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
 
-// TARIFS DES EXTRAS CODÉS EN DUR SELON TES RÈGLES
 const PIZZA_EXTRAS_BASE = { "Champignons": 10, "Mozzarella": 10, "Parmesan": 15, "Cheddar": 15 };
 const TACOS_EXTRAS = { "Sauce Fromagère": 10, "Supplément Cheddar": 7, "Supplément Mozzarella": 7, "Gratinage": 7 };
 
@@ -37,6 +36,7 @@ function FoodjiSystem() {
   
   const [menu, setMenu] = useState([]);
   const [commandes, setCommandes] = useState([]);
+  const [clientsDB, setClientsDB] = useState([]); // CRM Base de données clients
   const [parametres, setParametres] = useState({ isOuvert: true, rushMode: 'standard', stocks: { viandes: INIT_VIANDES, garnitures: INIT_GARNITURES_PIZZA, sauces: INIT_SAUCES, pates: INIT_PATES, tailles_pizza: INIT_TAILLES_PIZZA } });
   
   const [sessionCaisse, setSessionCaisse] = useState({ isActive: false, caissiere: '', startTime: null });
@@ -49,6 +49,7 @@ function FoodjiSystem() {
   const [formProd, setFormProd] = useState({ nom: '', description: '', image: '', categorie: 'Burgers', prixBase: '', variantes: [] });
   const [showHistory, setShowHistory] = useState(false); 
   
+  // ÉTATS POS (CAISSE)
   const [posCart, setPosCart] = useState([]);
   const [posPhone, setPosPhone] = useState('');
   const [posNote, setPosNote] = useState('');
@@ -57,13 +58,14 @@ function FoodjiSystem() {
   const [posOrderType, setPosOrderType] = useState('sur_place'); 
   const [posAddress, setPosAddress] = useState('');
   const [remiseGlobale, setRemiseGlobale] = useState(0);
+  const [clientActif, setClientActif] = useState(null); // Client reconnu par le CRM
   
   const [orderToPrint, setOrderToPrint] = useState(null);
   const [numpad, setNumpad] = useState({ active: false, mode: '', targetId: null, label: '', value: '' });
   const [showBilanPos, setShowBilanPos] = useState(false); 
   const [showBilanGlobal, setShowBilanGlobal] = useState(false); 
+  const [showRenduMonnaie, setShowRenduMonnaie] = useState({ active: false, aRendre: 0, received: 0 }); // Modal Rendu Monnaie
 
-  // ETAT COMPLEXE DE PERSONNALISATION
   const [customizeItem, setCustomizeItem] = useState(null); 
   const [customOptions, setCustomOptions] = useState({ garnitures: [], sauces: [], viandes: [], extras: [], cheesyCrust: false });
 
@@ -99,6 +101,7 @@ function FoodjiSystem() {
     });
 
     const unsubMenu = onSnapshot(collection(db, "produits"), (snap) => setMenu(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    const unsubClients = onSnapshot(collection(db, "clients"), (snap) => setClientsDB(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
     const unsubCmd = onSnapshot(query(collection(db, "commandes")), (snap) => {
       try {
           const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -112,7 +115,7 @@ function FoodjiSystem() {
       } catch (e) { console.error("Erreur tri", e); }
     });
 
-    return () => { unsubStatus(); unsubHoraires(); unsubStocks(); unsubSession(); unsubServiceGlobal(); unsubMenu(); unsubCmd(); };
+    return () => { unsubStatus(); unsubHoraires(); unsubStocks(); unsubSession(); unsubServiceGlobal(); unsubMenu(); unsubClients(); unsubCmd(); };
   }, [authState]);
 
   const handleLogin = async (e) => {
@@ -127,12 +130,11 @@ function FoodjiSystem() {
   const toggleStockItem = async (listName, index) => { const newList = [...parametres.stocks[listName]]; newList[index].available = !newList[index].available; await updateDoc(doc(db, "parametres", "stocks"), { ...parametres.stocks, [listName]: newList }); };
   const addNewStockItem = async () => { if(!newItemName.trim()) return; const newList = [...parametres.stocks[activeStockTab], { nom: newItemName.trim(), available: true }]; await updateDoc(doc(db, "parametres", "stocks"), { ...parametres.stocks, [activeStockTab]: newList }); setNewItemName(''); };
   const changerStatus = async (id, st) => await updateDoc(doc(db, "commandes", id), { status: st });
-  const supprimerCmd = async (id) => confirm("Supprimer commande ?") && await deleteDoc(doc(db, "commandes", id));
   
   const handleCategoryChange = (e) => {
       const cat = e.target.value;
       let vars = [];
-      if (cat === 'Tacos') vars = [{nom: 'L', prix: '', available: true}, {nom: 'XL', prix: '', available: true}, {nom: 'XXL', prix: '', available: true}];
+      if (cat === 'Tacos') vars = [{nom: 'M', prix: '', available: true}, {nom: 'L', prix: '', available: true}, {nom: 'XL', prix: '', available: true}, {nom: 'XXL', prix: '', available: true}];
       else if (cat === 'Pizzas') vars = [{nom: 'M', prix: '', available: true}, {nom: 'L', prix: '', available: true}];
       setFormProd({...formProd, categorie: cat, variantes: vars, prixBase: ''});
   };
@@ -142,7 +144,26 @@ function FoodjiSystem() {
     const data = { nom: formProd.nom, description: formProd.description, categorie: formProd.categorie, prix: formProd.variantes.length > 0 ? 0 : Number(formProd.prixBase), variantes: formProd.variantes, available: true, date: new Date() };
     if(formProd.image) data.image = formProd.image;
     if (editId) { await updateDoc(doc(db, "produits", editId), data); alert("Modifié !"); setEditId(null); } else { await addDoc(collection(db, "produits"), data); alert("Ajouté !"); }
-    setFormProd({ nom: '', description: '', image: '', categorie: 'Burgers', prixBase: '', variantes: [] }); setLoading(false);
+    setFormProd({ nom: '', description: '', image: '', categorie: 'Panuozzo', prixBase: '', variantes: [] }); setLoading(false);
+  };
+
+  // RÉPARATEUR DE PIZZAS
+  const reparerPizzas = async () => {
+      if(!confirm("Ceci va forcer les tailles M et L sur toutes les pizzas. Confirmer ?")) return;
+      setLoading(true);
+      const pizzas = menu.filter(p => p.categorie === 'Pizzas');
+      for (let p of pizzas) {
+          let vars = p.variantes || [];
+          let hasM = vars.find(v => v.nom === 'M');
+          let hasL = vars.find(v => v.nom === 'L');
+          if (!hasM || !hasL) {
+              if (!hasM) vars.push({nom: 'M', prix: p.prix || 0, available: true});
+              if (!hasL) vars.push({nom: 'L', prix: (p.prix || 0) * 1.5, available: true});
+              await updateDoc(doc(db, "produits", p.id), { variantes: vars });
+          }
+      }
+      setLoading(false);
+      alert("✅ Réparation terminée. Vérifie les prix L dans la liste !");
   };
 
   // --- SESSIONS ---
@@ -209,9 +230,29 @@ function FoodjiSystem() {
       }, 500);
   };
 
+  // --- CRM & TÉLÉPHONE LOGIC ---
+  const handlePhoneInput = (val) => {
+      setPosPhone(val);
+      const valTrim = val.replace(/\s+/g, '');
+      if (valTrim.length >= 9) {
+          const found = clientsDB.find(c => c.tel.replace(/\s+/g, '') === valTrim);
+          if (found) {
+              setPosClientName(found.nom || '');
+              setClientActif(found);
+          } else {
+              setClientActif(null);
+          }
+      } else {
+          setClientActif(null);
+      }
+  };
+
   // --- LOGIQUE PANIER & PERSONNALISATION ---
   const triggerAddToCart = (produit, variante = null) => {
-      if (produit.categorie === 'Tacos' || produit.categorie === 'Pizzas') {
+      const nomPizza = produit.nom.toLowerCase();
+      const isPizzaPersonnalisable = produit.categorie === 'Pizzas' && (nomPizza.includes('2 saisons') || nomPizza.includes('4 saisons') || nomPizza.includes('deux') || nomPizza.includes('quatre'));
+
+      if (produit.categorie === 'Tacos' || isPizzaPersonnalisable) {
           setCustomizeItem({ produit, variante });
           setCustomOptions({ garnitures: [], sauces: [], viandes: [], extras: [], cheesyCrust: false });
       } else {
@@ -231,7 +272,6 @@ function FoodjiSystem() {
       const vari = customizeItem.variante;
       const isMixte = prod.categorie === 'Tacos' && prod.nom.toLowerCase().includes('mixte');
       
-      // Sécurité Viandes Tacos Mixte
       if (isMixte) {
           const maxViandes = vari?.nom === 'XXL' ? 4 : vari?.nom === 'XL' ? 3 : 2;
           if (customOptions.viandes.length !== maxViandes) {
@@ -246,7 +286,6 @@ function FoodjiSystem() {
       let extraPrice = 0;
       let details = [];
 
-      // PIZZA CALCULATIONS
       if (produit.categorie === 'Pizzas') {
           if (options.garnitures?.length > 0) details.push(`Garnitures: ${options.garnitures.join(', ')}`);
           if (options.cheesyCrust) {
@@ -255,14 +294,12 @@ function FoodjiSystem() {
               details.push(`Cheesy Crust (+${crustPrice}DH)`);
           }
           options.extras?.forEach(ext => {
-              // Si taille L, le prix est augmenté de 70% (x1.7)
               const extPrice = (variante?.nom === 'L') ? Math.round(PIZZA_EXTRAS_BASE[ext] * 1.7) : PIZZA_EXTRAS_BASE[ext];
               extraPrice += extPrice;
               details.push(`+ ${ext} (+${extPrice}DH)`);
           });
       }
       
-      // TACOS CALCULATIONS
       if (produit.categorie === 'Tacos') {
           if (options.viandes?.length > 0) details.push(`Viandes: ${options.viandes.join(', ')}`);
           if (options.sauces?.length > 0) details.push(`Sauces: ${options.sauces.join(', ')}`);
@@ -288,20 +325,36 @@ function FoodjiSystem() {
   };
 
   const removeFromCart = (idCart) => { setPosCart(posCart.filter(item => item.idCart !== idCart)); };
+  
+  // CALCULS CRM ET REMISES
   const sousTotalCart = posCart.reduce((sum, item) => sum + Number(item.prixFinal), 0);
-  const totalCart = Math.max(0, sousTotalCart - remiseGlobale);
+  const remiseCRM = clientActif && clientActif.remiseAuto ? Math.round(sousTotalCart * (clientActif.remiseAuto / 100)) : 0;
+  const totalRemises = remiseGlobale + remiseCRM;
+  const totalCart = Math.max(0, sousTotalCart - totalRemises);
 
-  // --- NUMPAD & PAIEMENT ---
+  // --- NUMPAD & CALCULATRICE MONNAIE ---
   const openNumpad = (mode, label, targetId = null) => { setNumpad({ active: true, mode, label, targetId, value: '' }); };
   const handleNumpadKey = (val) => {
       if (val === 'DEL') setNumpad({...numpad, value: numpad.value.slice(0, -1)});
       else if (val === 'OK') applyNumpadValue();
       else setNumpad({...numpad, value: numpad.value + val});
   };
+
   const applyNumpadValue = async () => {
       const valNum = Number(numpad.value) || 0;
-      if (numpad.mode === 'remise_globale') setRemiseGlobale(valNum);
-      else if (numpad.mode === 'prix_article') setPosCart(posCart.map(it => it.idCart === numpad.targetId ? { ...it, prixFinal: valNum, isPrixModifie: true } : it));
+      
+      if (numpad.mode === 'remise_globale') {
+          setRemiseGlobale(valNum);
+      } 
+      else if (numpad.mode === 'prix_article') {
+          setPosCart(posCart.map(it => it.idCart === numpad.targetId ? { ...it, prixFinal: valNum, isPrixModifie: true } : it));
+      } 
+      else if (numpad.mode === 'encaissement_especes') {
+          if (valNum < totalCart) return alert("Le montant donné est inférieur au total.");
+          setNumpad({ active: false, mode: '', targetId: null, label: '', value: '' });
+          setShowRenduMonnaie({ active: true, aRendre: valNum - totalCart, received: valNum });
+          return;
+      }
       else if (numpad.mode === 'depense') {
           if (valNum <= 0) return alert("Montant invalide");
           const motif = prompt("Motif de la dépense (ex: Eau, Fournitures...) :");
@@ -319,12 +372,16 @@ function FoodjiSystem() {
       setNumpad({ active: false, mode: '', targetId: null, label: '', value: '' });
   };
 
-  const validerCommandePOS = async (methodePaiement) => {
+  // --- VALIDATION POS & MISE À JOUR CRM ---
+  const validerCommandePOS = async (methodePaiement, especeRecue = null) => {
       if (posCart.length === 0) return alert("Panier vide !");
       if (posOrderType === 'livraison' && !posAddress.trim()) return alert("Adresse de livraison obligatoire !");
+      
       setLoading(true);
+      const finalClientName = posClientName.trim() ? posClientName : "Non spécifié";
+      
       const newCmd = {
-          client: posClientName.trim() ? posClientName : "Non spécifié",
+          client: finalClientName,
           caissiere: sessionCaisse.caissiere || "Inconnu",
           tel: posPhone.trim() ? posPhone : "",
           adresse: posOrderType === 'livraison' ? posAddress : "Sur place",
@@ -332,17 +389,36 @@ function FoodjiSystem() {
           commentaire: posNote,
           items: posCart,
           sousTotal: sousTotalCart,
-          remise: remiseGlobale,
+          remise: totalRemises, // Inclut la remise CRM automatique
           total: totalCart,
           status: "Terminé", 
           methodePaiement: methodePaiement,
+          especeRecue: especeRecue,
           date: new Date()
       };
+      
       try {
+          // SAUVEGARDE COMMANDE
           const docRef = await addDoc(collection(db, "commandes"), newCmd);
           newCmd.id = docRef.id;
-          setOrderToPrint(newCmd); setTimeout(() => { window.print(); setTimeout(() => setOrderToPrint(null), 1000); }, 500);
-          setPosCart([]); setPosPhone(''); setPosNote(''); setPosClientName(''); setPosAddress(''); setPosOrderType('sur_place'); setRemiseGlobale(0);
+
+          // MISE A JOUR CRM CLIENTS
+          if (posPhone.trim().length >= 9) {
+              const telClean = posPhone.replace(/\s+/g, '');
+              const exist = clientsDB.find(c => c.tel.replace(/\s+/g, '') === telClean);
+              if (exist) {
+                  await updateDoc(doc(db, "clients", exist.id), { totalCommandes: (exist.totalCommandes || 0) + 1, lastOrder: new Date() });
+              } else {
+                  await addDoc(collection(db, "clients"), { tel: telClean, nom: finalClientName, totalCommandes: 1, remiseAuto: 0, lastOrder: new Date() });
+              }
+          }
+          
+          // IMPRESSION
+          setOrderToPrint(newCmd);
+          setTimeout(() => { window.print(); setTimeout(() => setOrderToPrint(null), 1000); }, 500);
+          
+          // RESET
+          setPosCart([]); setPosPhone(''); setPosNote(''); setPosClientName(''); setPosAddress(''); setPosOrderType('sur_place'); setRemiseGlobale(0); setClientActif(null); setShowRenduMonnaie({active: false, aRendre: 0, received: 0});
       } catch(e) { alert("Erreur création commande."); }
       setLoading(false);
   };
@@ -362,10 +438,11 @@ function FoodjiSystem() {
   );
 
   // ==========================================
-  // RENDUS D'IMPRESSION
+  // RENDUS D'IMPRESSION (NUMÉRO MIS À JOUR)
   // ==========================================
   const renderTickets = () => {
       if (!orderToPrint) return null;
+      const PHONE_FOODJI = "05 37 53 66 89";
 
       if (orderToPrint.isZ || orderToPrint.isX) {
           const dCloture = orderToPrint.date;
@@ -453,7 +530,7 @@ function FoodjiSystem() {
               <div className="ticket-80mm">
                   <div style={{textAlign:'center', marginBottom:'10px'}}><img src="/logo-ticket.png" alt="FOODJI" style={{maxWidth:'180px', maxHeight:'80px', filter:'grayscale(100%) contrast(1000%)'}} /></div>
                   <p style={{textAlign:'center', fontSize:'14px', margin: '2px 0'}}>Sala Al Jadida</p>
-                  <p style={{textAlign:'center', fontSize:'14px', margin: '2px 0'}}>Tél: 06 00 00 00 00</p>
+                  <p style={{textAlign:'center', fontSize:'16px', margin: '2px 0', fontWeight:'bold'}}>Tél: {PHONE_FOODJI}</p>
                   <hr style={{borderTop:'2px dashed black', margin: '10px 0'}}/>
                   <p style={{textAlign:'center', fontSize:'18px', fontWeight:'bold', margin: '5px 0'}}>{typeLabel}</p>
                   <p style={{margin: '2px 0', fontSize:'12px'}}>Date: {d.toLocaleDateString()} {heure}</p>
@@ -493,6 +570,15 @@ function FoodjiSystem() {
                   <hr style={{borderTop:'2px dashed black', margin: '10px 0'}}/>
                   <h2 style={{textAlign:'right', fontSize:'24px', margin: '10px 0'}}>TOTAL: {orderToPrint.total} DH</h2>
                   <p style={{textAlign:'right', fontSize:'14px', margin: '2px 0'}}>Paiement: {paiementStatus}</p>
+                  
+                  {/* AFFICHAGE RENDU MONNAIE SI ESPÈCES */}
+                  {orderToPrint.especeRecue && (
+                      <div style={{border:'1px solid black', padding:'5px', marginTop:'10px', fontSize:'14px'}}>
+                          <div>Reçu : {orderToPrint.especeRecue} DH</div>
+                          <div style={{fontWeight:'bold'}}>Rendu : {orderToPrint.especeRecue - orderToPrint.total} DH</div>
+                      </div>
+                  )}
+
                   <p style={{textAlign:'center', marginTop:'30px', fontWeight:'bold', margin: '30px 0 0 0'}}>Merci de votre visite !</p>
               </div>
           </div>
@@ -525,7 +611,7 @@ function FoodjiSystem() {
           <>
               {renderTickets()}
               
-              {/* MODALS NUMPAD & BILAN SHIFT */}
+              {/* MODALS NUMPAD, BILAN SHIFT ET RENDU MONNAIE */}
               {numpad.active && (
                   <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.8)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:3000}}>
                       <div style={{background:'white', width:'350px', borderRadius:'20px', padding:'25px', display:'flex', flexDirection:'column'}}>
@@ -540,6 +626,22 @@ function FoodjiSystem() {
                               <button onClick={()=>handleNumpadKey('OK')} style={{padding:'20px', fontSize:'1.5rem', fontWeight:'bold', borderRadius:'10px', border:'none', background:COLORS.success, color:'white', cursor:'pointer'}}>OK</button>
                           </div>
                           <button onClick={()=>setNumpad({active:false, mode:'', targetId:null, label:'', value:''})} style={{marginTop:'20px', padding:'15px', background:'#9CA3AF', color:'white', border:'none', borderRadius:'10px', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer'}}>Annuler</button>
+                      </div>
+                  </div>
+              )}
+
+              {/* MODAL CALCULATRICE MONNAIE */}
+              {showRenduMonnaie.active && (
+                  <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.9)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:4000}}>
+                      <div style={{background:'white', padding:'40px', borderRadius:'20px', width:'90%', maxWidth:'500px', textAlign:'center'}}>
+                          <h2 style={{fontSize:'2rem', margin:'0 0 20px 0'}}>💵 RENDU MONNAIE</h2>
+                          <div style={{fontSize:'1.5rem', color:'#666', marginBottom:'10px'}}>Total de la commande : <strong>{totalCart} DH</strong></div>
+                          <div style={{fontSize:'1.5rem', color:'#666', marginBottom:'20px'}}>Somme reçue : <strong>{showRenduMonnaie.received} DH</strong></div>
+                          <div style={{background:COLORS.primary, color:'white', padding:'30px', borderRadius:'15px', fontSize:'3rem', fontWeight:'bold', margin:'20px 0'}}>
+                              À RENDRE : {showRenduMonnaie.aRendre} DH
+                          </div>
+                          <button onClick={() => validerCommandePOS('Espèces', showRenduMonnaie.received)} style={{width:'100%', padding:'20px', background:COLORS.success, color:'white', border:'none', borderRadius:'10px', fontSize:'1.5rem', fontWeight:'bold', cursor:'pointer'}}>✅ VALIDER L'ENCAISSEMENT</button>
+                          <button onClick={() => setShowRenduMonnaie({active: false, aRendre: 0, received: 0})} style={{width:'100%', padding:'15px', background:'transparent', color:'#666', border:'none', marginTop:'10px', cursor:'pointer', fontSize:'1.2rem', textDecoration:'underline'}}>Annuler (Retour à la caisse)</button>
                       </div>
                   </div>
               )}
@@ -570,7 +672,7 @@ function FoodjiSystem() {
                   </div>
               )}
 
-              {/* MODAL PERSONNALISATION (PIZZAS & TACOS AVEC PRIX) */}
+              {/* MODAL PERSONNALISATION (PIZZAS & TACOS) */}
               {customizeItem && (
                   <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:2000}}>
                       <div style={{background:'white', width:'90%', maxWidth:'800px', borderRadius:'15px', padding:'20px', display:'flex', flexDirection:'column', maxHeight:'90vh'}}>
@@ -579,10 +681,8 @@ function FoodjiSystem() {
                           </h2>
                           
                           <div style={{flex:1, overflowY:'auto', padding:'10px 0'}}>
-                              {/* CAS PIZZAS */}
                               {customizeItem.produit.categorie === 'Pizzas' && (
                                   <>
-                                      {/* Garnitures gratuites si 2 ou 4 Saisons */}
                                       {(customizeItem.produit.nom.toLowerCase().includes('saison') || customizeItem.produit.nom.toLowerCase().includes('moitié')) && (
                                           <div style={{marginBottom:'20px'}}>
                                               <h3 style={{fontSize:'1.1rem', marginBottom:'10px'}}>🍕 Choix des garnitures</h3>
@@ -593,7 +693,6 @@ function FoodjiSystem() {
                                               </div>
                                           </div>
                                       )}
-                                      
                                       <div style={{marginBottom:'20px'}}>
                                           <h3 style={{fontSize:'1.1rem', marginBottom:'10px'}}>🧀 Bords Fourrés</h3>
                                           <button onClick={() => setCustomOptions(p => ({...p, cheesyCrust: !p.cheesyCrust}))} style={{width:'100%', padding:'15px', borderRadius:'8px', fontWeight:'bold', cursor:'pointer', fontSize:'1.1rem', display:'flex', justifyContent:'space-between', background: customOptions.cheesyCrust ? COLORS.promo : '#f0f2f5', color: customOptions.cheesyCrust ? 'white' : 'black', border:'none'}}>
@@ -601,7 +700,6 @@ function FoodjiSystem() {
                                               <span>+ {customizeItem.variante?.nom === 'L' ? 25 : 15} DH</span>
                                           </button>
                                       </div>
-
                                       <div style={{marginBottom:'20px'}}>
                                           <h3 style={{fontSize:'1.1rem', marginBottom:'10px'}}>➕ Extras (Payants)</h3>
                                           <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(200px, 1fr))', gap:'10px'}}>
@@ -619,10 +717,8 @@ function FoodjiSystem() {
                                   </>
                               )}
 
-                              {/* CAS TACOS */}
                               {customizeItem.produit.categorie === 'Tacos' && (
                                   <>
-                                      {/* Viandes pour Mixte */}
                                       {customizeItem.produit.nom.toLowerCase().includes('mixte') && (() => {
                                           const maxV = customizeItem.variante?.nom === 'XXL' ? 4 : customizeItem.variante?.nom === 'XL' ? 3 : 2;
                                           return (
@@ -640,7 +736,6 @@ function FoodjiSystem() {
                                               </div>
                                           )
                                       })()}
-
                                       <div style={{marginBottom:'20px'}}>
                                           <h3 style={{fontSize:'1.1rem', marginBottom:'10px'}}>🥣 Sauces (Incluses)</h3>
                                           <div style={{display:'flex', flexWrap:'wrap', gap:'10px'}}>
@@ -649,7 +744,6 @@ function FoodjiSystem() {
                                               ))}
                                           </div>
                                       </div>
-
                                       <div style={{marginBottom:'20px'}}>
                                           <h3 style={{fontSize:'1.1rem', marginBottom:'10px'}}>➕ Extras & Gratinage</h3>
                                           <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(200px, 1fr))', gap:'10px'}}>
@@ -717,7 +811,7 @@ function FoodjiSystem() {
                       </div>
                   </div>
 
-                  {/* COLONNE DROITE (PANIER) */}
+                  {/* COLONNE DROITE (PANIER & CRM) */}
                   <div style={{width: '400px', flexShrink: 0, background: 'white', display: 'flex', flexDirection: 'column', height: '100%', borderLeft: '2px solid #ddd', boxShadow: '-5px 0 15px rgba(0,0,0,0.05)'}}>
                       
                       <div style={{padding:'15px', borderBottom:'1px solid #eee', background:COLORS.secondary, color:'white', flexShrink: 0}}>
@@ -726,9 +820,20 @@ function FoodjiSystem() {
                               <button onClick={()=>setPosOrderType('emporter')} style={{flex:1, padding:'8px', borderRadius:'5px', border:'none', fontWeight:'bold', cursor:'pointer', background: posOrderType==='emporter' ? COLORS.promo : 'transparent', color: posOrderType==='emporter' ? 'white' : '#ccc'}}>Emporter</button>
                               <button onClick={()=>setPosOrderType('livraison')} style={{flex:1, padding:'8px', borderRadius:'5px', border:'none', fontWeight:'bold', cursor:'pointer', background: posOrderType==='livraison' ? '#3B82F6' : 'transparent', color: posOrderType==='livraison' ? 'white' : '#ccc'}}>Livraison</button>
                           </div>
-                          <input type="text" placeholder="Nom Client (Optionnel)" value={posClientName} onChange={e=>setPosClientName(e.target.value)} style={{width:'100%', padding:'12px', borderRadius:'8px', border:'none', marginBottom:'10px', fontSize:'1rem', boxSizing:'border-box'}}/>
-                          <input type="tel" placeholder="N° Tél (Imprimé sur ticket)" value={posPhone} onChange={e=>setPosPhone(e.target.value)} style={{width:'100%', padding:'12px', borderRadius:'8px', border:'none', fontSize:'1rem', boxSizing:'border-box', marginBottom: posOrderType==='livraison'?'10px':'0'}}/>
-                          {posOrderType === 'livraison' && <input type="text" placeholder="Adresse complète..." value={posAddress} onChange={e=>setPosAddress(e.target.value)} style={{width:'100%', padding:'12px', borderRadius:'8px', border:'2px solid #3B82F6', fontSize:'1rem', boxSizing:'border-box'}}/>}
+
+                          {/* RECONNAISSANCE CRM VIA TELEPHONE */}
+                          <div style={{position:'relative', marginBottom:'10px'}}>
+                              <input type="tel" placeholder="N° Tél (06...)" value={posPhone} onChange={e=>handlePhoneInput(e.target.value)} style={{width:'100%', padding:'12px', borderRadius:'8px', border:'2px solid #3B82F6', fontSize:'1.1rem', boxSizing:'border-box', fontWeight:'bold'}}/>
+                              {clientActif && clientActif.totalCommandes >= 10 && (
+                                  <span style={{position:'absolute', right:'10px', top:'12px', background:COLORS.promo, color:'white', padding:'2px 8px', borderRadius:'5px', fontWeight:'bold', fontSize:'0.8rem'}}>⭐ VIP</span>
+                              )}
+                          </div>
+                          
+                          <input type="text" placeholder="Nom Client (Automatique si connu)" value={posClientName} onChange={e=>setPosClientName(e.target.value)} style={{width:'100%', padding:'12px', borderRadius:'8px', border:'none', marginBottom: posOrderType==='livraison'?'10px':'0', fontSize:'1rem', boxSizing:'border-box'}}/>
+                          
+                          {posOrderType === 'livraison' && (
+                              <input type="text" placeholder="Adresse complète..." value={posAddress} onChange={e=>setPosAddress(e.target.value)} style={{width:'100%', padding:'12px', borderRadius:'8px', border:'none', fontSize:'1rem', boxSizing:'border-box'}}/>
+                          )}
                       </div>
 
                       <div style={{flex: 1, overflowY: 'auto', padding: '10px'}}>
@@ -757,9 +862,16 @@ function FoodjiSystem() {
                           <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'5px', fontSize:'1rem', color:'#666'}}>
                               <span>Sous-total</span><span>{sousTotalCart} DH</span>
                           </div>
+                          
+                          {/* AFFICHAGE DES REMISES (GLOBALE + CRM) */}
                           {remiseGlobale > 0 && (
-                              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'10px', fontSize:'1.1rem', color:COLORS.danger, fontWeight:'bold'}}>
+                              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'5px', fontSize:'1rem', color:COLORS.danger, fontWeight:'bold'}}>
                                   <span>Remise globale</span><span>- {remiseGlobale} DH</span>
+                              </div>
+                          )}
+                          {remiseCRM > 0 && (
+                              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'10px', fontSize:'1rem', color:COLORS.success, fontWeight:'bold'}}>
+                                  <span>Remise VIP ({clientActif.remiseAuto}%)</span><span>- {remiseCRM} DH</span>
                               </div>
                           )}
                           
@@ -769,11 +881,11 @@ function FoodjiSystem() {
                           </div>
                           
                           <div style={{display:'flex', gap:'10px', marginBottom:'10px'}}>
-                              <button onClick={()=>validerCommandePOS('Espèces')} disabled={loading || posCart.length===0} style={{flex:2, padding:'20px 10px', background:COLORS.success, color:'white', border:'none', borderRadius:'10px', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer', opacity: posCart.length===0?0.5:1}}>💵 ENCAISSER EN ESPÈCES</button>
+                              <button onClick={()=>openNumpad('encaissement_especes', 'SOMME REÇUE DU CLIENT (DH)')} disabled={loading || posCart.length===0} style={{flex:2, padding:'20px 10px', background:COLORS.success, color:'white', border:'none', borderRadius:'10px', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer', opacity: posCart.length===0?0.5:1}}>💵 ENCAISSER EN ESPÈCES</button>
                               <button onClick={()=>openNumpad('remise_globale', 'Saisir la remise totale (en DH)')} disabled={loading || posCart.length===0} style={{flex:1, padding:'20px 10px', background:'#fef3c7', color:'#b45309', border:'none', borderRadius:'10px', fontSize:'1rem', fontWeight:'bold', cursor:'pointer', opacity: posCart.length===0?0.5:1}}>🎁 REMISE</button>
                           </div>
                           
-                          <button onClick={()=>{setPosCart([]); setRemiseGlobale(0);}} style={{width:'100%', padding:'15px', background:'#fee2e2', color:'red', border:'none', borderRadius:'10px', fontWeight:'bold', cursor:'pointer', fontSize:'1rem'}}>🗑️ Vider le panier</button>
+                          <button onClick={()=>{setPosCart([]); setRemiseGlobale(0); setClientActif(null);}} style={{width:'100%', padding:'15px', background:'#fee2e2', color:'red', border:'none', borderRadius:'10px', fontWeight:'bold', cursor:'pointer', fontSize:'1rem'}}>🗑️ Vider le panier</button>
                       </div>
                   </div>
               </div>
@@ -921,8 +1033,46 @@ function FoodjiSystem() {
                 </>
             )}
 
+            {/* BASE DE DONNÉES CLIENTS CRM */}
+            <div style={{background:'white', padding:'25px', borderRadius:'15px', marginBottom:'40px', border:`2px solid #3B82F6`}}>
+                <h3 style={{marginTop:0, color: '#1D4ED8', fontSize:'1.3rem'}}>👥 CRM : Base Clients Fidèles</h3>
+                <div style={{overflowX:'auto'}}>
+                    <table style={{width:'100%', textAlign:'left', borderCollapse:'collapse'}}>
+                        <thead>
+                            <tr style={{borderBottom:'2px solid #eee'}}>
+                                <th style={{padding:'10px'}}>Téléphone</th>
+                                <th style={{padding:'10px'}}>Nom</th>
+                                <th style={{padding:'10px'}}>Commandes</th>
+                                <th style={{padding:'10px'}}>Remise Auto (%)</th>
+                                <th style={{padding:'10px'}}>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {clientsDB.sort((a,b) => b.totalCommandes - a.totalCommandes).slice(0,20).map(client => (
+                                <tr key={client.id} style={{borderBottom:'1px solid #f0f2f5'}}>
+                                    <td style={{padding:'10px', fontWeight:'bold'}}>{client.tel}</td>
+                                    <td style={{padding:'10px'}}>{client.nom} {client.totalCommandes >= 10 && <span style={{background:COLORS.promo, color:'white', padding:'2px 6px', borderRadius:'5px', fontSize:'0.7rem', marginLeft:'5px'}}>VIP</span>}</td>
+                                    <td style={{padding:'10px'}}>{client.totalCommandes}</td>
+                                    <td style={{padding:'10px'}}>
+                                        <input type="number" value={client.remiseAuto || 0} onChange={(e) => updateDoc(doc(db, "clients", client.id), {remiseAuto: Number(e.target.value)})} style={{width:'60px', padding:'5px', borderRadius:'5px', border:'1px solid #ccc'}}/> %
+                                    </td>
+                                    <td style={{padding:'10px'}}>
+                                        <button onClick={()=>deleteDoc(doc(db, "clients", client.id))} style={{background:'#fee2e2', color:'red', border:'none', padding:'5px 10px', borderRadius:'5px', cursor:'pointer'}}>Supprimer</button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* GESTION DES STOCKS ET DES PIZZAS */}
             <div style={{background:'white', padding:'25px', borderRadius:'15px', marginBottom:'40px', border:`2px solid ${COLORS.primary}`}}>
-                  <h3 style={{marginTop:0, color: COLORS.primary, fontSize:'1.3rem'}}>🥕 GESTION RAPIDE DES STOCKS (RUPTURES)</h3>
+                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px'}}>
+                      <h3 style={{margin:0, color: COLORS.primary, fontSize:'1.3rem'}}>🥕 GESTION DES STOCKS (RUPTURES)</h3>
+                      <button onClick={reparerPizzas} style={{padding:'10px 15px', background:'#374151', color:'white', border:'none', borderRadius:'8px', fontWeight:'bold', cursor:'pointer'}}>🔧 Réparer les Tailles Pizzas</button>
+                  </div>
+                  
                   <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '10px', display:'flex', gap:'10px', marginBottom:'20px', scrollbarWidth:'none' }}>
                       {STOCK_TABS.map(tab => (
                           <button key={tab.id} onClick={() => setActiveStockTab(tab.id)} style={{padding:'10px 20px', borderRadius:'25px', background: activeStockTab === tab.id ? COLORS.secondary : '#f0f2f5', color: activeStockTab === tab.id ? 'white' : 'black', fontWeight:'bold', border:'none', cursor: 'pointer', fontSize:'1rem'}}>{tab.label}</button>
