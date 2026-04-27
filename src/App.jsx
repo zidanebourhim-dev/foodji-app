@@ -34,7 +34,10 @@ function FoodjiSystem() {
   const [menu, setMenu] = useState([]);
   const [commandes, setCommandes] = useState([]);
   const [parametres, setParametres] = useState({ isOuvert: true, rushMode: 'standard', stocks: { viandes: INIT_VIANDES, garnitures: INIT_GARNITURES_PIZZA, sauces: INIT_SAUCES, pates: INIT_PATES, tailles_pizza: INIT_TAILLES_PIZZA } });
+  
+  // SESSIONS & Z
   const [sessionCaisse, setSessionCaisse] = useState({ isActive: false, caissiere: '', startTime: null });
+  const [serviceGlobal, setServiceGlobal] = useState({ lastZDate: null });
   
   const [adminCategorie, setAdminCategorie] = useState('Tacos'); 
   const [activeStockTab, setActiveStockTab] = useState('viandes');
@@ -56,19 +59,16 @@ function FoodjiSystem() {
   const [customizeItem, setCustomizeItem] = useState(null); 
   const [selectedOptions, setSelectedOptions] = useState([]);
 
-  // NUMPAD
+  // NUMPAD & MODALS
   const [numpad, setNumpad] = useState({ active: false, mode: '', targetId: null, label: '', value: '' });
-
-  // NOUVEAU MODAL : Bilan en cours (Flash Caisse)
-  const [showBilanPos, setShowBilanPos] = useState(false);
+  const [showBilanPos, setShowBilanPos] = useState(false); // Bilan du shift (X)
+  const [showBilanGlobal, setShowBilanGlobal] = useState(false); // Bilan de la journée (Z)
 
   const prevCommandesLength = useRef(0);
   const audioRef = useRef(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  
-  const SYNC_ID_VERSION = "053700";
 
   useEffect(() => {
     setPersistence(auth, browserLocalPersistence).finally(() => {
@@ -86,9 +86,17 @@ function FoodjiSystem() {
         if (s.exists()) setParametres(prev => ({...prev, stocks: s.data()}));
         else setDoc(doc(db, "parametres", "stocks"), parametres.stocks);
     });
+    
+    // Écoute du Shift en cours (X)
     const unsubSession = onSnapshot(doc(db, "parametres", "session_caisse"), (s) => {
         if (s.exists()) setSessionCaisse(s.data());
         else setDoc(doc(db, "parametres", "session_caisse"), { isActive: false, caissiere: '', startTime: null });
+    });
+
+    // Écoute du Point Zéro global de la journée (Z)
+    const unsubServiceGlobal = onSnapshot(doc(db, "parametres", "service_global"), (s) => {
+        if (s.exists()) setServiceGlobal(s.data());
+        else setDoc(doc(db, "parametres", "service_global"), { lastZDate: new Date() });
     });
 
     const unsubMenu = onSnapshot(collection(db, "produits"), (snap) => setMenu(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
@@ -105,7 +113,7 @@ function FoodjiSystem() {
       } catch (e) { console.error("Erreur tri", e); }
     });
 
-    return () => { unsubStatus(); unsubHoraires(); unsubStocks(); unsubSession(); unsubMenu(); unsubCmd(); };
+    return () => { unsubStatus(); unsubHoraires(); unsubStocks(); unsubSession(); unsubServiceGlobal(); unsubMenu(); unsubCmd(); };
   }, [authState]);
 
   const handleLogin = async (e) => {
@@ -113,12 +121,12 @@ function FoodjiSystem() {
       try { await signInWithEmailAndPassword(auth, email, password); } catch(err) { alert(`Erreur: ${err.code}`); }
       setLoading(false);
   };
-  const checkManagerAuth = () => { const code = prompt("🔒 Code Manager requis :"); if (code === SYNC_ID_VERSION) return true; alert("❌ Code incorrect !"); return false; };
 
+  // --- ACTIONS ADMIN ---
   const toggleAvailability = async (item) => await updateDoc(doc(db, "produits", item.id), { available: !item.available });
-  const supprimerProduit = async (id) => { if (!checkManagerAuth()) return; if(confirm("Supprimer définitivement ?")) await deleteDoc(doc(db, "produits", id)); };
+  const supprimerProduit = async (id) => { if(confirm("Supprimer définitivement ?")) await deleteDoc(doc(db, "produits", id)); };
   const toggleStockItem = async (listName, index) => { const newList = [...parametres.stocks[listName]]; newList[index].available = !newList[index].available; await updateDoc(doc(db, "parametres", "stocks"), { ...parametres.stocks, [listName]: newList }); };
-  const addNewStockItem = async () => { if(!checkManagerAuth() || !newItemName.trim()) return; const newList = [...parametres.stocks[activeStockTab], { nom: newItemName.trim(), available: true }]; await updateDoc(doc(db, "parametres", "stocks"), { ...parametres.stocks, [activeStockTab]: newList }); setNewItemName(''); };
+  const addNewStockItem = async () => { if(!newItemName.trim()) return; const newList = [...parametres.stocks[activeStockTab], { nom: newItemName.trim(), available: true }]; await updateDoc(doc(db, "parametres", "stocks"), { ...parametres.stocks, [activeStockTab]: newList }); setNewItemName(''); };
   const changerStatus = async (id, st) => await updateDoc(doc(db, "commandes", id), { status: st });
   const supprimerCmd = async (id) => confirm("Supprimer commande ?") && await deleteDoc(doc(db, "commandes", id));
   
@@ -130,11 +138,13 @@ function FoodjiSystem() {
     setFormProd({ nom: '', description: '', image: '', categorie: 'Panuozzo', prixBase: '', variantes: [] }); setLoading(false);
   };
 
+  // --- GESTION DES SESSIONS ET DU Z ---
   const ouvrirCaisse = async (nomCaissiere) => {
       await updateDoc(doc(db, "parametres", "session_caisse"), { isActive: true, caissiere: nomCaissiere, startTime: new Date() });
   };
 
-  const genererBilanSession = () => {
+  // Bilan du Shift Actuel (Le X)
+  const genererBilanShift = () => {
       if (!sessionCaisse.startTime) return null;
       const startT = sessionCaisse.startTime.seconds ? new Date(sessionCaisse.startTime.seconds * 1000) : new Date(sessionCaisse.startTime);
       const cmdsSession = commandes.filter(c => {
@@ -150,26 +160,15 @@ function FoodjiSystem() {
           else totalLivrApp += c.total; 
       });
 
-      return {
-          startT,
-          totalGeneral: (totalEspeces + totalTPE + totalLivrApp), 
-          totalEspeces, totalTPE, totalDépenses, totalLivrApp, 
-          netEnCaisse: (totalEspeces - totalDépenses), 
-          nbCommandes: cmdsSession.length
-      };
+      return { startT, totalGeneral: (totalEspeces + totalTPE + totalLivrApp), totalEspeces, totalTPE, totalDépenses, totalLivrApp, netEnCaisse: (totalEspeces - totalDépenses), nbCommandes: cmdsSession.length };
   };
 
   const cloturerShift = async () => {
-      if (!confirm(`⚠️ Clôturer le shift de ${sessionCaisse.caissiere} ?`)) return;
-      const bilan = genererBilanSession();
+      if (!confirm(`⚠️ Clôturer le shift de ${sessionCaisse.caissiere} ? (Cela n'efface pas les compteurs globaux de la journée)`)) return;
+      const bilan = genererBilanShift();
       if (!bilan) return;
 
-      const xData = {
-          isX: true,
-          caissiere: sessionCaisse.caissiere,
-          date: new Date(),
-          ...bilan
-      };
+      const xData = { isX: true, caissiere: sessionCaisse.caissiere, date: new Date(), ...bilan };
       
       setOrderToPrint(xData);
       setTimeout(async () => { 
@@ -179,34 +178,54 @@ function FoodjiSystem() {
       }, 500);
   };
 
-  const imprimerZJournee = () => {
-      const today = new Date(); today.setHours(0,0,0,0);
-      const cmdsDuJour = commandes.filter(c => {
+  // Bilan Global depuis le dernier Z
+  const genererBilanGlobalZ = () => {
+      if (!serviceGlobal.lastZDate) return null;
+      const startT = serviceGlobal.lastZDate.seconds ? new Date(serviceGlobal.lastZDate.seconds * 1000) : new Date(serviceGlobal.lastZDate);
+      
+      const cmdsZ = commandes.filter(c => {
           const d = c.date?.seconds ? new Date(c.date.seconds * 1000) : new Date(c.date);
-          return d >= today && c.status !== 'Refusé' && c.status !== 'Annulé';
+          // On filtre strictement toutes les commandes DEPUIS le dernier Z
+          return d >= startT && c.status !== 'Refusé' && c.status !== 'Annulé';
       });
+
       let totalEspeces = 0, totalTPE = 0, totalDépenses = 0, totalLivrApp = 0;
-      cmdsDuJour.forEach(c => {
+      cmdsZ.forEach(c => {
           if (c.type === 'depense') totalDépenses += Math.abs(c.total);
           else if (c.methodePaiement === 'Espèces') totalEspeces += c.total;
           else if (c.methodePaiement === 'TPE') totalTPE += c.total;
           else totalLivrApp += c.total; 
       });
-      
-      const zData = {
-          isZ: true, date: new Date(), today: today,
-          totalGeneral: (totalEspeces + totalTPE + totalLivrApp), 
-          totalEspeces, totalTPE, totalDépenses, totalLivrApp, 
-          netEnCaisse: (totalEspeces - totalDépenses), 
-          nbCommandes: cmdsDuJour.length
-      };
-      setOrderToPrint(zData);
-      setTimeout(() => { window.print(); setTimeout(() => setOrderToPrint(null), 1000); }, 500);
+
+      return { startT, totalGeneral: (totalEspeces + totalTPE + totalLivrApp), totalEspeces, totalTPE, totalDépenses, totalLivrApp, netEnCaisse: (totalEspeces - totalDépenses), nbCommandes: cmdsZ.length };
   };
 
+  const cloturerZDefinitif = async () => {
+      if (!confirm("⚠️ ATTENTION : Cela va imprimer le bilan final et REMETTRE TOUS LES COMPTEURS À ZÉRO pour le lendemain. Tu confirmes ?")) return;
+      const bilan = genererBilanGlobalZ();
+      if(!bilan) return;
+
+      const now = new Date();
+      const zData = { isZ: true, date: now, ...bilan };
+      
+      setOrderToPrint(zData);
+      setTimeout(async () => { 
+          window.print(); 
+          // C'est ICI qu'on remet à Zéro pour le lendemain :
+          await updateDoc(doc(db, "parametres", "service_global"), { lastZDate: now });
+          // Si un shift était en cours, on le ferme de force
+          if(sessionCaisse.isActive) {
+              await updateDoc(doc(db, "parametres", "session_caisse"), { isActive: false, caissiere: '', startTime: null });
+          }
+          setShowBilanGlobal(false);
+          setTimeout(() => setOrderToPrint(null), 1000);
+      }, 500);
+  };
+
+  // --- LOGIQUE PANIER & CAISSE ---
   const triggerAddToCart = (produit, variante = null) => {
       const nomPizza = produit.nom.toLowerCase();
-      const isPizzaPersonnalisable = produit.categorie === 'Pizzas' && (nomPizza.includes('2 saisons') || nomPizza.includes('4 saisons'));
+      const isPizzaPersonnalisable = produit.categorie === 'Pizzas' && (nomPizza.includes('2 saisons') || nomPizza.includes('4 saisons') || nomPizza.includes('deux') || nomPizza.includes('quatre'));
 
       if (produit.categorie === 'Tacos' || isPizzaPersonnalisable) {
           setCustomizeItem({ produit, variante });
@@ -260,7 +279,7 @@ function FoodjiSystem() {
           
           setLoading(true);
           const newDepense = {
-              client: "DÉCAISSEMENT", caissiere: sessionCaisse.caissiere, type: "depense", commentaire: motif,
+              client: "DÉCAISSEMENT", caissiere: sessionCaisse.caissiere || "Manager", type: "depense", commentaire: motif,
               items: [{ nom: `Dépense: ${motif}`, prixFinal: -valNum }], total: -valNum, status: "Terminé", methodePaiement: "Espèces", date: new Date()
           };
           const docRef = await addDoc(collection(db, "commandes"), newDepense);
@@ -320,9 +339,13 @@ function FoodjiSystem() {
       </div>
   );
 
+  // ==========================================
+  // RENDUS D'IMPRESSION
+  // ==========================================
   const renderTickets = () => {
       if (!orderToPrint) return null;
 
+      // MODE Z (FIN DE JOURNÉE) ou X (FIN DE SHIFT)
       if (orderToPrint.isZ || orderToPrint.isX) {
           const dCloture = orderToPrint.date;
           const titre = orderToPrint.isX ? "X DE CAISSE (SHIFT)" : "Z DE CAISSE (JOURNÉE)";
@@ -333,8 +356,11 @@ function FoodjiSystem() {
                       <p style={{textAlign:'center'}}>Imprimé le {dCloture.toLocaleDateString()} à {dCloture.getHours().toString().padStart(2, '0')}:{dCloture.getMinutes().toString().padStart(2, '0')}</p>
                       {orderToPrint.isX && <p style={{textAlign:'center', fontWeight:'bold', fontSize:'18px'}}>Caissière : {orderToPrint.caissiere}</p>}
                       <hr style={{borderTop:'2px dashed black', margin: '15px 0'}}/>
-                      <p>Période: {orderToPrint.isX ? `Depuis ${orderToPrint.startT.getHours().toString().padStart(2,'0')}:${orderToPrint.startT.getMinutes().toString().padStart(2,'0')}` : `Journée du ${orderToPrint.today.toLocaleDateString()}`}</p>
+                      
+                      <p style={{fontSize:'14px'}}>Depuis : {orderToPrint.startT.toLocaleDateString()} à {orderToPrint.startT.getHours().toString().padStart(2,'0')}:{orderToPrint.startT.getMinutes().toString().padStart(2,'0')}</p>
+                      <p style={{fontSize:'14px'}}>Jusqu'à : {dCloture.toLocaleDateString()} à {dCloture.getHours().toString().padStart(2,'0')}:{dCloture.getMinutes().toString().padStart(2,'0')}</p>
                       <p>Nb Commandes: {orderToPrint.nbCommandes}</p>
+                      
                       <hr style={{borderTop:'2px dashed black', margin: '15px 0'}}/>
                       <table style={{width:'100%', fontSize:'16px'}}>
                           <tbody>
@@ -476,7 +502,7 @@ function FoodjiSystem() {
           <>
               {renderTickets()}
               
-              {/* MODAL NUMPAD */}
+              {/* MODALS NUMPAD & BILAN SHIFT */}
               {numpad.active && (
                   <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.8)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:3000}}>
                       <div style={{background:'white', width:'350px', borderRadius:'20px', padding:'25px', display:'flex', flexDirection:'column'}}>
@@ -495,15 +521,14 @@ function FoodjiSystem() {
                   </div>
               )}
 
-              {/* MODAL BILAN EN COURS (FLASH CAISSE) */}
               {showBilanPos && (
                   <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:4000}}>
                       <div style={{background:'white', padding:'30px', borderRadius:'15px', width:'90%', maxWidth:'400px', boxShadow:'0 10px 25px rgba(0,0,0,0.2)'}}>
-                          <h2 style={{marginTop:0, textAlign:'center'}}>👁️ Bilan en cours</h2>
+                          <h2 style={{marginTop:0, textAlign:'center'}}>👁️ Bilan du Shift (X)</h2>
                           <p style={{textAlign:'center', color:'#666'}}>Session de <strong>{sessionCaisse.caissiere}</strong></p>
                           <hr style={{margin:'20px 0'}}/>
                           {(() => {
-                              const bilan = genererBilanSession();
+                              const bilan = genererBilanShift();
                               if (!bilan) return <p>Aucune donnée disponible.</p>;
                               return (
                                   <>
@@ -524,7 +549,7 @@ function FoodjiSystem() {
 
               <div className="no-print" style={{display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', background: '#f0f2f5', fontFamily: 'sans-serif'}}>
                   
-                  {/* MODAL PERSONNALISATION */}
+                  {/* MODAL PERSONNALISATION ARTICLES */}
                   {customizeItem && (
                       <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:2000}}>
                           <div style={{background:'white', width:'90%', maxWidth:'600px', borderRadius:'15px', padding:'20px', display:'flex', flexDirection:'column', maxHeight:'90vh'}}>
@@ -549,10 +574,9 @@ function FoodjiSystem() {
                               <h2 style={{margin:0, color:COLORS.primary}}>🍔 Foodji POS</h2>
                               <span style={{background:'#e0e7ff', color:'#3730a3', padding:'5px 10px', borderRadius:'20px', fontWeight:'bold', fontSize:'0.9rem'}}>👤 {sessionCaisse.caissiere}</span>
                           </div>
-                          {/* NOUVEAUX BOUTONS SANS SÉCURITÉ */}
                           <div style={{display:'flex', gap:'8px'}}>
                               <button onClick={()=>openNumpad('depense', 'Saisir le montant retiré')} style={{padding:'10px 15px', background:'#fef3c7', color:'#92400e', borderRadius:'8px', border:'1px solid #f59e0b', cursor:'pointer', fontWeight:'bold'}}>💸 Sortie</button>
-                              <button onClick={()=>setShowBilanPos(true)} style={{padding:'10px 15px', background:'#e0e7ff', color:'#3730a3', borderRadius:'8px', border:'none', cursor:'pointer', fontWeight:'bold'}}>👁️ Bilan Actuel</button>
+                              <button onClick={()=>setShowBilanPos(true)} style={{padding:'10px 15px', background:'#e0e7ff', color:'#3730a3', borderRadius:'8px', border:'none', cursor:'pointer', fontWeight:'bold'}}>👁️ Bilan (X)</button>
                               <button onClick={cloturerShift} style={{padding:'10px 15px', background:COLORS.warning, color:'white', borderRadius:'8px', border:'none', cursor:'pointer', fontWeight:'bold'}}>🛑 Fin Shift</button>
                               <button onClick={() => setAppMode('ADMIN')} style={{padding:'10px 15px', background:COLORS.secondary, color:'white', borderRadius:'8px', border:'none', cursor:'pointer', fontWeight:'bold'}}>⚙️ BACK-OFFICE</button>
                           </div>
@@ -656,7 +680,7 @@ function FoodjiSystem() {
   }
 
   // ==========================================
-  // RENDU ADMIN & STOCKS 
+  // RENDU ADMIN & STOCKS (BACK-OFFICE)
   // ==========================================
   return (
     <>
@@ -668,11 +692,41 @@ function FoodjiSystem() {
                 <h2 style={{margin:0}}>⚙️ Tableau de Bord (Admin)</h2>
                 <div style={{display:'flex', gap:'10px'}}>
                     <button onClick={()=>setShowHistory(!showHistory)} style={{padding:'10px 15px', borderRadius:'8px', border:`2px solid ${COLORS.secondary}`, background: showHistory ? COLORS.secondary : 'transparent', color: showHistory ? 'white' : COLORS.secondary, fontWeight:'bold', cursor:'pointer'}}>🕒 Historique</button>
-                    <button onClick={imprimerZJournee} style={{padding:'10px 15px', borderRadius:'8px', border:'none', background:'#1D4ED8', color:'white', fontWeight:'bold', cursor:'pointer'}}>📊 Imprimer Z de Caisse (Fin Journée)</button>
+                    <button onClick={()=>setShowBilanGlobal(true)} style={{padding:'10px 15px', borderRadius:'8px', border:'none', background:'#1D4ED8', color:'white', fontWeight:'bold', cursor:'pointer'}}>📊 Bilan Journée (Z)</button>
                     <button onClick={()=>setAppMode('POS')} style={{padding:'10px 15px', borderRadius:'8px', border:'none', background:COLORS.primary, color:'white', fontWeight:'bold', cursor:'pointer', fontSize:'1.1rem'}}>🍔 OUVRIR LA CAISSE</button>
                     <button onClick={() => auth.signOut()} style={{padding:'10px 15px', borderRadius:'8px', border:'none', background:'#eee', cursor:'pointer'}}>Déconnexion</button>
                 </div>
             </div>
+
+            {/* MODAL DU Z GLOBAL (AVEC REMISE A ZERO) */}
+            {showBilanGlobal && (
+                <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:4000}}>
+                    <div style={{background:'white', padding:'30px', borderRadius:'15px', width:'90%', maxWidth:'450px', boxShadow:'0 10px 25px rgba(0,0,0,0.2)'}}>
+                        <h2 style={{marginTop:0, textAlign:'center', color:COLORS.danger}}>📊 BILAN JOURNÉE (Z)</h2>
+                        <p style={{textAlign:'center', color:'#666'}}>Depuis le {serviceGlobal.lastZDate ? new Date(serviceGlobal.lastZDate.seconds ? serviceGlobal.lastZDate.seconds * 1000 : serviceGlobal.lastZDate).toLocaleString() : 'Début'}</p>
+                        <hr style={{margin:'20px 0'}}/>
+                        {(() => {
+                            const bilan = genererBilanGlobalZ();
+                            if (!bilan) return <p>Aucune donnée disponible.</p>;
+                            return (
+                                <>
+                                    <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', fontSize:'1.2rem'}}><span>Espèces (Tiroir) :</span> <strong>{bilan.totalEspeces} DH</strong></div>
+                                    <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', fontSize:'1.2rem'}}><span>TPE (Carte) :</span> <strong>{bilan.totalTPE} DH</strong></div>
+                                    <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', fontSize:'1.2rem', color:'#666'}}><span>Livr. App/Web :</span> <strong>{bilan.totalLivrApp} DH</strong></div>
+                                    <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', fontSize:'1.2rem', color:'red'}}><span>Décaissements :</span> <strong>- {bilan.totalDépenses} DH</strong></div>
+                                    <hr style={{margin:'20px 0'}}/>
+                                    <div style={{display:'flex', justifyContent:'space-between', fontSize:'1.5rem', color:COLORS.primary}}><span>NET EN CAISSE :</span> <strong>{bilan.netEnCaisse} DH</strong></div>
+                                    <div style={{textAlign:'center', marginTop:'10px', color:'#666'}}>Commandes : {bilan.nbCommandes}</div>
+                                </>
+                            );
+                        })()}
+                        <div style={{marginTop:'25px', display:'flex', flexDirection:'column', gap:'10px'}}>
+                            <button onClick={cloturerZDefinitif} style={{width:'100%', padding:'15px', background:COLORS.danger, color:'white', border:'none', borderRadius:'10px', fontSize:'1.1rem', fontWeight:'bold', cursor:'pointer'}}>🖨️ IMPRIMER Z ET REMETTRE À ZÉRO</button>
+                            <button onClick={()=>setShowBilanGlobal(false)} style={{width:'100%', padding:'15px', background:'#eee', color:'black', border:'none', borderRadius:'10px', fontSize:'1.1rem', fontWeight:'bold', cursor:'pointer'}}>Fermer</button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {showHistory ? (
                 <div style={{background:'white', padding:'25px', borderRadius:'15px', marginBottom:'40px'}}>
