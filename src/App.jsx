@@ -12,9 +12,9 @@ const INIT_SAUCES = [{ nom: "Algérienne", available: true }, { nom: "Biggy", av
 const INIT_PATES = [{ nom: "Penne", available: true }, { nom: "Tagliatelle", available: true }, { nom: "Spaghetti", available: true }];
 const INIT_TAILLES_PIZZA = [{ nom: "M", available: true }, { nom: "L", available: true }];
 
-// RETOUR DE TOUTES LES CATÉGORIES + AJOUT PANUOZZO (SANS DESSERTS)
 const TOUTES_CATEGORIES = ["Tacos", "Pizzas", "Burgers", "Panuozzo", "Pâtes", "Sides", "Les Burritos", "Koniks", "Plats", "Salades", "Boissons"];
 const STOCK_TABS = [{ id: 'viandes', label: '🌮 Viandes' }, { id: 'garnitures', label: '🍕 Garnitures' }, { id: 'sauces', label: '🥣 Sauces' }, { id: 'pates', label: '🍝 Pâtes' }, { id: 'tailles_pizza', label: '📏 Tailles Pizza' }];
+const CAISSIERES = ["Rim", "Amal", "Manager"];
 const NOTIF_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
 
 class ErrorBoundary extends React.Component {
@@ -34,13 +34,13 @@ function FoodjiSystem() {
   const [menu, setMenu] = useState([]);
   const [commandes, setCommandes] = useState([]);
   const [parametres, setParametres] = useState({ isOuvert: true, rushMode: 'standard', stocks: { viandes: INIT_VIANDES, garnitures: INIT_GARNITURES_PIZZA, sauces: INIT_SAUCES, pates: INIT_PATES, tailles_pizza: INIT_TAILLES_PIZZA } });
+  const [sessionCaisse, setSessionCaisse] = useState({ isActive: false, caissiere: '', startTime: null });
   
   const [adminCategorie, setAdminCategorie] = useState('Tacos'); 
   const [activeStockTab, setActiveStockTab] = useState('viandes');
   const [newItemName, setNewItemName] = useState('');
   const [editId, setEditId] = useState(null); 
   const [formProd, setFormProd] = useState({ nom: '', description: '', image: '', categorie: 'Burgers', prixBase: '', variantes: [] });
-  const [showZDeCaisse, setShowZDeCaisse] = useState(false);
   const [showHistory, setShowHistory] = useState(false); 
   
   const [posCart, setPosCart] = useState([]);
@@ -50,18 +50,20 @@ function FoodjiSystem() {
   const [posCategory, setPosCategory] = useState('Tacos');
   const [posOrderType, setPosOrderType] = useState('sur_place'); 
   const [posAddress, setPosAddress] = useState('');
+  const [remiseGlobale, setRemiseGlobale] = useState(0);
+  
   const [orderToPrint, setOrderToPrint] = useState(null);
-
   const [customizeItem, setCustomizeItem] = useState(null); 
   const [selectedOptions, setSelectedOptions] = useState([]);
 
+  // CLAVIER NUMÉRIQUE TACTILE (NUMPAD)
+  const [numpad, setNumpad] = useState({ active: false, mode: '', targetId: null, label: '', value: '' });
+
   const prevCommandesLength = useRef(0);
   const audioRef = useRef(null);
-  const fileInputRef = useRef(null); 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-
   const SYNC_ID_VERSION = "053700";
 
   useEffect(() => {
@@ -80,6 +82,11 @@ function FoodjiSystem() {
         if (s.exists()) setParametres(prev => ({...prev, stocks: s.data()}));
         else setDoc(doc(db, "parametres", "stocks"), parametres.stocks);
     });
+    const unsubSession = onSnapshot(doc(db, "parametres", "session_caisse"), (s) => {
+        if (s.exists()) setSessionCaisse(s.data());
+        else setDoc(doc(db, "parametres", "session_caisse"), { isActive: false, caissiere: '', startTime: null });
+    });
+
     const unsubMenu = onSnapshot(collection(db, "produits"), (snap) => setMenu(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
     const unsubCmd = onSnapshot(query(collection(db, "commandes")), (snap) => {
       try {
@@ -94,7 +101,7 @@ function FoodjiSystem() {
       } catch (e) { console.error("Erreur tri", e); }
     });
 
-    return () => { unsubStatus(); unsubHoraires(); unsubStocks(); unsubMenu(); unsubCmd(); };
+    return () => { unsubStatus(); unsubHoraires(); unsubStocks(); unsubSession(); unsubMenu(); unsubCmd(); };
   }, [authState]);
 
   const handleLogin = async (e) => {
@@ -104,6 +111,7 @@ function FoodjiSystem() {
   };
   const checkManagerAuth = () => { const code = prompt("🔒 Code Manager requis :"); if (code === SYNC_ID_VERSION) return true; alert("❌ Code incorrect !"); return false; };
 
+  // --- ACTIONS ADMIN ---
   const toggleAvailability = async (item) => await updateDoc(doc(db, "produits", item.id), { available: !item.available });
   const supprimerProduit = async (id) => { if (!checkManagerAuth()) return; if(confirm("Supprimer définitivement ?")) await deleteDoc(doc(db, "produits", id)); };
   const toggleStockItem = async (listName, index) => { const newList = [...parametres.stocks[listName]]; newList[index].available = !newList[index].available; await updateDoc(doc(db, "parametres", "stocks"), { ...parametres.stocks, [listName]: newList }); };
@@ -119,10 +127,55 @@ function FoodjiSystem() {
     setFormProd({ nom: '', description: '', image: '', categorie: 'Panuozzo', prixBase: '', variantes: [] }); setLoading(false);
   };
 
-  // --- LOGIQUE CORRIGÉE : UNIQUEMENT 2 SAISONS / 4 SAISONS POUR LA PIZZA ---
+  // --- GESTION DE SESSION (Z DE CAISSE) ---
+  const ouvrirCaisse = async (nomCaissiere) => {
+      await updateDoc(doc(db, "parametres", "session_caisse"), { isActive: true, caissiere: nomCaissiere, startTime: new Date() });
+  };
+
+  const genererBilanSession = () => {
+      if (!sessionCaisse.startTime) return null;
+      const startT = sessionCaisse.startTime.seconds ? new Date(sessionCaisse.startTime.seconds * 1000) : new Date(sessionCaisse.startTime);
+      
+      const cmdsSession = commandes.filter(c => {
+          const d = c.date?.seconds ? new Date(c.date.seconds * 1000) : new Date(c.date);
+          return d >= startT && c.status !== 'Refusé' && c.status !== 'Annulé';
+      });
+
+      let totalEspeces = 0, totalTPE = 0, totalDépenses = 0, totalLivrApp = 0;
+      
+      cmdsSession.forEach(c => {
+          if (c.type === 'depense') totalDépenses += Math.abs(c.total);
+          else if (c.methodePaiement === 'Espèces') totalEspeces += c.total;
+          else if (c.methodePaiement === 'TPE') totalTPE += c.total;
+          else totalLivrApp += c.total; 
+      });
+
+      return { startT, totalGeneral: (totalEspeces + totalTPE + totalLivrApp), totalEspeces, totalTPE, totalDépenses, totalLivrApp, netEnCaisse: (totalEspeces - totalDépenses), nbCommandes: cmdsSession.length };
+  };
+
+  const cloturerCaisse = async () => {
+      if (!confirm("⚠️ Es-tu sûr de vouloir clôturer le service et imprimer le Z de Caisse ?")) return;
+      const bilan = genererBilanSession();
+      
+      const zData = {
+          isZ: true,
+          caissiere: sessionCaisse.caissiere,
+          date: new Date(),
+          ...bilan
+      };
+      
+      setOrderToPrint(zData);
+      setTimeout(async () => { 
+          window.print(); 
+          await updateDoc(doc(db, "parametres", "session_caisse"), { isActive: false, caissiere: '', startTime: null });
+          setTimeout(() => setOrderToPrint(null), 1000);
+      }, 500);
+  };
+
+  // --- LOGIQUE PANIER & CAISSE ---
   const triggerAddToCart = (produit, variante = null) => {
       const nomPizza = produit.nom.toLowerCase();
-      const isPizzaPersonnalisable = produit.categorie === 'Pizzas' && (nomPizza.includes('2 saisons') || nomPizza.includes('4 saisons') || nomPizza.includes('deux saisons') || nomPizza.includes('quatre saisons'));
+      const isPizzaPersonnalisable = produit.categorie === 'Pizzas' && (nomPizza.includes('2 saisons') || nomPizza.includes('4 saisons') || nomPizza.includes('deux') || nomPizza.includes('quatre'));
 
       if (produit.categorie === 'Tacos' || isPizzaPersonnalisable) {
           setCustomizeItem({ produit, variante });
@@ -133,36 +186,77 @@ function FoodjiSystem() {
   };
 
   const toggleOption = (optName) => {
-      if (selectedOptions.includes(optName)) {
-          setSelectedOptions(selectedOptions.filter(o => o !== optName));
-      } else {
-          setSelectedOptions([...selectedOptions, optName]);
-      }
+      if (selectedOptions.includes(optName)) setSelectedOptions(selectedOptions.filter(o => o !== optName));
+      else setSelectedOptions([...selectedOptions, optName]);
   };
 
   const addToCartFinal = (produit, variante, options) => {
       const prixFinal = variante ? variante.prix : produit.prix;
       const nomComplet = variante ? `${produit.nom} (${variante.nom})` : produit.nom;
       
-      let sauces = [];
-      let optionsChoisies = [];
+      let sauces = []; let optionsChoisies = [];
       if (produit.categorie === 'Tacos') sauces = options;
       if (produit.categorie === 'Pizzas') optionsChoisies = options;
 
-      setPosCart([...posCart, { 
-          ...produit, 
-          nom: nomComplet, 
-          prixFinal, 
-          sauces, 
-          optionsChoisies,
-          idCart: Date.now() + Math.random() 
-      }]);
+      setPosCart([...posCart, { ...produit, nom: nomComplet, prixOriginal: prixFinal, prixFinal, sauces, optionsChoisies, idCart: Date.now() + Math.random() }]);
       setCustomizeItem(null);
   };
 
   const removeFromCart = (idCart) => { setPosCart(posCart.filter(item => item.idCart !== idCart)); };
-  const totalCart = posCart.reduce((sum, item) => sum + Number(item.prixFinal), 0);
+  
+  // Calculs totaux (Articles - Remise globale)
+  const sousTotalCart = posCart.reduce((sum, item) => sum + Number(item.prixFinal), 0);
+  const totalCart = Math.max(0, sousTotalCart - remiseGlobale);
 
+  // --- NUMPAD LOGIC ---
+  const openNumpad = (mode, label, targetId = null) => {
+      setNumpad({ active: true, mode, label, targetId, value: '' });
+  };
+  
+  const handleNumpadKey = (val) => {
+      if (val === 'DEL') setNumpad({...numpad, value: numpad.value.slice(0, -1)});
+      else if (val === 'OK') applyNumpadValue();
+      else setNumpad({...numpad, value: numpad.value + val});
+  };
+
+  const applyNumpadValue = async () => {
+      const valNum = Number(numpad.value) || 0;
+      
+      if (numpad.mode === 'remise_globale') {
+          setRemiseGlobale(valNum);
+      } 
+      else if (numpad.mode === 'prix_article') {
+          setPosCart(posCart.map(it => it.idCart === numpad.targetId ? { ...it, prixFinal: valNum, isPrixModifie: true } : it));
+      } 
+      else if (numpad.mode === 'depense') {
+          if (valNum <= 0) return alert("Montant invalide");
+          const motif = prompt("Motif de la dépense (ex: Eau, Fournitures...) :");
+          if (!motif) return;
+          
+          setLoading(true);
+          const newDepense = {
+              client: "DÉCAISSEMENT",
+              caissiere: sessionCaisse.caissiere,
+              type: "depense",
+              commentaire: motif,
+              items: [{ nom: `Dépense: ${motif}`, prixFinal: -valNum }],
+              total: -valNum,
+              status: "Terminé", 
+              methodePaiement: "Espèces",
+              date: new Date()
+          };
+          const docRef = await addDoc(collection(db, "commandes"), newDepense);
+          newDepense.id = docRef.id;
+          newDepense.isDepense = true;
+          
+          setOrderToPrint(newDepense);
+          setTimeout(() => { window.print(); setTimeout(() => setOrderToPrint(null), 1000); }, 500);
+          setLoading(false);
+      }
+      setNumpad({ active: false, mode: '', targetId: null, label: '', value: '' });
+  };
+
+  // --- VALIDATION POS ---
   const validerCommandePOS = async (methodePaiement) => {
       if (posCart.length === 0) return alert("Panier vide !");
       if (posOrderType === 'livraison' && !posAddress.trim()) return alert("Adresse de livraison obligatoire !");
@@ -170,11 +264,14 @@ function FoodjiSystem() {
       setLoading(true);
       const newCmd = {
           client: posClientName.trim() ? posClientName : "Non spécifié",
+          caissiere: sessionCaisse.caissiere || "Inconnu",
           tel: posPhone.trim() ? posPhone : "",
           adresse: posOrderType === 'livraison' ? posAddress : "Sur place",
           type: posOrderType,
           commentaire: posNote,
           items: posCart,
+          sousTotal: sousTotalCart,
+          remise: remiseGlobale,
           total: totalCart,
           status: "Terminé", 
           methodePaiement: methodePaiement,
@@ -186,39 +283,18 @@ function FoodjiSystem() {
           newCmd.id = docRef.id;
           
           setOrderToPrint(newCmd);
-          setTimeout(() => { 
-              window.print(); 
-              setTimeout(() => setOrderToPrint(null), 1000);
-          }, 500);
+          setTimeout(() => { window.print(); setTimeout(() => setOrderToPrint(null), 1000); }, 500);
           
-          setPosCart([]); setPosPhone(''); setPosNote(''); setPosClientName(''); setPosAddress(''); setPosOrderType('sur_place');
+          setPosCart([]); setPosPhone(''); setPosNote(''); setPosClientName(''); setPosAddress(''); setPosOrderType('sur_place'); setRemiseGlobale(0);
       } catch(e) { alert("Erreur création commande."); }
       setLoading(false);
   };
 
-  const imprimerCommandeExistante = (cmd) => {
-      setOrderToPrint(cmd);
-      setTimeout(() => {
-          window.print();
-          setTimeout(() => setOrderToPrint(null), 1000);
-      }, 500);
-  };
+  const imprimerCommandeExistante = (cmd) => { setOrderToPrint(cmd); setTimeout(() => { window.print(); setTimeout(() => setOrderToPrint(null), 1000); }, 500); };
 
-  const genererZDeCaisse = () => {
-      const today = new Date(); today.setHours(0,0,0,0);
-      const cmdsDuJour = commandes.filter(c => {
-          const d = c.date?.seconds ? new Date(c.date.seconds * 1000) : new Date(c.date);
-          return d >= today && c.status !== 'Refusé' && c.status !== 'Annulé';
-      });
-      let totalEspeces = 0, totalTPE = 0, totalLivrApp = 0;
-      cmdsDuJour.forEach(c => {
-          if (c.methodePaiement === 'Espèces') totalEspeces += c.total;
-          else if (c.methodePaiement === 'TPE') totalTPE += c.total;
-          else totalLivrApp += c.total; 
-      });
-      return { totalGeneral: totalEspeces + totalTPE + totalLivrApp, totalEspeces, totalTPE, totalLivrApp, nbCommandes: cmdsDuJour.length };
-  };
-
+  // ==========================================
+  // RENDUS SÉCURISÉS (LOGIN)
+  // ==========================================
   if (authState === "LOADING") return <div style={{ background: COLORS.secondary, height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}><h3>Chargement...</h3></div>;
   if (authState === null) return (
       <div style={{ background: COLORS.bg, height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -231,8 +307,63 @@ function FoodjiSystem() {
       </div>
   );
 
+  // ==========================================
+  // RENDUS D'IMPRESSION (TICKETS & Z)
+  // ==========================================
   const renderTickets = () => {
       if (!orderToPrint) return null;
+
+      // MODE Z DE CAISSE
+      if (orderToPrint.isZ) {
+          const dCloture = orderToPrint.date;
+          return (
+              <div className="print-only">
+                  <div className="ticket-80mm">
+                      <h1 style={{textAlign:'center', fontSize:'24px', borderBottom:'2px solid black', paddingBottom:'10px'}}>Z DE CAISSE</h1>
+                      <p style={{textAlign:'center'}}>Imprimé le {dCloture.toLocaleDateString()} à {dCloture.getHours().toString().padStart(2, '0')}:{dCloture.getMinutes().toString().padStart(2, '0')}</p>
+                      <p style={{textAlign:'center', fontWeight:'bold', fontSize:'18px'}}>Caissière : {orderToPrint.caissiere}</p>
+                      <hr style={{borderTop:'2px dashed black', margin: '15px 0'}}/>
+                      <p>Ouverture: {orderToPrint.startT.toLocaleDateString()} {orderToPrint.startT.getHours().toString().padStart(2,'0')}:{orderToPrint.startT.getMinutes().toString().padStart(2,'0')}</p>
+                      <p>Nb Commandes: {orderToPrint.nbCommandes}</p>
+                      <hr style={{borderTop:'2px dashed black', margin: '15px 0'}}/>
+                      <table style={{width:'100%', fontSize:'16px'}}>
+                          <tbody>
+                              <tr><td>Total Espèces</td><td style={{textAlign:'right'}}>{orderToPrint.totalEspeces} DH</td></tr>
+                              <tr><td>Total TPE</td><td style={{textAlign:'right'}}>{orderToPrint.totalTPE} DH</td></tr>
+                              <tr><td>Commandes App/Web</td><td style={{textAlign:'right'}}>{orderToPrint.totalLivrApp} DH</td></tr>
+                              <tr style={{color: 'red'}}><td>Décaissements</td><td style={{textAlign:'right'}}>- {orderToPrint.totalDépenses} DH</td></tr>
+                          </tbody>
+                      </table>
+                      <hr style={{borderTop:'2px solid black', margin: '15px 0'}}/>
+                      <h2 style={{fontSize:'20px'}}>CHIFFRE D'AFFAIRES : {orderToPrint.totalGeneral} DH</h2>
+                      <h2 style={{fontSize:'22px', border:'2px solid black', padding:'10px', textAlign:'center'}}>NET EN CAISSE : {orderToPrint.netEnCaisse} DH</h2>
+                      <p style={{textAlign:'center', marginTop:'40px'}}>Signature Manager :</p>
+                      <div style={{height:'60px', borderBottom:'1px dotted black', margin:'0 20px'}}></div>
+                  </div>
+              </div>
+          );
+      }
+
+      // MODE DÉPENSE
+      if (orderToPrint.isDepense) {
+          const d = orderToPrint.date;
+          return (
+              <div className="print-only">
+                  <div className="ticket-80mm">
+                      <h1 style={{textAlign:'center', fontSize:'24px', borderBottom:'2px solid black', paddingBottom:'10px'}}>BON DE DÉCAISSEMENT</h1>
+                      <p style={{textAlign:'center'}}>Date : {d.toLocaleDateString()} à {d.getHours().toString().padStart(2, '0')}:{d.getMinutes().toString().padStart(2, '0')}</p>
+                      <p style={{textAlign:'center', fontWeight:'bold', fontSize:'18px'}}>Caissière : {orderToPrint.caissiere}</p>
+                      <hr style={{borderTop:'2px dashed black', margin: '15px 0'}}/>
+                      <h2 style={{fontSize:'18px'}}>Motif : {orderToPrint.commentaire}</h2>
+                      <h2 style={{fontSize:'24px', textAlign:'center', border:'2px solid black', padding:'10px'}}>SORTIE : {Math.abs(orderToPrint.total)} DH</h2>
+                      <p style={{textAlign:'center', marginTop:'40px'}}>Signature :</p>
+                      <div style={{height:'60px', borderBottom:'1px dotted black', margin:'0 20px'}}></div>
+                  </div>
+              </div>
+          );
+      }
+
+      // MODE STANDARD (COMMANDES CLIENTS)
       const d = orderToPrint.date?.seconds ? new Date(orderToPrint.date.seconds * 1000) : new Date(); 
       const heure = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
       
@@ -244,12 +375,10 @@ function FoodjiSystem() {
 
       return (
           <div className="print-only">
-              {/* TICKET CUISINE */}
               <div className="ticket-80mm">
                   <h1 style={{textAlign:'center', fontSize:'24px', borderBottom:'2px solid black', paddingBottom:'10px', margin: '0 0 10px 0'}}>CUISINE - #{orderToPrint.id.substring(0,4).toUpperCase()}</h1>
                   <p style={{textAlign:'center', fontSize:'22px', fontWeight:'bold', margin: '5px 0', border:'2px solid black', padding:'5px'}}>{typeLabel}</p>
                   <p style={{textAlign:'center', margin: '5px 0'}}>{d.toLocaleDateString()} - {heure}</p>
-                  
                   {orderToPrint.commentaire && <div style={{border:'2px dashed black', padding:'10px', margin:'10px 0', fontWeight:'bold', fontSize:'18px'}}>NOTE: {orderToPrint.commentaire}</div>}
                   
                   <ul style={{listStyle:'none', padding:0, marginTop:'20px', margin:0}}>
@@ -265,18 +394,14 @@ function FoodjiSystem() {
 
               <div className="page-break"></div>
 
-              {/* TICKET CLIENT AVEC LOGO ET TELEPHONE */}
               <div className="ticket-80mm">
-                  <div style={{textAlign:'center', marginBottom:'10px'}}>
-                      <img src="/logo-ticket.png" alt="FOODJI" style={{maxWidth:'180px', maxHeight:'80px', filter:'grayscale(100%) contrast(1000%)'}} />
-                  </div>
-                  
+                  <div style={{textAlign:'center', marginBottom:'10px'}}><img src="/logo-ticket.png" alt="FOODJI" style={{maxWidth:'180px', maxHeight:'80px', filter:'grayscale(100%) contrast(1000%)'}} /></div>
                   <p style={{textAlign:'center', fontSize:'14px', margin: '2px 0'}}>Sala Al Jadida</p>
                   <p style={{textAlign:'center', fontSize:'14px', margin: '2px 0'}}>Tél: 06 00 00 00 00</p>
                   <hr style={{borderTop:'2px dashed black', margin: '10px 0'}}/>
-                  
                   <p style={{textAlign:'center', fontSize:'18px', fontWeight:'bold', margin: '5px 0'}}>{typeLabel}</p>
                   <p style={{margin: '2px 0', fontSize:'12px'}}>Date: {d.toLocaleDateString()} {heure}</p>
+                  <p style={{margin: '2px 0', fontSize:'12px'}}>Caisse: {orderToPrint.caissiere || 'Inconnu'}</p>
                   
                   {orderToPrint.client && orderToPrint.client !== "Non spécifié" && <p style={{margin: '2px 0', fontWeight:'bold', fontSize:'16px'}}>Client: {orderToPrint.client}</p>}
                   {orderToPrint.tel && <p style={{margin: '5px 0', fontWeight:'bold', fontSize:'18px'}}>Tél: {orderToPrint.tel}</p>}
@@ -292,10 +417,11 @@ function FoodjiSystem() {
                                     <td style={{paddingTop:'5px'}}><strong>{it.nom}</strong></td>
                                     <td style={{textAlign:'right', paddingTop:'5px'}}><strong>{it.prixFinal} DH</strong></td>
                                 </tr>
-                                {(it.optionsChoisies?.length > 0 || it.sauces?.length > 0) && (
+                                {(it.optionsChoisies?.length > 0 || it.sauces?.length > 0 || it.isPrixModifie) && (
                                     <tr>
                                         <td colSpan="2" style={{fontSize:'12px', paddingLeft:'10px', paddingBottom:'5px', color:'#333'}}>
                                             {it.optionsChoisies?.join(', ')} {it.sauces?.join(', ')}
+                                            {it.isPrixModifie && <span style={{display:'block', color:'red'}}>*Prix manuel appliqué</span>}
                                         </td>
                                     </tr>
                                 )}
@@ -303,6 +429,11 @@ function FoodjiSystem() {
                           ))}
                       </tbody>
                   </table>
+                  
+                  {orderToPrint.remise > 0 && (
+                      <div style={{textAlign:'right', fontSize:'16px', borderBottom:'1px dashed black', paddingBottom:'5px'}}>Sous-total: {orderToPrint.sousTotal} DH<br/><strong>REMISE: -{orderToPrint.remise} DH</strong></div>
+                  )}
+
                   <hr style={{borderTop:'2px dashed black', margin: '10px 0'}}/>
                   <h2 style={{textAlign:'right', fontSize:'24px', margin: '10px 0'}}>TOTAL: {orderToPrint.total} DH</h2>
                   <p style={{textAlign:'right', fontSize:'14px', margin: '2px 0'}}>Paiement: {paiementStatus}</p>
@@ -316,39 +447,61 @@ function FoodjiSystem() {
   // CAISSE TACTILE (POS)
   // ==========================================
   if (appMode === 'POS') {
+      // 1. ÉCRAN DE VERROUILLAGE SI CAISSE FERMÉE
+      if (!sessionCaisse.isActive) {
+          return (
+              <div style={{display:'flex', height:'100vh', background:COLORS.secondary, alignItems:'center', justifyContent:'center', color:'white', flexDirection:'column'}}>
+                  <h1 style={{fontSize:'3rem', marginBottom:'40px'}}>CAISSE FERMÉE</h1>
+                  <div style={{background:'white', color:'black', padding:'40px', borderRadius:'15px', width:'400px', textAlign:'center'}}>
+                      <h2 style={{marginTop:0}}>Ouvrir le service</h2>
+                      <p>Qui est à la caisse ?</p>
+                      <div style={{display:'flex', flexDirection:'column', gap:'15px', marginTop:'20px'}}>
+                          {CAISSIERES.map(nom => (
+                              <button key={nom} onClick={() => ouvrirCaisse(nom)} style={{padding:'20px', fontSize:'1.5rem', fontWeight:'bold', borderRadius:'10px', border:'2px solid #ddd', background:'#f9fafb', cursor:'pointer'}}>{nom}</button>
+                          ))}
+                      </div>
+                      <button onClick={()=>setAppMode('ADMIN')} style={{marginTop:'30px', padding:'10px', border:'none', background:'transparent', color:COLORS.textLight, textDecoration:'underline', cursor:'pointer'}}>Retour Administration</button>
+                  </div>
+              </div>
+          );
+      }
+
+      // 2. ÉCRAN POS NORMAL
       return (
           <>
               {renderTickets()}
               
+              {/* MODAL CLAVIER NUMÉRIQUE TACTILE */}
+              {numpad.active && (
+                  <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.8)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:3000}}>
+                      <div style={{background:'white', width:'350px', borderRadius:'20px', padding:'25px', display:'flex', flexDirection:'column'}}>
+                          <h2 style={{marginTop:0, textAlign:'center'}}>{numpad.label}</h2>
+                          <div style={{background:'#f0f2f5', padding:'20px', fontSize:'2.5rem', textAlign:'right', borderRadius:'10px', marginBottom:'20px', fontWeight:'bold', minHeight:'40px'}}>
+                              {numpad.value} {numpad.value ? 'DH' : ''}
+                          </div>
+                          <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:'15px'}}>
+                              {['7','8','9','4','5','6','1','2','3','0','DEL'].map(btn => (
+                                  <button key={btn} onClick={()=>handleNumpadKey(btn)} style={{padding:'20px', fontSize:'1.8rem', fontWeight:'bold', borderRadius:'10px', border:'none', background: btn==='DEL' ? '#fee2e2' : '#e5e7eb', color: btn==='DEL' ? 'red' : 'black', cursor:'pointer'}}>{btn}</button>
+                              ))}
+                              <button onClick={()=>handleNumpadKey('OK')} style={{padding:'20px', fontSize:'1.5rem', fontWeight:'bold', borderRadius:'10px', border:'none', background:COLORS.success, color:'white', cursor:'pointer'}}>OK</button>
+                          </div>
+                          <button onClick={()=>setNumpad({active:false, mode:'', targetId:null, label:'', value:''})} style={{marginTop:'20px', padding:'15px', background:'#9CA3AF', color:'white', border:'none', borderRadius:'10px', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer'}}>Annuler</button>
+                      </div>
+                  </div>
+              )}
+
               <div className="no-print" style={{display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', background: '#f0f2f5', fontFamily: 'sans-serif'}}>
                   
-                  {/* MODAL DE PERSONNALISATION */}
+                  {/* MODAL PERSONNALISATION ARTICLES */}
                   {customizeItem && (
                       <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:2000}}>
                           <div style={{background:'white', width:'90%', maxWidth:'600px', borderRadius:'15px', padding:'20px', display:'flex', flexDirection:'column', maxHeight:'90vh'}}>
-                              <h2 style={{marginTop:0, borderBottom:'2px solid #eee', paddingBottom:'10px', color:COLORS.primary}}>
-                                  Options pour {customizeItem.produit.nom}
-                              </h2>
-                              
+                              <h2 style={{marginTop:0, borderBottom:'2px solid #eee', paddingBottom:'10px', color:COLORS.primary}}>Options pour {customizeItem.produit.nom}</h2>
                               <div style={{flex:1, overflowY:'auto', padding:'10px 0', display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(140px, 1fr))', gap:'10px'}}>
-                                  {(customizeItem.produit.categorie === 'Pizzas' ? parametres.stocks.garnitures : parametres.stocks.sauces)
-                                      .filter(opt => opt.available)
-                                      .map((opt, idx) => (
-                                          <button 
-                                            key={idx} 
-                                            onClick={() => toggleOption(opt.nom)}
-                                            style={{
-                                                padding:'15px', borderRadius:'10px', fontWeight:'bold', cursor:'pointer', fontSize:'1rem',
-                                                background: selectedOptions.includes(opt.nom) ? COLORS.primary : '#f0f2f5',
-                                                color: selectedOptions.includes(opt.nom) ? 'white' : 'black',
-                                                border: selectedOptions.includes(opt.nom) ? `2px solid ${COLORS.primary}` : '2px solid transparent',
-                                                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                                            }}>
-                                              {opt.nom}
-                                          </button>
+                                  {(customizeItem.produit.categorie === 'Pizzas' ? parametres.stocks.garnitures : parametres.stocks.sauces).filter(opt => opt.available).map((opt, idx) => (
+                                          <button key={idx} onClick={() => toggleOption(opt.nom)} style={{padding:'15px', borderRadius:'10px', fontWeight:'bold', cursor:'pointer', fontSize:'1rem', background: selectedOptions.includes(opt.nom) ? COLORS.primary : '#f0f2f5', color: selectedOptions.includes(opt.nom) ? 'white' : 'black', border: selectedOptions.includes(opt.nom) ? `2px solid ${COLORS.primary}` : '2px solid transparent', boxShadow: '0 2px 4px rgba(0,0,0,0.1)'}}>{opt.nom}</button>
                                   ))}
                               </div>
-
                               <div style={{display:'flex', gap:'10px', marginTop:'20px', borderTop:'2px solid #eee', paddingTop:'20px'}}>
                                   <button onClick={() => setCustomizeItem(null)} style={{flex:1, padding:'15px', background:'#9CA3AF', color:'white', borderRadius:'10px', border:'none', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer'}}>Annuler</button>
                                   <button onClick={() => addToCartFinal(customizeItem.produit, customizeItem.variante, selectedOptions)} style={{flex:2, padding:'15px', background:COLORS.success, color:'white', borderRadius:'10px', border:'none', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer'}}>✅ Valider</button>
@@ -360,8 +513,14 @@ function FoodjiSystem() {
                   {/* COLONNE GAUCHE (MENU) */}
                   <div style={{flex: 1, display: 'flex', flexDirection: 'column', padding: '10px', height: '100%', overflowY: 'auto'}}>
                       <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', background:'white', padding:'15px', borderRadius:'10px', marginBottom:'10px', flexShrink: 0}}>
-                          <h2 style={{margin:0, color:COLORS.primary}}>🍔 Foodji POS</h2>
-                          <button onClick={()=>setAppMode('ADMIN')} style={{padding:'10px 20px', background:COLORS.secondary, color:'white', borderRadius:'8px', border:'none', cursor:'pointer'}}>Quitter Caisse</button>
+                          <div style={{display:'flex', alignItems:'center', gap:'15px'}}>
+                              <h2 style={{margin:0, color:COLORS.primary}}>🍔 Foodji POS</h2>
+                              <span style={{background:'#e0e7ff', color:'#3730a3', padding:'5px 10px', borderRadius:'20px', fontWeight:'bold', fontSize:'0.9rem'}}>👤 {sessionCaisse.caissiere}</span>
+                          </div>
+                          <div style={{display:'flex', gap:'10px'}}>
+                              <button onClick={()=>openNumpad('depense', 'Saisir le montant retiré de la caisse')} style={{padding:'10px 15px', background:'#fef3c7', color:'#92400e', borderRadius:'8px', border:'1px solid #f59e0b', cursor:'pointer', fontWeight:'bold'}}>💸 Sortie Caisse</button>
+                              <button onClick={cloturerCaisse} style={{padding:'10px 15px', background:COLORS.secondary, color:'white', borderRadius:'8px', border:'none', cursor:'pointer', fontWeight:'bold'}}>🔒 Fin de Service (Z)</button>
+                          </div>
                       </div>
                       
                       <div style={{display:'flex', gap:'10px', overflowX:'auto', paddingBottom:'10px', marginBottom:'10px', flexShrink: 0, scrollbarWidth:'none'}}>
@@ -403,7 +562,7 @@ function FoodjiSystem() {
                               <button onClick={()=>setPosOrderType('livraison')} style={{flex:1, padding:'8px', borderRadius:'5px', border:'none', fontWeight:'bold', cursor:'pointer', background: posOrderType==='livraison' ? '#3B82F6' : 'transparent', color: posOrderType==='livraison' ? 'white' : '#ccc'}}>Livraison</button>
                           </div>
 
-                          <input type="text" placeholder="Nom Client (Laisser vide si aucun)" value={posClientName} onChange={e=>setPosClientName(e.target.value)} style={{width:'100%', padding:'12px', borderRadius:'8px', border:'none', marginBottom:'10px', fontSize:'1rem', boxSizing:'border-box'}}/>
+                          <input type="text" placeholder="Nom Client (Optionnel)" value={posClientName} onChange={e=>setPosClientName(e.target.value)} style={{width:'100%', padding:'12px', borderRadius:'8px', border:'none', marginBottom:'10px', fontSize:'1rem', boxSizing:'border-box'}}/>
                           <input type="tel" placeholder="N° Tél (Imprimé sur ticket)" value={posPhone} onChange={e=>setPosPhone(e.target.value)} style={{width:'100%', padding:'12px', borderRadius:'8px', border:'none', fontSize:'1rem', boxSizing:'border-box', marginBottom: posOrderType==='livraison'?'10px':'0'}}/>
                           
                           {posOrderType === 'livraison' && (
@@ -415,8 +574,8 @@ function FoodjiSystem() {
                           {posCart.length === 0 ? <div style={{textAlign:'center', color:'#999', marginTop:'50px', fontSize:'1.2rem'}}>Panier vide</div> : null}
                           {posCart.map(item => (
                               <div key={item.idCart} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px', borderBottom:'1px dashed #ddd', background:'#fafafa', borderRadius:'8px', marginBottom:'5px'}}>
-                                  <div>
-                                    <div style={{fontWeight:'bold', fontSize:'1.1rem'}}>{item.nom}</div>
+                                  <div style={{flex:1, cursor:'pointer'}} onClick={()=>openNumpad('prix_article', `Modifier prix : ${item.nom}`, item.idCart)}>
+                                    <div style={{fontWeight:'bold', fontSize:'1.1rem', color: item.isPrixModifie ? COLORS.promo : 'black'}}>{item.nom}</div>
                                     {(item.optionsChoisies?.length > 0 || item.sauces?.length > 0) && (
                                         <div style={{fontSize:'0.85rem', color:COLORS.textLight, marginTop:'4px'}}>
                                             {item.optionsChoisies?.join(', ')} {item.sauces?.join(', ')}
@@ -424,8 +583,8 @@ function FoodjiSystem() {
                                     )}
                                   </div>
                                   <div style={{display:'flex', alignItems:'center', gap:'15px'}}>
-                                      <span style={{fontWeight:'bold', color:COLORS.primary}}>{item.prixFinal} DH</span>
-                                      <button onClick={()=>removeFromCart(item.idCart)} style={{background:'#fee2e2', color:'red', border:'none', padding:'8px 12px', borderRadius:'5px', cursor:'pointer', fontWeight:'bold'}}>X</button>
+                                      <span style={{fontWeight:'bold', color:COLORS.primary, cursor:'pointer'}} onClick={()=>openNumpad('prix_article', `Modifier prix : ${item.nom}`, item.idCart)}>{item.prixFinal} DH</span>
+                                      <button onClick={()=>removeFromCart(item.idCart)} style={{background:'#fee2e2', color:'red', border:'none', padding:'10px 15px', borderRadius:'5px', cursor:'pointer', fontWeight:'bold', fontSize:'1.2rem'}}>X</button>
                                   </div>
                               </div>
                           ))}
@@ -433,16 +592,28 @@ function FoodjiSystem() {
 
                       <div style={{padding: '20px', borderTop: '2px solid #eee', background: '#fff', flexShrink: 0}}>
                           <textarea placeholder="Note cuisine (ex: Sans frites)" value={posNote} onChange={e=>setPosNote(e.target.value)} style={{width:'100%', padding:'10px', borderRadius:'8px', border:'1px solid #ddd', marginBottom:'15px', resize:'none', boxSizing:'border-box'}}/>
+                          
+                          {/* AFFICHAGE DES REMISES */}
+                          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'5px', fontSize:'1rem', color:'#666'}}>
+                              <span>Sous-total</span><span>{sousTotalCart} DH</span>
+                          </div>
+                          {remiseGlobale > 0 && (
+                              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'10px', fontSize:'1.1rem', color:COLORS.danger, fontWeight:'bold'}}>
+                                  <span>Remise globale</span><span>- {remiseGlobale} DH</span>
+                              </div>
+                          )}
+                          
                           <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'15px', fontSize:'1.8rem', fontWeight:'bold'}}>
                               <span>TOTAL</span>
                               <span style={{color:COLORS.primary}}>{totalCart} DH</span>
                           </div>
                           
                           <div style={{display:'flex', gap:'10px', marginBottom:'10px'}}>
-                              <button onClick={()=>validerCommandePOS('Espèces')} disabled={loading || posCart.length===0} style={{flex:1, padding:'20px 10px', background:COLORS.success, color:'white', border:'none', borderRadius:'10px', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer', opacity: posCart.length===0?0.5:1}}>💵 ENCAISSER EN ESPÈCES</button>
+                              <button onClick={()=>validerCommandePOS('Espèces')} disabled={loading || posCart.length===0} style={{flex:2, padding:'20px 10px', background:COLORS.success, color:'white', border:'none', borderRadius:'10px', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer', opacity: posCart.length===0?0.5:1}}>💵 ENCAISSER EN ESPÈCES</button>
+                              <button onClick={()=>openNumpad('remise_globale', 'Saisir la remise totale (en DH)')} disabled={loading || posCart.length===0} style={{flex:1, padding:'20px 10px', background:'#fef3c7', color:'#b45309', border:'none', borderRadius:'10px', fontSize:'1rem', fontWeight:'bold', cursor:'pointer', opacity: posCart.length===0?0.5:1}}>🎁 REMISE</button>
                           </div>
                           
-                          <button onClick={()=>setPosCart([])} style={{width:'100%', padding:'15px', background:'#fee2e2', color:'red', border:'none', borderRadius:'10px', fontWeight:'bold', cursor:'pointer', fontSize:'1rem'}}>🗑️ Vider le panier</button>
+                          <button onClick={()=>{setPosCart([]); setRemiseGlobale(0);}} style={{width:'100%', padding:'15px', background:'#fee2e2', color:'red', border:'none', borderRadius:'10px', fontWeight:'bold', cursor:'pointer', fontSize:'1rem'}}>🗑️ Vider le panier</button>
                       </div>
                   </div>
               </div>
@@ -453,8 +624,6 @@ function FoodjiSystem() {
   // ==========================================
   // RENDU ADMIN & STOCKS 
   // ==========================================
-  const zData = genererZDeCaisse();
-
   return (
     <>
       {renderTickets()}
@@ -465,30 +634,11 @@ function FoodjiSystem() {
                 <h2 style={{margin:0}}>⚙️ Tableau de Bord</h2>
                 <div style={{display:'flex', gap:'10px'}}>
                     <button onClick={()=>setShowHistory(!showHistory)} style={{padding:'10px 15px', borderRadius:'8px', border:`2px solid ${COLORS.secondary}`, background: showHistory ? COLORS.secondary : 'transparent', color: showHistory ? 'white' : COLORS.secondary, fontWeight:'bold', cursor:'pointer'}}>🕒 Historique</button>
-                    <button onClick={()=>setShowZDeCaisse(true)} style={{padding:'10px 15px', borderRadius:'8px', border:'none', background:'#3B82F6', color:'white', fontWeight:'bold', cursor:'pointer'}}>📊 Z de Caisse</button>
                     <button onClick={()=>setAppMode('POS')} style={{padding:'10px 15px', borderRadius:'8px', border:'none', background:COLORS.primary, color:'white', fontWeight:'bold', cursor:'pointer', fontSize:'1.1rem'}}>🍔 OUVRIR LA CAISSE</button>
                     <button onClick={() => auth.signOut()} style={{padding:'10px 15px', borderRadius:'8px', border:'none', background:'#eee', cursor:'pointer'}}>Déconnexion</button>
                 </div>
             </div>
 
-            {/* MODAL Z DE CAISSE */}
-            {showZDeCaisse && (
-                <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000}}>
-                    <div style={{background:'white', padding:'30px', borderRadius:'15px', width:'90%', maxWidth:'400px'}}>
-                        <h2 style={{marginTop:0, textAlign:'center'}}>📊 Fin de Service</h2>
-                        <p style={{textAlign:'center', color:'#666'}}>Aujourd'hui ({new Date().toLocaleDateString()})</p>
-                        <hr style={{margin:'20px 0'}}/>
-                        <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', fontSize:'1.2rem'}}><span>Espèces (Tiroir) :</span> <strong>{zData.totalEspeces} DH</strong></div>
-                        <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', fontSize:'1.2rem', color:'#666'}}><span>Livr. App/Web :</span> <strong>{zData.totalLivrApp} DH</strong></div>
-                        <hr style={{margin:'20px 0'}}/>
-                        <div style={{display:'flex', justifyContent:'space-between', fontSize:'1.5rem', color:COLORS.primary}}><span>TOTAL JOUR :</span> <strong>{zData.totalGeneral} DH</strong></div>
-                        <div style={{textAlign:'center', marginTop:'10px', color:'#666'}}>Nombre de commandes : {zData.nbCommandes}</div>
-                        <button onClick={()=>setShowZDeCaisse(false)} style={{width:'100%', padding:'15px', background:COLORS.secondary, color:'white', border:'none', borderRadius:'10px', marginTop:'20px', fontSize:'1.1rem', cursor:'pointer'}}>Fermer</button>
-                    </div>
-                </div>
-            )}
-
-            {/* VUE HISTORIQUE */}
             {showHistory ? (
                 <div style={{background:'white', padding:'25px', borderRadius:'15px', marginBottom:'40px'}}>
                     <h3 style={{marginTop:0, color: COLORS.secondary}}>🕒 50 Dernières Commandes (Terminées / Annulées)</h3>
@@ -499,6 +649,7 @@ function FoodjiSystem() {
                               <div>
                                   <strong>{cmd.client}</strong>
                                   <div style={{fontSize:'0.8rem', color:'#666'}}>{cmd.date?.seconds ? new Date(cmd.date.seconds * 1000).toLocaleString() : 'Date inconnue'}</div>
+                                  {cmd.caissiere && <div style={{fontSize:'0.8rem', color:COLORS.primary}}>Par: {cmd.caissiere}</div>}
                               </div>
                               <div style={{textAlign:'right'}}>
                                   <strong style={{color:COLORS.primary}}>{cmd.total} DH</strong>
