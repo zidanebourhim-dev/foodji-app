@@ -36,7 +36,7 @@ function FoodjiSystem() {
   
   const [menu, setMenu] = useState([]);
   const [commandes, setCommandes] = useState([]);
-  const [clientsDB, setClientsDB] = useState([]); // CRM Base de données clients
+  const [clientsDB, setClientsDB] = useState([]); 
   const [parametres, setParametres] = useState({ isOuvert: true, rushMode: 'standard', stocks: { viandes: INIT_VIANDES, garnitures: INIT_GARNITURES_PIZZA, sauces: INIT_SAUCES, pates: INIT_PATES, tailles_pizza: INIT_TAILLES_PIZZA } });
   
   const [sessionCaisse, setSessionCaisse] = useState({ isActive: false, caissiere: '', startTime: null });
@@ -58,16 +58,22 @@ function FoodjiSystem() {
   const [posOrderType, setPosOrderType] = useState('sur_place'); 
   const [posAddress, setPosAddress] = useState('');
   const [remiseGlobale, setRemiseGlobale] = useState(0);
-  const [clientActif, setClientActif] = useState(null); // Client reconnu par le CRM
+  const [clientActif, setClientActif] = useState(null); 
   
   const [orderToPrint, setOrderToPrint] = useState(null);
   const [numpad, setNumpad] = useState({ active: false, mode: '', targetId: null, label: '', value: '' });
   const [showBilanPos, setShowBilanPos] = useState(false); 
   const [showBilanGlobal, setShowBilanGlobal] = useState(false); 
-  const [showRenduMonnaie, setShowRenduMonnaie] = useState({ active: false, aRendre: 0, received: 0 }); // Modal Rendu Monnaie
+  const [showRenduMonnaie, setShowRenduMonnaie] = useState({ active: false, aRendre: 0, received: 0 }); 
 
   const [customizeItem, setCustomizeItem] = useState(null); 
   const [customOptions, setCustomOptions] = useState({ garnitures: [], sauces: [], viandes: [], extras: [], cheesyCrust: false });
+
+  // ÉTATS CRM MANUEL
+  const [newClientPhone, setNewClientPhone] = useState('');
+  const [newClientName, setNewClientName] = useState('');
+  const [newClientOrders, setNewClientOrders] = useState('');
+  const [newClientRemise, setNewClientRemise] = useState('');
 
   const prevCommandesLength = useRef(0);
   const audioRef = useRef(null);
@@ -147,7 +153,6 @@ function FoodjiSystem() {
     setFormProd({ nom: '', description: '', image: '', categorie: 'Panuozzo', prixBase: '', variantes: [] }); setLoading(false);
   };
 
-  // RÉPARATEUR DE PIZZAS
   const reparerPizzas = async () => {
       if(!confirm("Ceci va forcer les tailles M et L sur toutes les pizzas. Confirmer ?")) return;
       setLoading(true);
@@ -164,6 +169,30 @@ function FoodjiSystem() {
       }
       setLoading(false);
       alert("✅ Réparation terminée. Vérifie les prix L dans la liste !");
+  };
+
+  const ajouterClientManuel = async () => {
+      const telClean = newClientPhone.replace(/\s+/g, '');
+      if (telClean.length < 9) return alert("Numéro de téléphone invalide (au moins 9 chiffres).");
+      
+      const exist = clientsDB.find(c => c.tel.replace(/\s+/g, '') === telClean);
+      if (exist) return alert("❌ Ce numéro existe déjà. Modifie sa fiche dans le tableau en dessous.");
+      
+      setLoading(true);
+      try {
+          await addDoc(collection(db, "clients"), {
+              tel: telClean,
+              nom: newClientName.trim() || "Inconnu",
+              totalCommandes: Number(newClientOrders) || 0,
+              remiseAuto: Number(newClientRemise) || 0,
+              lastOrder: new Date()
+          });
+          setNewClientPhone(''); setNewClientName(''); setNewClientOrders(''); setNewClientRemise('');
+          alert("✅ Client ajouté avec succès !");
+      } catch (e) {
+          alert("Erreur lors de l'ajout.");
+      }
+      setLoading(false);
   };
 
   // --- SESSIONS ---
@@ -372,7 +401,6 @@ function FoodjiSystem() {
       setNumpad({ active: false, mode: '', targetId: null, label: '', value: '' });
   };
 
-  // --- VALIDATION POS & MISE À JOUR CRM ---
   const validerCommandePOS = async (methodePaiement, especeRecue = null) => {
       if (posCart.length === 0) return alert("Panier vide !");
       if (posOrderType === 'livraison' && !posAddress.trim()) return alert("Adresse de livraison obligatoire !");
@@ -389,7 +417,7 @@ function FoodjiSystem() {
           commentaire: posNote,
           items: posCart,
           sousTotal: sousTotalCart,
-          remise: totalRemises, // Inclut la remise CRM automatique
+          remise: totalRemises,
           total: totalCart,
           status: "Terminé", 
           methodePaiement: methodePaiement,
@@ -398,11 +426,9 @@ function FoodjiSystem() {
       };
       
       try {
-          // SAUVEGARDE COMMANDE
           const docRef = await addDoc(collection(db, "commandes"), newCmd);
           newCmd.id = docRef.id;
 
-          // MISE A JOUR CRM CLIENTS
           if (posPhone.trim().length >= 9) {
               const telClean = posPhone.replace(/\s+/g, '');
               const exist = clientsDB.find(c => c.tel.replace(/\s+/g, '') === telClean);
@@ -413,11 +439,9 @@ function FoodjiSystem() {
               }
           }
           
-          // IMPRESSION
           setOrderToPrint(newCmd);
           setTimeout(() => { window.print(); setTimeout(() => setOrderToPrint(null), 1000); }, 500);
           
-          // RESET
           setPosCart([]); setPosPhone(''); setPosNote(''); setPosClientName(''); setPosAddress(''); setPosOrderType('sur_place'); setRemiseGlobale(0); setClientActif(null); setShowRenduMonnaie({active: false, aRendre: 0, received: 0});
       } catch(e) { alert("Erreur création commande."); }
       setLoading(false);
@@ -437,9 +461,6 @@ function FoodjiSystem() {
       </div>
   );
 
-  // ==========================================
-  // RENDUS D'IMPRESSION (NUMÉRO MIS À JOUR)
-  // ==========================================
   const renderTickets = () => {
       if (!orderToPrint) return null;
       const PHONE_FOODJI = "05 37 53 66 89";
@@ -503,7 +524,6 @@ function FoodjiSystem() {
 
       return (
           <div className="print-only">
-              {/* TICKET CUISINE */}
               <div className="ticket-80mm">
                   <h1 style={{textAlign:'center', fontSize:'24px', borderBottom:'2px solid black', paddingBottom:'10px', margin: '0 0 10px 0'}}>CUISINE - #{orderToPrint.id.substring(0,4).toUpperCase()}</h1>
                   <p style={{textAlign:'center', fontSize:'22px', fontWeight:'bold', margin: '5px 0', border:'2px solid black', padding:'5px'}}>{typeLabel}</p>
@@ -526,7 +546,6 @@ function FoodjiSystem() {
 
               <div className="page-break"></div>
 
-              {/* TICKET CLIENT */}
               <div className="ticket-80mm">
                   <div style={{textAlign:'center', marginBottom:'10px'}}><img src="/logo-ticket.png" alt="FOODJI" style={{maxWidth:'180px', maxHeight:'80px', filter:'grayscale(100%) contrast(1000%)'}} /></div>
                   <p style={{textAlign:'center', fontSize:'14px', margin: '2px 0'}}>Sala Al Jadida</p>
@@ -571,7 +590,6 @@ function FoodjiSystem() {
                   <h2 style={{textAlign:'right', fontSize:'24px', margin: '10px 0'}}>TOTAL: {orderToPrint.total} DH</h2>
                   <p style={{textAlign:'right', fontSize:'14px', margin: '2px 0'}}>Paiement: {paiementStatus}</p>
                   
-                  {/* AFFICHAGE RENDU MONNAIE SI ESPÈCES */}
                   {orderToPrint.especeRecue && (
                       <div style={{border:'1px solid black', padding:'5px', marginTop:'10px', fontSize:'14px'}}>
                           <div>Reçu : {orderToPrint.especeRecue} DH</div>
@@ -611,7 +629,6 @@ function FoodjiSystem() {
           <>
               {renderTickets()}
               
-              {/* MODALS NUMPAD, BILAN SHIFT ET RENDU MONNAIE */}
               {numpad.active && (
                   <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.8)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:3000}}>
                       <div style={{background:'white', width:'350px', borderRadius:'20px', padding:'25px', display:'flex', flexDirection:'column'}}>
@@ -630,7 +647,6 @@ function FoodjiSystem() {
                   </div>
               )}
 
-              {/* MODAL CALCULATRICE MONNAIE */}
               {showRenduMonnaie.active && (
                   <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.9)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:4000}}>
                       <div style={{background:'white', padding:'40px', borderRadius:'20px', width:'90%', maxWidth:'500px', textAlign:'center'}}>
@@ -672,7 +688,6 @@ function FoodjiSystem() {
                   </div>
               )}
 
-              {/* MODAL PERSONNALISATION (PIZZAS & TACOS) */}
               {customizeItem && (
                   <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:2000}}>
                       <div style={{background:'white', width:'90%', maxWidth:'800px', borderRadius:'15px', padding:'20px', display:'flex', flexDirection:'column', maxHeight:'90vh'}}>
@@ -821,7 +836,6 @@ function FoodjiSystem() {
                               <button onClick={()=>setPosOrderType('livraison')} style={{flex:1, padding:'8px', borderRadius:'5px', border:'none', fontWeight:'bold', cursor:'pointer', background: posOrderType==='livraison' ? '#3B82F6' : 'transparent', color: posOrderType==='livraison' ? 'white' : '#ccc'}}>Livraison</button>
                           </div>
 
-                          {/* RECONNAISSANCE CRM VIA TELEPHONE */}
                           <div style={{position:'relative', marginBottom:'10px'}}>
                               <input type="tel" placeholder="N° Tél (06...)" value={posPhone} onChange={e=>handlePhoneInput(e.target.value)} style={{width:'100%', padding:'12px', borderRadius:'8px', border:'2px solid #3B82F6', fontSize:'1.1rem', boxSizing:'border-box', fontWeight:'bold'}}/>
                               {clientActif && clientActif.totalCommandes >= 10 && (
@@ -863,7 +877,6 @@ function FoodjiSystem() {
                               <span>Sous-total</span><span>{sousTotalCart} DH</span>
                           </div>
                           
-                          {/* AFFICHAGE DES REMISES (GLOBALE + CRM) */}
                           {remiseGlobale > 0 && (
                               <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'5px', fontSize:'1rem', color:COLORS.danger, fontWeight:'bold'}}>
                                   <span>Remise globale</span><span>- {remiseGlobale} DH</span>
@@ -1033,9 +1046,22 @@ function FoodjiSystem() {
                 </>
             )}
 
-            {/* BASE DE DONNÉES CLIENTS CRM */}
+            {/* BASE DE DONNÉES CLIENTS CRM + AJOUT MANUEL */}
             <div style={{background:'white', padding:'25px', borderRadius:'15px', marginBottom:'40px', border:`2px solid #3B82F6`}}>
                 <h3 style={{marginTop:0, color: '#1D4ED8', fontSize:'1.3rem'}}>👥 CRM : Base Clients Fidèles</h3>
+                
+                {/* FORMULAIRE AJOUT MANUEL */}
+                <div style={{background:'#f8fafc', padding:'15px', borderRadius:'10px', marginBottom:'20px', border:'1px solid #e2e8f0'}}>
+                    <h4 style={{marginTop:0, marginBottom:'10px', color:'#334155'}}>➕ Ajouter un client manuellement</h4>
+                    <div style={{display:'flex', gap:'10px', flexWrap:'wrap', alignItems:'center'}}>
+                        <input type="tel" placeholder="Tél (06...)" value={newClientPhone} onChange={e=>setNewClientPhone(e.target.value)} style={{flex:1, minWidth:'150px', padding:'10px', borderRadius:'5px', border:'1px solid #cbd5e1'}} />
+                        <input type="text" placeholder="Nom complet" value={newClientName} onChange={e=>setNewClientName(e.target.value)} style={{flex:2, minWidth:'200px', padding:'10px', borderRadius:'5px', border:'1px solid #cbd5e1'}} />
+                        <input type="number" placeholder="Commandes (ex: 15)" value={newClientOrders} onChange={e=>setNewClientOrders(e.target.value)} style={{width:'120px', padding:'10px', borderRadius:'5px', border:'1px solid #cbd5e1'}} />
+                        <input type="number" placeholder="Remise Auto (%)" value={newClientRemise} onChange={e=>setNewClientRemise(e.target.value)} style={{width:'120px', padding:'10px', borderRadius:'5px', border:'1px solid #cbd5e1'}} />
+                        <button onClick={ajouterClientManuel} disabled={loading} style={{padding:'10px 20px', background:'#1D4ED8', color:'white', border:'none', borderRadius:'5px', fontWeight:'bold', cursor:'pointer'}}>Ajouter</button>
+                    </div>
+                </div>
+
                 <div style={{overflowX:'auto'}}>
                     <table style={{width:'100%', textAlign:'left', borderCollapse:'collapse'}}>
                         <thead>
