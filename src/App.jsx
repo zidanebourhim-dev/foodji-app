@@ -115,6 +115,8 @@ function FoodjiSystem() {
       try {
           const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
           list.sort((a, b) => (b.date?.seconds || 0) - (a.date?.seconds || 0));
+          
+          // LA NOTIFICATION SONORE EST BIEN ICI
           if (list.length > prevCommandesLength.current) {
               if (!audioRef.current) audioRef.current = new Audio(NOTIF_SOUND);
               audioRef.current.play().catch(() => {});
@@ -461,25 +463,20 @@ function FoodjiSystem() {
 
   const imprimerCommandeExistante = (cmd) => { setOrderToPrint(cmd); setTimeout(() => { window.print(); setTimeout(() => setOrderToPrint(null), 1000); }, 500); };
 
-  // LE TRADUCTEUR UNIVERSEL (Appli Client -> Caisse Locale)
   const getDetaisImpression = (it) => {
-      // 1. Si ça vient de la caisse locale (qui a déjà généré le texte)
       if (it.detailsTxt && it.detailsTxt.length > 0) return it.detailsTxt;
       
-      // 2. Si ça vient de l'application Web/Client (on traduit son vocabulaire)
       let d = [];
       if (it.choixPates) d.push(`Type: ${it.choixPates}`);
       if (it.isCheesyCrust) d.push(`★ CHEESY CRUST`);
       if (it.optionsChoisies?.length > 0) d.push(`Options: ${it.optionsChoisies.join(', ')}`);
       if (it.sauces?.length > 0) d.push(`Sauces: ${it.sauces.join(', ')}`);
       
-      // Les extras du client sont des objets {nom: "..."} ou du texte
       if (it.extras?.length > 0) {
           const extrasText = it.extras.map(e => e.nom ? e.nom : e).join(', ');
           d.push(`Extras: ${extrasText}`);
       }
       
-      // Les exclusions du client (sans oignons, etc.)
       if (it.sans?.length > 0) {
           it.sans.forEach(exc => d.push(`🚫 ${exc}`));
       }
@@ -499,9 +496,6 @@ function FoodjiSystem() {
       </div>
   );
 
-  // ==========================================
-  // RENDUS D'IMPRESSION 
-  // ==========================================
   const renderTickets = () => {
       if (!orderToPrint) return null;
       const PHONE_FOODJI = "05 37 53 66 89";
@@ -680,9 +674,9 @@ function FoodjiSystem() {
       );
   };
 
-  // ==========================================
-  // CAISSE TACTILE (POS)
-  // ==========================================
+  // CALCUL DES COMMANDES WEB EN ATTENTE
+  const commandesWebEnAttente = commandes.filter(c => c.status !== 'Terminé' && c.status !== 'Annulé' && c.status !== 'Refusé').length;
+
   if (appMode === 'POS') {
       if (!sessionCaisse.isActive) {
           return (
@@ -788,7 +782,6 @@ function FoodjiSystem() {
                           
                           <div style={{flex:1, overflowY:'auto', padding:'10px 0'}}>
                               
-                              {/* --- SECTION BURGERS (Exclusions) --- */}
                               {customizeItem.produit.categorie === 'Burgers' && (
                                   <div style={{marginBottom:'20px'}}>
                                       <h3 style={{fontSize:'1.1rem', marginBottom:'10px', color:COLORS.danger}}>🚫 Exclusions (Sans...)</h3>
@@ -803,7 +796,6 @@ function FoodjiSystem() {
                                   </div>
                               )}
 
-                              {/* --- SECTION PLATS (2 Accompagnements obligatoires) --- */}
                               {customizeItem.produit.categorie === 'Plats' && (
                                   <div style={{marginBottom:'20px', background:'#e0e7ff', padding:'15px', borderRadius:'10px'}}>
                                       <h3 style={{fontSize:'1.1rem', margin:'0 0 10px 0', color:'#3730a3'}}>🥗 Accompagnements ({customOptions.accompagnements.length} / 2 obligatoires)</h3>
@@ -819,7 +811,6 @@ function FoodjiSystem() {
                                   </div>
                               )}
 
-                              {/* --- SECTION PÂTES (Choix obligatoire) --- */}
                               {customizeItem.produit.categorie === 'Pâtes' && (
                                   <div style={{marginBottom:'20px'}}>
                                       <h3 style={{fontSize:'1.1rem', marginBottom:'10px'}}>🍝 Type de Pâtes (Obligatoire)</h3>
@@ -831,7 +822,6 @@ function FoodjiSystem() {
                                   </div>
                               )}
 
-                              {/* --- SECTION PIZZAS --- */}
                               {customizeItem.produit.categorie === 'Pizzas' && (
                                   <>
                                       {(customizeItem.produit.nom.toLowerCase().includes('saison') || customizeItem.produit.nom.toLowerCase().includes('moitié')) && (
@@ -854,7 +844,6 @@ function FoodjiSystem() {
                                   </>
                               )}
 
-                              {/* --- EXTRAS COMMUNS (Pizzas, Pâtes, Plats) --- */}
                               {['Pizzas', 'Pâtes', 'Plats'].includes(customizeItem.produit.categorie) && (
                                   <div style={{marginBottom:'20px'}}>
                                       <h3 style={{fontSize:'1.1rem', marginBottom:'10px'}}>➕ Extras (Payants)</h3>
@@ -872,7 +861,6 @@ function FoodjiSystem() {
                                   </div>
                               )}
 
-                              {/* --- SECTION TACOS --- */}
                               {customizeItem.produit.categorie === 'Tacos' && (
                                   <>
                                       {customizeItem.produit.nom.toLowerCase().includes('mixte') && (() => {
@@ -926,10 +914,19 @@ function FoodjiSystem() {
                   {/* COLONNE GAUCHE (MENU) */}
                   <div style={{flex: 1, display: 'flex', flexDirection: 'column', padding: '10px', height: '100%', overflowY: 'auto'}}>
                       <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', background:'white', padding:'15px', borderRadius:'10px', marginBottom:'10px', flexShrink: 0}}>
+                          
                           <div style={{display:'flex', alignItems:'center', gap:'15px'}}>
                               <h2 style={{margin:0, color:COLORS.primary}}>🍔 Foodji POS</h2>
                               <span style={{background:'#e0e7ff', color:'#3730a3', padding:'5px 10px', borderRadius:'20px', fontWeight:'bold', fontSize:'0.9rem'}}>👤 {sessionCaisse.caissiere}</span>
+                              
+                              {/* ALERTE VISUELLE COMMANDES WEB */}
+                              {commandesWebEnAttente > 0 && (
+                                  <button onClick={() => setAppMode('ADMIN')} className="blink-alert" style={{marginLeft: '15px', background: COLORS.danger, color: 'white', border: 'none', borderRadius: '8px', padding: '8px 15px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 0 10px rgba(239,68,68,0.5)'}}>
+                                      🔴 {commandesWebEnAttente} WEB EN ATTENTE
+                                  </button>
+                              )}
                           </div>
+
                           <div style={{display:'flex', gap:'8px'}}>
                               <button onClick={()=>openNumpad('depense', 'Saisir le montant retiré')} style={{padding:'10px 15px', background:'#fef3c7', color:'#92400e', borderRadius:'8px', border:'1px solid #f59e0b', cursor:'pointer', fontWeight:'bold'}}>💸 Sortie</button>
                               <button onClick={()=>setShowBilanPos(true)} style={{padding:'10px 15px', background:'#e0e7ff', color:'#3730a3', borderRadius:'8px', border:'none', cursor:'pointer', fontWeight:'bold'}}>👁️ Bilan (X)</button>
@@ -1353,6 +1350,13 @@ const printStyles = `
     .page-break { page-break-after: always; }
   }
   @media screen { .print-only { display: none !important; } }
+  
+  @keyframes blinkAlert { 
+      0% { opacity: 1; transform: scale(1); } 
+      50% { opacity: 0.7; transform: scale(1.05); } 
+      100% { opacity: 1; transform: scale(1); } 
+  }
+  .blink-alert { animation: blinkAlert 1s infinite; }
 `;
 
 export default function App() { 
