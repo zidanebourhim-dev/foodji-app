@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db, auth } from './firebase';
 import { signInWithEmailAndPassword, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'firebase/auth';
-import { collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, setDoc, query, writeBatch } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, setDoc, query } from 'firebase/firestore';
 import './App.css';
 
 const COLORS = { primary: '#A84438', secondary: '#1A1E29', bg: '#F3F4F6', card: '#FFFFFF', success: '#10B981', danger: '#EF4444', warning: '#F59E0B', promo: '#D97706', textLight: '#6B7280', pending: '#F97316' };
@@ -19,6 +19,10 @@ const NOTIF_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-previ
 
 const EXTRAS_BASE = { "Champignons": 10, "Mozzarella": 10, "Parmesan": 15, "Cheddar": 15 };
 const TACOS_EXTRAS = { "Sauce Fromagère": 10, "Supplément Cheddar": 7, "Supplément Mozzarella": 7, "Gratinage": 7 };
+
+// LISTES CODÉES EN DUR POUR PLATS ET BURGERS
+const ACCOMPAGNEMENTS_PLATS = ["Frites", "Légumes Sautés", "Pâtes"];
+const EXCLUSIONS_BURGER = ["Sans Oignons", "Sans Tomates", "Sans Salade", "Sans Fromage", "Sans Sauce", "Sans Cornichons"];
 
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { hasError: false, errorMsg: '' }; }
@@ -68,7 +72,8 @@ function FoodjiSystem() {
   const [showCashOptions, setShowCashOptions] = useState(false);
 
   const [customizeItem, setCustomizeItem] = useState(null); 
-  const [customOptions, setCustomOptions] = useState({ garnitures: [], sauces: [], viandes: [], extras: [], cheesyCrust: false, typePate: '' });
+  // Ajout des états accompagnements et exclusions
+  const [customOptions, setCustomOptions] = useState({ garnitures: [], sauces: [], viandes: [], extras: [], cheesyCrust: false, typePate: '', accompagnements: [], exclusions: [] });
 
   const [newClientPhone, setNewClientPhone] = useState('');
   const [newClientName, setNewClientName] = useState('');
@@ -124,7 +129,6 @@ function FoodjiSystem() {
     return () => { unsubStatus(); unsubHoraires(); unsubStocks(); unsubSession(); unsubServiceGlobal(); unsubMenu(); unsubClients(); unsubCmd(); };
   }, [authState]);
 
-  // EFFET: Tarification dynamique Pep's selon le mode de commande
   useEffect(() => {
       setPosCart(prevCart => prevCart.map(item => {
           if (item.nom.includes("Pep's") && !item.isPrixModifie) {
@@ -273,11 +277,12 @@ function FoodjiSystem() {
   };
 
   const triggerAddToCart = (produit, variante = null) => {
-      if (['Tacos', 'Pizzas', 'Pâtes', 'Plats'].includes(produit.categorie)) {
+      // Ajout de Burgers à la liste des produits ouvrant le pop-up
+      if (['Tacos', 'Pizzas', 'Pâtes', 'Plats', 'Burgers'].includes(produit.categorie)) {
           setCustomizeItem({ produit, variante });
-          setCustomOptions({ garnitures: [], sauces: [], viandes: [], extras: [], cheesyCrust: false, typePate: '' });
+          setCustomOptions({ garnitures: [], sauces: [], viandes: [], extras: [], cheesyCrust: false, typePate: '', accompagnements: [], exclusions: [] });
       } else {
-          addToCartFinal(produit, variante, { garnitures: [], sauces: [], viandes: [], extras: [], cheesyCrust: false, typePate: '' });
+          addToCartFinal(produit, variante, { garnitures: [], sauces: [], viandes: [], extras: [], cheesyCrust: false, typePate: '', accompagnements: [], exclusions: [] });
       }
   };
 
@@ -303,13 +308,17 @@ function FoodjiSystem() {
           return alert("Action refusée : Tu dois obligatoirement choisir un type de pâtes (Penne, Tagliatelle ou Spaghetti).");
       }
 
+      // VÉRIFICATION OBLIGATOIRE POUR LES PLATS (EXACTEMENT 2 ACCOMPAGNEMENTS)
+      if (prod.categorie === 'Plats' && customOptions.accompagnements.length !== 2) {
+          return alert("Action refusée : Tu dois obligatoirement choisir EXACTEMENT 2 accompagnements différents pour ce Plat.");
+      }
+
       addToCartFinal(prod, vari, customOptions);
   };
 
   const addToCartFinal = (produit, variante, options) => {
       let basePrice = variante ? variante.prix : produit.prix;
       
-      // TARIFICATION DYNAMIQUE PEP'S
       if (produit.nom.includes("Pep's")) {
           basePrice = (posOrderType === 'emporter' || posOrderType === 'livraison') ? 33 : 28;
       }
@@ -319,6 +328,14 @@ function FoodjiSystem() {
 
       if (produit.categorie === 'Pâtes') {
           details.push(`Type: ${options.typePate}`);
+      }
+      
+      if (produit.categorie === 'Plats') {
+          details.push(`Accompagnements: ${options.accompagnements.join(' et ')}`);
+      }
+
+      if (produit.categorie === 'Burgers' && options.exclusions?.length > 0) {
+          options.exclusions.forEach(exc => details.push(`🚫 ${exc}`));
       }
 
       if (produit.categorie === 'Pizzas') {
@@ -448,7 +465,6 @@ function FoodjiSystem() {
 
   const imprimerCommandeExistante = (cmd) => { setOrderToPrint(cmd); setTimeout(() => { window.print(); setTimeout(() => setOrderToPrint(null), 1000); }, 500); };
 
-  // Helper pour extraire les détails d'une commande Web/App ancienne ou non formatée
   const getDetaisImpression = (it) => {
       if (it.detailsTxt && it.detailsTxt.length > 0) return it.detailsTxt;
       let d = [];
@@ -470,9 +486,6 @@ function FoodjiSystem() {
       </div>
   );
 
-  // ==========================================
-  // RENDUS D'IMPRESSION 
-  // ==========================================
   const renderTickets = () => {
       if (!orderToPrint) return null;
       const PHONE_FOODJI = "05 37 53 66 89";
@@ -758,6 +771,39 @@ function FoodjiSystem() {
                           </h2>
                           
                           <div style={{flex:1, overflowY:'auto', padding:'10px 0'}}>
+                              
+                              {/* --- SECTION BURGERS (Exclusions) --- */}
+                              {customizeItem.produit.categorie === 'Burgers' && (
+                                  <div style={{marginBottom:'20px'}}>
+                                      <h3 style={{fontSize:'1.1rem', marginBottom:'10px', color:COLORS.danger}}>🚫 Exclusions (Sans...)</h3>
+                                      <div style={{display:'flex', flexWrap:'wrap', gap:'10px'}}>
+                                          {EXCLUSIONS_BURGER.map((exc, idx) => {
+                                              const isSelected = customOptions.exclusions.includes(exc);
+                                              return (
+                                                  <button key={idx} onClick={() => toggleArrOption('exclusions', exc)} style={{padding:'10px 15px', borderRadius:'8px', fontWeight:'bold', cursor:'pointer', background: isSelected ? COLORS.danger : '#fef2f2', color: isSelected ? 'white' : COLORS.danger, border: isSelected ? 'none' : `1px solid ${COLORS.danger}`}}>{exc}</button>
+                                              );
+                                          })}
+                                      </div>
+                                  </div>
+                              )}
+
+                              {/* --- SECTION PLATS (2 Accompagnements obligatoires) --- */}
+                              {customizeItem.produit.categorie === 'Plats' && (
+                                  <div style={{marginBottom:'20px', background:'#e0e7ff', padding:'15px', borderRadius:'10px'}}>
+                                      <h3 style={{fontSize:'1.1rem', margin:'0 0 10px 0', color:'#3730a3'}}>🥗 Accompagnements ({customOptions.accompagnements.length} / 2 obligatoires)</h3>
+                                      <div style={{display:'flex', flexWrap:'wrap', gap:'10px'}}>
+                                          {ACCOMPAGNEMENTS_PLATS.map((acc, idx) => {
+                                              const isSelected = customOptions.accompagnements.includes(acc);
+                                              const isDisabled = !isSelected && customOptions.accompagnements.length >= 2;
+                                              return (
+                                                  <button key={idx} disabled={isDisabled} onClick={() => toggleArrOption('accompagnements', acc)} style={{padding:'10px 15px', borderRadius:'8px', fontWeight:'bold', cursor: isDisabled?'not-allowed':'pointer', background: isSelected ? '#3730a3' : '#fff', color: isSelected ? 'white' : 'black', border:'1px solid #3730a3', opacity: isDisabled?0.5:1}}>{acc}</button>
+                                              );
+                                          })}
+                                      </div>
+                                  </div>
+                              )}
+
+                              {/* --- SECTION PÂTES (Choix obligatoire) --- */}
                               {customizeItem.produit.categorie === 'Pâtes' && (
                                   <div style={{marginBottom:'20px'}}>
                                       <h3 style={{fontSize:'1.1rem', marginBottom:'10px'}}>🍝 Type de Pâtes (Obligatoire)</h3>
@@ -769,6 +815,7 @@ function FoodjiSystem() {
                                   </div>
                               )}
 
+                              {/* --- SECTION PIZZAS --- */}
                               {customizeItem.produit.categorie === 'Pizzas' && (
                                   <>
                                       {(customizeItem.produit.nom.toLowerCase().includes('saison') || customizeItem.produit.nom.toLowerCase().includes('moitié')) && (
@@ -791,6 +838,7 @@ function FoodjiSystem() {
                                   </>
                               )}
 
+                              {/* --- EXTRAS COMMUNS (Pizzas, Pâtes, Plats) --- */}
                               {['Pizzas', 'Pâtes', 'Plats'].includes(customizeItem.produit.categorie) && (
                                   <div style={{marginBottom:'20px'}}>
                                       <h3 style={{fontSize:'1.1rem', marginBottom:'10px'}}>➕ Extras (Payants)</h3>
@@ -808,6 +856,7 @@ function FoodjiSystem() {
                                   </div>
                               )}
 
+                              {/* --- SECTION TACOS --- */}
                               {customizeItem.produit.categorie === 'Tacos' && (
                                   <>
                                       {customizeItem.produit.nom.toLowerCase().includes('mixte') && (() => {
@@ -1144,6 +1193,7 @@ function FoodjiSystem() {
                 </>
             )}
 
+            {/* BASE DE DONNÉES CLIENTS CRM + AJOUT MANUEL */}
             <div style={{background:'white', padding:'25px', borderRadius:'15px', marginBottom:'40px', border:`2px solid #3B82F6`}}>
                 <h3 style={{marginTop:0, color: '#1D4ED8', fontSize:'1.3rem'}}>👥 CRM : Base Clients Fidèles</h3>
                 
