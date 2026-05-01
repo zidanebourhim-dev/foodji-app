@@ -20,7 +20,6 @@ const NOTIF_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-previ
 const EXTRAS_BASE = { "Champignons": 10, "Mozzarella": 10, "Parmesan": 15, "Cheddar": 15 };
 const TACOS_EXTRAS = { "Sauce Fromagère": 10, "Supplément Cheddar": 7, "Supplément Mozzarella": 7, "Gratinage": 7 };
 
-// LISTES CODÉES EN DUR POUR PLATS ET BURGERS
 const ACCOMPAGNEMENTS_PLATS = ["Frites", "Légumes Sautés", "Pâtes"];
 const EXCLUSIONS_BURGER = ["Sans Oignons", "Sans Tomates", "Sans Salade", "Sans Fromage", "Sans Sauce", "Sans Cornichons"];
 
@@ -72,7 +71,6 @@ function FoodjiSystem() {
   const [showCashOptions, setShowCashOptions] = useState(false);
 
   const [customizeItem, setCustomizeItem] = useState(null); 
-  // Ajout des états accompagnements et exclusions
   const [customOptions, setCustomOptions] = useState({ garnitures: [], sauces: [], viandes: [], extras: [], cheesyCrust: false, typePate: '', accompagnements: [], exclusions: [] });
 
   const [newClientPhone, setNewClientPhone] = useState('');
@@ -277,7 +275,6 @@ function FoodjiSystem() {
   };
 
   const triggerAddToCart = (produit, variante = null) => {
-      // Ajout de Burgers à la liste des produits ouvrant le pop-up
       if (['Tacos', 'Pizzas', 'Pâtes', 'Plats', 'Burgers'].includes(produit.categorie)) {
           setCustomizeItem({ produit, variante });
           setCustomOptions({ garnitures: [], sauces: [], viandes: [], extras: [], cheesyCrust: false, typePate: '', accompagnements: [], exclusions: [] });
@@ -308,7 +305,6 @@ function FoodjiSystem() {
           return alert("Action refusée : Tu dois obligatoirement choisir un type de pâtes (Penne, Tagliatelle ou Spaghetti).");
       }
 
-      // VÉRIFICATION OBLIGATOIRE POUR LES PLATS (EXACTEMENT 2 ACCOMPAGNEMENTS)
       if (prod.categorie === 'Plats' && customOptions.accompagnements.length !== 2) {
           return alert("Action refusée : Tu dois obligatoirement choisir EXACTEMENT 2 accompagnements différents pour ce Plat.");
       }
@@ -465,12 +461,29 @@ function FoodjiSystem() {
 
   const imprimerCommandeExistante = (cmd) => { setOrderToPrint(cmd); setTimeout(() => { window.print(); setTimeout(() => setOrderToPrint(null), 1000); }, 500); };
 
+  // LE TRADUCTEUR UNIVERSEL (Appli Client -> Caisse Locale)
   const getDetaisImpression = (it) => {
+      // 1. Si ça vient de la caisse locale (qui a déjà généré le texte)
       if (it.detailsTxt && it.detailsTxt.length > 0) return it.detailsTxt;
+      
+      // 2. Si ça vient de l'application Web/Client (on traduit son vocabulaire)
       let d = [];
+      if (it.choixPates) d.push(`Type: ${it.choixPates}`);
+      if (it.isCheesyCrust) d.push(`★ CHEESY CRUST`);
       if (it.optionsChoisies?.length > 0) d.push(`Options: ${it.optionsChoisies.join(', ')}`);
       if (it.sauces?.length > 0) d.push(`Sauces: ${it.sauces.join(', ')}`);
-      if (it.extras?.length > 0) d.push(`Extras: ${it.extras.join(', ')}`);
+      
+      // Les extras du client sont des objets {nom: "..."} ou du texte
+      if (it.extras?.length > 0) {
+          const extrasText = it.extras.map(e => e.nom ? e.nom : e).join(', ');
+          d.push(`Extras: ${extrasText}`);
+      }
+      
+      // Les exclusions du client (sans oignons, etc.)
+      if (it.sans?.length > 0) {
+          it.sans.forEach(exc => d.push(`🚫 ${exc}`));
+      }
+      
       return d;
   };
 
@@ -486,6 +499,9 @@ function FoodjiSystem() {
       </div>
   );
 
+  // ==========================================
+  // RENDUS D'IMPRESSION 
+  // ==========================================
   const renderTickets = () => {
       if (!orderToPrint) return null;
       const PHONE_FOODJI = "05 37 53 66 89";
@@ -1193,7 +1209,6 @@ function FoodjiSystem() {
                 </>
             )}
 
-            {/* BASE DE DONNÉES CLIENTS CRM + AJOUT MANUEL */}
             <div style={{background:'white', padding:'25px', borderRadius:'15px', marginBottom:'40px', border:`2px solid #3B82F6`}}>
                 <h3 style={{marginTop:0, color: '#1D4ED8', fontSize:'1.3rem'}}>👥 CRM : Base Clients Fidèles</h3>
                 
