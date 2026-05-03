@@ -65,7 +65,6 @@ function FoodjiSystem() {
   
   const [orderToPrint, setOrderToPrint] = useState(null);
   const [numpad, setNumpad] = useState({ active: false, mode: '', targetId: null, label: '', value: '' });
-  const [showBilanPos, setShowBilanPos] = useState(false); 
   const [showBilanGlobal, setShowBilanGlobal] = useState(false); 
   const [showRenduMonnaie, setShowRenduMonnaie] = useState({ active: false, aRendre: 0, received: 0 }); 
   const [showCashOptions, setShowCashOptions] = useState(false);
@@ -116,7 +115,6 @@ function FoodjiSystem() {
           const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
           list.sort((a, b) => (b.date?.seconds || 0) - (a.date?.seconds || 0));
           
-          // LA NOTIFICATION SONORE EST BIEN ICI
           if (list.length > prevCommandesLength.current) {
               if (!audioRef.current) audioRef.current = new Audio(NOTIF_SOUND);
               audioRef.current.play().catch(() => {});
@@ -149,7 +147,22 @@ function FoodjiSystem() {
   const supprimerProduit = async (id) => { if(confirm("Supprimer définitivement ?")) await deleteDoc(doc(db, "produits", id)); };
   const toggleStockItem = async (listName, index) => { const newList = [...parametres.stocks[listName]]; newList[index].available = !newList[index].available; await updateDoc(doc(db, "parametres", "stocks"), { ...parametres.stocks, [listName]: newList }); };
   const addNewStockItem = async () => { if(!newItemName.trim()) return; const newList = [...parametres.stocks[activeStockTab], { nom: newItemName.trim(), available: true }]; await updateDoc(doc(db, "parametres", "stocks"), { ...parametres.stocks, [activeStockTab]: newList }); setNewItemName(''); };
-  const changerStatus = async (id, st) => await updateDoc(doc(db, "commandes", id), { status: st });
+  
+  // ACTION DE STATUS AVEC CRM AUTOMATISÉ
+  const changerStatus = async (cmd, st) => {
+      await updateDoc(doc(db, "commandes", cmd.id), { status: st });
+      
+      // AUTO-CRM : Si la commande Web est servie et a un numéro valide, on nourrit le CRM
+      if (st === 'Terminé' && cmd.tel && cmd.tel.trim().length >= 9) {
+          const telClean = cmd.tel.replace(/\s+/g, '');
+          const exist = clientsDB.find(c => c.tel.replace(/\s+/g, '') === telClean);
+          if (exist) {
+              await updateDoc(doc(db, "clients", exist.id), { totalCommandes: (exist.totalCommandes || 0) + 1, lastOrder: new Date() });
+          } else {
+              await addDoc(collection(db, "clients"), { tel: telClean, nom: cmd.client || "Client Web", totalCommandes: 1, remiseAuto: 0, lastOrder: new Date() });
+          }
+      }
+  };
   
   const handleCategoryChange = (e) => {
       const cat = e.target.value;
@@ -463,6 +476,7 @@ function FoodjiSystem() {
 
   const imprimerCommandeExistante = (cmd) => { setOrderToPrint(cmd); setTimeout(() => { window.print(); setTimeout(() => setOrderToPrint(null), 1000); }, 500); };
 
+  // TRADUCTEUR UNIVERSEL POUR LES COMMANDES WEB ET POS
   const getDetaisImpression = (it) => {
       if (it.detailsTxt && it.detailsTxt.length > 0) return it.detailsTxt;
       
@@ -484,6 +498,9 @@ function FoodjiSystem() {
       return d;
   };
 
+  // CALCUL DES COMMANDES WEB EN ATTENTE POUR L'ALERTE
+  const commandesWebEnAttente = commandes.filter(c => c.status !== 'Terminé' && c.status !== 'Annulé' && c.status !== 'Refusé').length;
+
   if (authState === "LOADING") return <div style={{ background: COLORS.secondary, height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}><h3>Chargement...</h3></div>;
   if (authState === null) return (
       <div style={{ background: COLORS.bg, height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -496,6 +513,9 @@ function FoodjiSystem() {
       </div>
   );
 
+  // ==========================================
+  // RENDUS D'IMPRESSION (AVEC LE BON LOGO.PNG)
+  // ==========================================
   const renderTickets = () => {
       if (!orderToPrint) return null;
       const PHONE_FOODJI = "05 37 53 66 89";
@@ -595,7 +615,9 @@ function FoodjiSystem() {
 
               {/* TICKET CLIENT */}
               <div className="ticket-80mm">
-                  <div style={{textAlign:'center', marginBottom:'10px'}}><img src="/logo-ticket.png" alt="FOODJI" style={{maxWidth:'180px', maxHeight:'80px', filter:'grayscale(100%) contrast(1000%)'}} /></div>
+                  <div style={{textAlign:'center', marginBottom:'10px'}}>
+                      <img src="/logo.png" alt="FOODJI" style={{width:'100%', maxWidth:'150px', filter:'grayscale(100%) contrast(1000%)'}} />
+                  </div>
                   <p style={{textAlign:'center', fontSize:'14px', margin: '2px 0'}}>Sala Al Jadida</p>
                   <p style={{textAlign:'center', fontSize:'16px', margin: '2px 0', fontWeight:'bold'}}>Tél: {PHONE_FOODJI}</p>
                   <hr style={{borderTop:'2px dashed black', margin: '10px 0'}}/>
@@ -674,9 +696,9 @@ function FoodjiSystem() {
       );
   };
 
-  // CALCUL DES COMMANDES WEB EN ATTENTE
-  const commandesWebEnAttente = commandes.filter(c => c.status !== 'Terminé' && c.status !== 'Annulé' && c.status !== 'Refusé').length;
-
+  // ==========================================
+  // CAISSE TACTILE (POS)
+  // ==========================================
   if (appMode === 'POS') {
       if (!sessionCaisse.isActive) {
           return (
@@ -747,32 +769,6 @@ function FoodjiSystem() {
                   </div>
               )}
 
-              {showBilanPos && (
-                  <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:4000}}>
-                      <div style={{background:'white', padding:'30px', borderRadius:'15px', width:'90%', maxWidth:'400px', boxShadow:'0 10px 25px rgba(0,0,0,0.2)'}}>
-                          <h2 style={{marginTop:0, textAlign:'center'}}>👁️ Bilan du Shift (X)</h2>
-                          <p style={{textAlign:'center', color:'#666'}}>Session de <strong>{sessionCaisse.caissiere}</strong></p>
-                          <hr style={{margin:'20px 0'}}/>
-                          {(() => {
-                              const bilan = genererBilanShift();
-                              if (!bilan) return <p>Aucune donnée disponible.</p>;
-                              return (
-                                  <>
-                                      <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', fontSize:'1.2rem'}}><span>Espèces (Tiroir) :</span> <strong>{bilan.totalEspeces} DH</strong></div>
-                                      <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', fontSize:'1.2rem'}}><span>TPE (Carte) :</span> <strong>{bilan.totalTPE} DH</strong></div>
-                                      <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', fontSize:'1.2rem', color:'#666'}}><span>Livr. App/Web :</span> <strong>{bilan.totalLivrApp} DH</strong></div>
-                                      <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', fontSize:'1.2rem', color:'red'}}><span>Décaissements :</span> <strong>- {bilan.totalDépenses} DH</strong></div>
-                                      <hr style={{margin:'20px 0'}}/>
-                                      <div style={{display:'flex', justifyContent:'space-between', fontSize:'1.5rem', color:COLORS.primary}}><span>NET EN CAISSE :</span> <strong>{bilan.netEnCaisse} DH</strong></div>
-                                      <div style={{textAlign:'center', marginTop:'10px', color:'#666'}}>Commandes : {bilan.nbCommandes}</div>
-                                  </>
-                              );
-                          })()}
-                          <button onClick={()=>setShowBilanPos(false)} style={{width:'100%', padding:'15px', background:COLORS.secondary, color:'white', border:'none', borderRadius:'10px', marginTop:'25px', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer'}}>Fermer</button>
-                      </div>
-                  </div>
-              )}
-
               {customizeItem && (
                   <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:2000}}>
                       <div style={{background:'white', width:'90%', maxWidth:'800px', borderRadius:'15px', padding:'20px', display:'flex', flexDirection:'column', maxHeight:'90vh'}}>
@@ -781,7 +777,6 @@ function FoodjiSystem() {
                           </h2>
                           
                           <div style={{flex:1, overflowY:'auto', padding:'10px 0'}}>
-                              
                               {customizeItem.produit.categorie === 'Burgers' && (
                                   <div style={{marginBottom:'20px'}}>
                                       <h3 style={{fontSize:'1.1rem', marginBottom:'10px', color:COLORS.danger}}>🚫 Exclusions (Sans...)</h3>
@@ -919,7 +914,7 @@ function FoodjiSystem() {
                               <h2 style={{margin:0, color:COLORS.primary}}>🍔 Foodji POS</h2>
                               <span style={{background:'#e0e7ff', color:'#3730a3', padding:'5px 10px', borderRadius:'20px', fontWeight:'bold', fontSize:'0.9rem'}}>👤 {sessionCaisse.caissiere}</span>
                               
-                              {/* ALERTE VISUELLE COMMANDES WEB */}
+                              {/* ALERTE VISUELLE COMMANDES WEB RESTAURÉE */}
                               {commandesWebEnAttente > 0 && (
                                   <button onClick={() => setAppMode('ADMIN')} className="blink-alert" style={{marginLeft: '15px', background: COLORS.danger, color: 'white', border: 'none', borderRadius: '8px', padding: '8px 15px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 0 10px rgba(239,68,68,0.5)'}}>
                                       🔴 {commandesWebEnAttente} WEB EN ATTENTE
@@ -929,7 +924,6 @@ function FoodjiSystem() {
 
                           <div style={{display:'flex', gap:'8px'}}>
                               <button onClick={()=>openNumpad('depense', 'Saisir le montant retiré')} style={{padding:'10px 15px', background:'#fef3c7', color:'#92400e', borderRadius:'8px', border:'1px solid #f59e0b', cursor:'pointer', fontWeight:'bold'}}>💸 Sortie</button>
-                              <button onClick={()=>setShowBilanPos(true)} style={{padding:'10px 15px', background:'#e0e7ff', color:'#3730a3', borderRadius:'8px', border:'none', cursor:'pointer', fontWeight:'bold'}}>👁️ Bilan (X)</button>
                               <button onClick={cloturerShift} style={{padding:'10px 15px', background:COLORS.warning, color:'white', borderRadius:'8px', border:'none', cursor:'pointer', fontWeight:'bold'}}>🛑 Fin Shift</button>
                               <button onClick={() => setAppMode('ADMIN')} style={{padding:'10px 15px', background:COLORS.secondary, color:'white', borderRadius:'8px', border:'none', cursor:'pointer', fontWeight:'bold'}}>⚙️ BACK-OFFICE</button>
                           </div>
@@ -1057,7 +1051,7 @@ function FoodjiSystem() {
   }
 
   // ==========================================
-  // RENDU ADMIN & STOCKS (BACK-OFFICE)
+  // RENDU ADMIN & STOCKS (BACK-OFFICE COMPACT)
   // ==========================================
   return (
     <>
@@ -1066,12 +1060,30 @@ function FoodjiSystem() {
         <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
             
             <div style={{marginBottom:'20px', display:'flex', flexWrap:'wrap', gap:'10px', alignItems:'center', justifyContent:'space-between'}}>
-                <h2 style={{margin:0}}>⚙️ Tableau de Bord (Admin)</h2>
+                <h2 style={{margin:0}}>⚙️ Admin Foodji</h2>
                 <div style={{display:'flex', gap:'10px'}}>
-                    <button onClick={()=>setShowHistory(!showHistory)} style={{padding:'10px 15px', borderRadius:'8px', border:`2px solid ${COLORS.secondary}`, background: showHistory ? COLORS.secondary : 'transparent', color: showHistory ? 'white' : COLORS.secondary, fontWeight:'bold', cursor:'pointer'}}>🕒 Historique</button>
-                    <button onClick={()=>setShowBilanGlobal(true)} style={{padding:'10px 15px', borderRadius:'8px', border:'none', background:'#1D4ED8', color:'white', fontWeight:'bold', cursor:'pointer'}}>📊 Bilan Journée (Z)</button>
-                    <button onClick={()=>setAppMode('POS')} style={{padding:'10px 15px', borderRadius:'8px', border:'none', background:COLORS.primary, color:'white', fontWeight:'bold', cursor:'pointer', fontSize:'1.1rem'}}>🍔 OUVRIR LA CAISSE</button>
-                    <button onClick={() => auth.signOut()} style={{padding:'10px 15px', borderRadius:'8px', border:'none', background:'#eee', cursor:'pointer'}}>Déconnexion</button>
+                    <button onClick={()=>setShowHistory(!showHistory)} style={{padding:'8px 12px', borderRadius:'8px', border:`2px solid ${COLORS.secondary}`, background: showHistory ? COLORS.secondary : 'transparent', color: showHistory ? 'white' : COLORS.secondary, fontWeight:'bold', cursor:'pointer'}}>🕒 Historique</button>
+                    <button onClick={()=>setShowBilanGlobal(true)} style={{padding:'8px 12px', borderRadius:'8px', border:'none', background:'#1D4ED8', color:'white', fontWeight:'bold', cursor:'pointer'}}>📊 Bilan (Z)</button>
+                    <button onClick={()=>setAppMode('POS')} style={{padding:'8px 12px', borderRadius:'8px', border:'none', background:COLORS.primary, color:'white', fontWeight:'bold', cursor:'pointer'}}>🍔 RETOUR CAISSE</button>
+                    <button onClick={() => auth.signOut()} style={{padding:'8px 12px', borderRadius:'8px', border:'none', background:'#eee', cursor:'pointer'}}>Quitter</button>
+                </div>
+            </div>
+
+            {/* HEADER COMPACT (Service & Rush) */}
+            <div style={{display:'flex', flexWrap:'wrap', gap:'20px', marginBottom:'20px', background:'white', padding:'15px', borderRadius:'10px', alignItems:'center', boxShadow:'0 2px 5px rgba(0,0,0,0.05)'}}>
+                <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+                    <strong style={{color:'#666'}}>Service :</strong>
+                    <button onClick={() => updateDoc(doc(db, "parametres", "horaires"), { isOuvert: true })} style={{padding:'8px 15px', borderRadius:'5px', background: parametres.isOuvert ? COLORS.success : '#eee', color: parametres.isOuvert ? 'white' : 'black', border:'none', cursor:'pointer', fontWeight:'bold'}}>🟢 OUVERT</button>
+                    <button onClick={() => updateDoc(doc(db, "parametres", "horaires"), { isOuvert: false })} style={{padding:'8px 15px', borderRadius:'5px', background: !parametres.isOuvert ? COLORS.danger : '#eee', color: !parametres.isOuvert ? 'white' : 'black', border:'none', cursor:'pointer', fontWeight:'bold'}}>🔴 FERMÉ</button>
+                </div>
+                <div style={{width:'1px', height:'30px', background:'#eee'}}></div>
+                <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+                    <strong style={{color:'#666'}}>Mode Cuisine :</strong>
+                    <select value={parametres.rushMode} onChange={(e) => updateDoc(doc(db, "parametres", "status"), { mode: e.target.value })} style={{padding:'8px', borderRadius:'5px', border:'1px solid #ddd', fontWeight:'bold', outline:'none', cursor:'pointer'}}>
+                        <option value="standard">✅ Standard</option>
+                        <option value="rush">⚠️ Rush (30min+)</option>
+                        <option value="gros_rush">🔥 Gros Rush (1h+)</option>
+                    </select>
                 </div>
             </div>
 
@@ -1143,24 +1155,8 @@ function FoodjiSystem() {
                 </div>
             ) : (
                 <>
-                    <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(250px, 1fr))', gap:'20px', marginBottom:'30px'}}>
-                      <div style={{background: 'white', padding: '20px', borderRadius: '16px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', textAlign:'center'}}>
-                          <h3 style={{marginTop:0, marginBottom:'15px', fontSize:'1rem'}}>Service Client</h3>
-                          <button onClick={() => updateDoc(doc(db, "parametres", "horaires"), { isOuvert: !parametres.isOuvert })} style={{width:'100%', padding:'15px', borderRadius:'10px', border: parametres.isOuvert ? `2px solid ${COLORS.success}` : '1px solid #ddd', background: parametres.isOuvert ? '#ECFDF5' : 'white', color: parametres.isOuvert ? COLORS.success : 'black', fontWeight:'bold', cursor:'pointer'}}>
-                              {parametres.isOuvert ? '🟢 OUVERT' : '🔴 FERMÉ'}
-                          </button>
-                      </div>
-                      <div style={{background: 'white', padding: '20px', borderRadius: '16px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)', textAlign:'center'}}>
-                          <h3 style={{marginTop:0, marginBottom:'15px', fontSize:'1rem'}}>Mode Rush</h3>
-                          <select value={parametres.rushMode} onChange={(e) => updateDoc(doc(db, "parametres", "status"), { mode: e.target.value })} style={{width:'100%', padding:'15px', borderRadius:'10px', border:'1px solid #ddd', fontSize:'1rem'}}>
-                              <option value="standard">✅ Standard</option>
-                              <option value="rush">⚠️ Rush (30min+)</option>
-                              <option value="gros_rush">🔥 Gros Rush (1h+)</option>
-                          </select>
-                      </div>
-                    </div>
-
-                    <h3 style={{marginBottom:'15px'}}>Commandes Web & App ({commandes.filter(c => c.status !== 'Terminé' && c.status !== 'Annulé').length})</h3>
+                    {/* COMMANDES WEB EN COURS */}
+                    <h3 style={{marginBottom:'15px'}}>Commandes Web & App ({commandesWebEnAttente})</h3>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '20px', marginBottom:'40px' }}>
                       {commandes.filter(c => c.status !== 'Terminé' && c.status !== 'Annulé').map(cmd => (
                         <div key={cmd.id} style={{ background:'white', borderRadius:'16px', padding:'15px', borderLeft: `5px solid ${COLORS.pending}` }}>
@@ -1197,8 +1193,9 @@ function FoodjiSystem() {
 
                           <div style={{display:'flex', gap:'10px', flexWrap:'wrap'}}>
                             <button onClick={()=>imprimerCommandeExistante(cmd)} style={{width:'100%', padding:'10px', background: COLORS.secondary, color:'white', border:'none', borderRadius:'8px', fontWeight:'bold', cursor:'pointer', marginBottom:'5px'}}>🖨️ IMPRIMER LE TICKET</button>
-                            <button onClick={()=>changerStatus(cmd.id, 'Terminé')} style={{flex:1, padding:'10px', background: COLORS.success, color:'white', border:'none', borderRadius:'8px', fontWeight:'bold'}}>✅ SERVI</button>
-                            <button onClick={()=>changerStatus(cmd.id, 'Annulé')} style={{flex:1, padding:'10px', background: COLORS.danger, color:'white', border:'none', borderRadius:'8px', fontWeight:'bold'}}>❌ ANNULER</button>
+                            {/* LE BOUTON SERVI MET A JOUR LE CRM EN ARRIERE PLAN */}
+                            <button onClick={()=>changerStatus(cmd, 'Terminé')} style={{flex:1, padding:'10px', background: COLORS.success, color:'white', border:'none', borderRadius:'8px', fontWeight:'bold'}}>✅ SERVI</button>
+                            <button onClick={()=>changerStatus(cmd, 'Annulé')} style={{flex:1, padding:'10px', background: COLORS.danger, color:'white', border:'none', borderRadius:'8px', fontWeight:'bold'}}>❌ ANNULER</button>
                           </div>
                         </div>
                       ))}
@@ -1206,50 +1203,7 @@ function FoodjiSystem() {
                 </>
             )}
 
-            <div style={{background:'white', padding:'25px', borderRadius:'15px', marginBottom:'40px', border:`2px solid #3B82F6`}}>
-                <h3 style={{marginTop:0, color: '#1D4ED8', fontSize:'1.3rem'}}>👥 CRM : Base Clients Fidèles</h3>
-                
-                <div style={{background:'#f8fafc', padding:'15px', borderRadius:'10px', marginBottom:'20px', border:'1px solid #e2e8f0'}}>
-                    <h4 style={{marginTop:0, marginBottom:'10px', color:'#334155'}}>➕ Ajouter un client manuellement</h4>
-                    <div style={{display:'flex', gap:'10px', flexWrap:'wrap', alignItems:'center'}}>
-                        <input type="tel" placeholder="Tél (06...)" value={newClientPhone} onChange={e=>setNewClientPhone(e.target.value)} style={{flex:1, minWidth:'150px', padding:'10px', borderRadius:'5px', border:'1px solid #cbd5e1'}} />
-                        <input type="text" placeholder="Nom complet" value={newClientName} onChange={e=>setNewClientName(e.target.value)} style={{flex:2, minWidth:'200px', padding:'10px', borderRadius:'5px', border:'1px solid #cbd5e1'}} />
-                        <input type="number" placeholder="Commandes (ex: 15)" value={newClientOrders} onChange={e=>setNewClientOrders(e.target.value)} style={{width:'120px', padding:'10px', borderRadius:'5px', border:'1px solid #cbd5e1'}} />
-                        <input type="number" placeholder="Remise Auto (%)" value={newClientRemise} onChange={e=>setNewClientRemise(e.target.value)} style={{width:'120px', padding:'10px', borderRadius:'5px', border:'1px solid #cbd5e1'}} />
-                        <button onClick={ajouterClientManuel} disabled={loading} style={{padding:'10px 20px', background:'#1D4ED8', color:'white', border:'none', borderRadius:'5px', fontWeight:'bold', cursor:'pointer'}}>Ajouter</button>
-                    </div>
-                </div>
-
-                <div style={{maxHeight:'400px', overflowY:'auto', border:'1px solid #eee', borderRadius:'10px'}}>
-                    <table style={{width:'100%', textAlign:'left', borderCollapse:'collapse'}}>
-                        <thead style={{position:'sticky', top:0, background:'white', zIndex:10}}>
-                            <tr style={{borderBottom:'2px solid #eee'}}>
-                                <th style={{padding:'10px'}}>Téléphone</th>
-                                <th style={{padding:'10px'}}>Nom</th>
-                                <th style={{padding:'10px'}}>Commandes</th>
-                                <th style={{padding:'10px'}}>Remise Auto (%)</th>
-                                <th style={{padding:'10px'}}>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {clientsDB.sort((a,b) => b.totalCommandes - a.totalCommandes).map(client => (
-                                <tr key={client.id} style={{borderBottom:'1px solid #f0f2f5'}}>
-                                    <td style={{padding:'10px', fontWeight:'bold'}}>{client.tel}</td>
-                                    <td style={{padding:'10px'}}>{client.nom} {client.totalCommandes >= 10 && <span style={{background:COLORS.promo, color:'white', padding:'2px 6px', borderRadius:'5px', fontSize:'0.7rem', marginLeft:'5px'}}>VIP</span>}</td>
-                                    <td style={{padding:'10px'}}>{client.totalCommandes}</td>
-                                    <td style={{padding:'10px'}}>
-                                        <input type="number" value={client.remiseAuto || 0} onChange={(e) => updateDoc(doc(db, "clients", client.id), {remiseAuto: Number(e.target.value)})} style={{width:'60px', padding:'5px', borderRadius:'5px', border:'1px solid #ccc'}}/> %
-                                    </td>
-                                    <td style={{padding:'10px'}}>
-                                        <button onClick={()=>deleteDoc(doc(db, "clients", client.id))} style={{background:'#fee2e2', color:'red', border:'none', padding:'5px 10px', borderRadius:'5px', cursor:'pointer'}}>Supprimer</button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
+            {/* 1. GESTION DES STOCKS REMONTÉE EN PRIORITÉ */}
             <div style={{background:'white', padding:'25px', borderRadius:'15px', marginBottom:'40px', border:`2px solid ${COLORS.primary}`}}>
                   <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px'}}>
                       <h3 style={{margin:0, color: COLORS.primary, fontSize:'1.3rem'}}>🥕 GESTION DES STOCKS (RUPTURES)</h3>
@@ -1276,8 +1230,9 @@ function FoodjiSystem() {
                   </div>
             </div>
 
+            {/* 2. GESTION DU MENU */}
             <h3 style={{marginBottom:'15px'}}>📦 Gestion de la Carte (Produits)</h3>
-            <div style={{background:'white', padding:'20px', borderRadius:'15px'}}>
+            <div style={{background:'white', padding:'20px', borderRadius:'15px', marginBottom:'40px'}}>
                <div style={{ overflowX: 'auto', display:'flex', gap:'10px', paddingBottom:'15px', marginBottom:'15px' }}>
                 {TOUTES_CATEGORIES.map(c => <button key={c} onClick={() => setAdminCategorie(c)} style={{padding:'10px 20px', borderRadius:'20px', border:'none', background: adminCategorie===c?COLORS.secondary:'#eee', color:adminCategorie===c?'white':'black', cursor:'pointer', fontWeight:'bold'}}>{c}</button>)}
                </div>
@@ -1294,46 +1249,94 @@ function FoodjiSystem() {
                   </div>
                 </div>
               ))}
+
+              {/* Formulaire d'ajout rapide menu */}
+              <div style={{marginTop:'30px', background:'#f9fafb', padding:'25px', borderRadius:'15px', border:'1px dashed #ccc'}}>
+                 <h4 style={{marginTop:0}}>{editId ? '✏️ Mettre à jour le produit' : '➕ Ajouter un Produit'}</h4>
+                 <div style={{display:'flex', flexDirection:'column', gap:'15px'}}>
+                     <input placeholder="Nom du produit" value={formProd.nom} onChange={e=>setFormProd({...formProd, nom: e.target.value})} style={{padding:'12px', borderRadius:'8px', border:'1px solid #ddd', fontSize:'1rem'}} />
+                     <select value={formProd.categorie} onChange={handleCategoryChange} style={{padding:'12px', borderRadius:'8px', border:'1px solid #ddd', fontSize:'1rem'}}>
+                         {TOUTES_CATEGORIES.map(cat => <option key={cat}>{cat}</option>)}
+                     </select>
+                     
+                     {formProd.variantes && formProd.variantes.length > 0 ? (
+                         <div style={{display:'flex', gap:'10px', flexWrap:'wrap'}}>
+                             {formProd.variantes.map((v, index) => (
+                                 <div key={index} style={{flex:1, minWidth:'120px', background:'white', padding:'10px', borderRadius:'8px', border:'1px solid #eee'}}>
+                                     <label style={{fontSize:'0.9rem', fontWeight:'bold'}}>{v.nom}</label>
+                                     <input type="number" placeholder="Prix" value={v.prix} onChange={(e) => {
+                                         const newVars = [...formProd.variantes];
+                                         newVars[index].prix = Number(e.target.value);
+                                         setFormProd({...formProd, variantes: newVars});
+                                     }} style={{width:'100%', padding:'8px', borderRadius:'5px', border:'1px solid #ccc', marginTop:'5px', boxSizing:'border-box'}} />
+                                     <label style={{fontSize:'0.9rem', display:'flex', alignItems:'center', gap:'5px', marginTop:'8px', cursor:'pointer'}}>
+                                         <input type="checkbox" checked={v.available !== false} onChange={(e) => {
+                                             const newVars = [...formProd.variantes];
+                                             newVars[index].available = e.target.checked;
+                                             setFormProd({...formProd, variantes: newVars});
+                                         }} style={{width:'18px', height:'18px'}} /> Dispo
+                                     </label>
+                                 </div>
+                             ))}
+                         </div>
+                     ) : (
+                         <input type="number" placeholder="Prix unique (ex: 45)" value={formProd.prixBase} onChange={e=>setFormProd({...formProd, prixBase: e.target.value})} style={{padding:'12px', borderRadius:'8px', border:'1px solid #ddd', fontSize:'1rem'}} />
+                     )}
+
+                     <div style={{display:'flex', gap:'10px'}}>
+                        <button onClick={saveProduit} style={{flex:1, padding:'15px', background:COLORS.primary, color:'white', border:'none', borderRadius:'10px', fontSize:'1.1rem', fontWeight:'bold', cursor:'pointer'}}>{editId ? 'Enregistrer' : 'Ajouter'}</button>
+                        {editId && <button onClick={() => {setEditId(null); setFormProd({nom:'', description:'', categorie:'Panuozzo', prixBase:'', variantes:[]});}} style={{padding:'15px 25px', background:'#9CA3AF', color:'white', border:'none', borderRadius:'10px', fontSize:'1.1rem', fontWeight:'bold', cursor:'pointer'}}>Annuler</button>}
+                     </div>
+                 </div>
+              </div>
             </div>
 
-            <div style={{marginTop:'30px', background:'white', padding:'25px', borderRadius:'15px', boxShadow:'0 4px 6px rgba(0,0,0,0.05)'}}>
-               <h3 style={{marginTop:0}}>{editId ? '✏️ Mettre à jour le produit' : '➕ Ajouter un Produit'}</h3>
-               <div style={{display:'flex', flexDirection:'column', gap:'15px'}}>
-                   <input placeholder="Nom du produit" value={formProd.nom} onChange={e=>setFormProd({...formProd, nom: e.target.value})} style={{padding:'12px', borderRadius:'8px', border:'1px solid #ddd', fontSize:'1rem'}} />
-                   <select value={formProd.categorie} onChange={handleCategoryChange} style={{padding:'12px', borderRadius:'8px', border:'1px solid #ddd', fontSize:'1rem'}}>
-                       {TOUTES_CATEGORIES.map(cat => <option key={cat}>{cat}</option>)}
-                   </select>
-                   
-                   {formProd.variantes && formProd.variantes.length > 0 ? (
-                       <div style={{display:'flex', gap:'10px', flexWrap:'wrap'}}>
-                           {formProd.variantes.map((v, index) => (
-                               <div key={index} style={{flex:1, minWidth:'120px', background:'#f9fafb', padding:'10px', borderRadius:'8px', border:'1px solid #eee'}}>
-                                   <label style={{fontSize:'0.9rem', fontWeight:'bold'}}>{v.nom}</label>
-                                   <input type="number" placeholder="Prix" value={v.prix} onChange={(e) => {
-                                       const newVars = [...formProd.variantes];
-                                       newVars[index].prix = Number(e.target.value);
-                                       setFormProd({...formProd, variantes: newVars});
-                                   }} style={{width:'100%', padding:'8px', borderRadius:'5px', border:'1px solid #ccc', marginTop:'5px', boxSizing:'border-box'}} />
-                                   <label style={{fontSize:'0.9rem', display:'flex', alignItems:'center', gap:'5px', marginTop:'8px', cursor:'pointer'}}>
-                                       <input type="checkbox" checked={v.available !== false} onChange={(e) => {
-                                           const newVars = [...formProd.variantes];
-                                           newVars[index].available = e.target.checked;
-                                           setFormProd({...formProd, variantes: newVars});
-                                       }} style={{width:'18px', height:'18px'}} /> Dispo
-                                   </label>
-                               </div>
-                           ))}
-                       </div>
-                   ) : (
-                       <input type="number" placeholder="Prix unique (ex: 45)" value={formProd.prixBase} onChange={e=>setFormProd({...formProd, prixBase: e.target.value})} style={{padding:'12px', borderRadius:'8px', border:'1px solid #ddd', fontSize:'1rem'}} />
-                   )}
+            {/* 3. CRM RELÉGUÉ EN BAS AVEC HAUTEUR LIMITÉE */}
+            <div style={{background:'white', padding:'25px', borderRadius:'15px', marginBottom:'40px', border:`2px solid #3B82F6`}}>
+                <h3 style={{marginTop:0, color: '#1D4ED8', fontSize:'1.3rem'}}>👥 CRM : Base Clients Fidèles</h3>
+                
+                <div style={{background:'#f8fafc', padding:'15px', borderRadius:'10px', marginBottom:'20px', border:'1px solid #e2e8f0'}}>
+                    <h4 style={{marginTop:0, marginBottom:'10px', color:'#334155'}}>➕ Ajouter un client manuellement</h4>
+                    <div style={{display:'flex', gap:'10px', flexWrap:'wrap', alignItems:'center'}}>
+                        <input type="tel" placeholder="Tél (06...)" value={newClientPhone} onChange={e=>setNewClientPhone(e.target.value)} style={{flex:1, minWidth:'150px', padding:'10px', borderRadius:'5px', border:'1px solid #cbd5e1'}} />
+                        <input type="text" placeholder="Nom complet" value={newClientName} onChange={e=>setNewClientName(e.target.value)} style={{flex:2, minWidth:'200px', padding:'10px', borderRadius:'5px', border:'1px solid #cbd5e1'}} />
+                        <input type="number" placeholder="Commandes (ex: 15)" value={newClientOrders} onChange={e=>setNewClientOrders(e.target.value)} style={{width:'120px', padding:'10px', borderRadius:'5px', border:'1px solid #cbd5e1'}} />
+                        <input type="number" placeholder="Remise Auto (%)" value={newClientRemise} onChange={e=>setNewClientRemise(e.target.value)} style={{width:'120px', padding:'10px', borderRadius:'5px', border:'1px solid #cbd5e1'}} />
+                        <button onClick={ajouterClientManuel} disabled={loading} style={{padding:'10px 20px', background:'#1D4ED8', color:'white', border:'none', borderRadius:'5px', fontWeight:'bold', cursor:'pointer'}}>Ajouter</button>
+                    </div>
+                </div>
 
-                   <div style={{display:'flex', gap:'10px'}}>
-                      <button onClick={saveProduit} style={{flex:1, padding:'15px', background:COLORS.primary, color:'white', border:'none', borderRadius:'10px', fontSize:'1.1rem', fontWeight:'bold', cursor:'pointer'}}>{editId ? 'Enregistrer les modifications' : 'Ajouter à la carte'}</button>
-                      {editId && <button onClick={() => {setEditId(null); setFormProd({nom:'', description:'', categorie:'Panuozzo', prixBase:'', variantes:[]});}} style={{padding:'15px 25px', background:'#9CA3AF', color:'white', border:'none', borderRadius:'10px', fontSize:'1.1rem', fontWeight:'bold', cursor:'pointer'}}>Annuler</button>}
-                   </div>
-               </div>
+                {/* HAUTEUR BRIDÉE A 250px (Scrolable) */}
+                <div style={{maxHeight:'250px', overflowY:'auto', border:'1px solid #eee', borderRadius:'10px'}}>
+                    <table style={{width:'100%', textAlign:'left', borderCollapse:'collapse'}}>
+                        <thead style={{position:'sticky', top:0, background:'white', zIndex:10}}>
+                            <tr style={{borderBottom:'2px solid #eee', boxShadow:'0 2px 2px rgba(0,0,0,0.05)'}}>
+                                <th style={{padding:'10px'}}>Téléphone</th>
+                                <th style={{padding:'10px'}}>Nom</th>
+                                <th style={{padding:'10px'}}>Commandes</th>
+                                <th style={{padding:'10px'}}>Remise Auto (%)</th>
+                                <th style={{padding:'10px'}}>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {clientsDB.sort((a,b) => b.totalCommandes - a.totalCommandes).map(client => (
+                                <tr key={client.id} style={{borderBottom:'1px solid #f0f2f5'}}>
+                                    <td style={{padding:'10px', fontWeight:'bold'}}>{client.tel}</td>
+                                    <td style={{padding:'10px'}}>{client.nom} {client.totalCommandes >= 10 && <span style={{background:COLORS.promo, color:'white', padding:'2px 6px', borderRadius:'5px', fontSize:'0.7rem', marginLeft:'5px'}}>VIP</span>}</td>
+                                    <td style={{padding:'10px'}}>{client.totalCommandes}</td>
+                                    <td style={{padding:'10px'}}>
+                                        <input type="number" value={client.remiseAuto || 0} onChange={(e) => updateDoc(doc(db, "clients", client.id), {remiseAuto: Number(e.target.value)})} style={{width:'60px', padding:'5px', borderRadius:'5px', border:'1px solid #ccc'}}/> %
+                                    </td>
+                                    <td style={{padding:'10px'}}>
+                                        <button onClick={()=>deleteDoc(doc(db, "clients", client.id))} style={{background:'#fee2e2', color:'red', border:'none', padding:'5px 10px', borderRadius:'5px', cursor:'pointer'}}>Supprimer</button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             </div>
+
         </div>
       </div>
     </>
