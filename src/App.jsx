@@ -42,14 +42,14 @@ function FoodjiSystem() {
   const [clientsDB, setClientsDB] = useState([]); 
   const [parametres, setParametres] = useState({ isOuvert: true, rushMode: 'standard', stocks: { viandes: INIT_VIANDES, garnitures: INIT_GARNITURES_PIZZA, sauces: INIT_SAUCES, pates: INIT_PATES, tailles_pizza: INIT_TAILLES_PIZZA } });
   
-  const [sessionCaisse, setSessionCaisse] = useState({ isActive: false, caissiere: '', startTime: null });
+  const [sessionCaisse, setSessionCaisse] = useState({ isActive: false, caissiere: '', startTime: null, fondsInitial: 0 });
   const [serviceGlobal, setServiceGlobal] = useState({ lastZDate: null });
   
   const [adminCategorie, setAdminCategorie] = useState('Tacos'); 
   const [activeStockTab, setActiveStockTab] = useState('viandes');
   const [newItemName, setNewItemName] = useState('');
   const [editId, setEditId] = useState(null); 
-  const [formProd, setFormProd] = useState({ nom: '', description: '', image: '', categorie: 'Burgers', prixBase: '', variantes: [] });
+  const [formProd, setFormProd] = useState({ nom: '', description: '', image: '', categorie: 'Burgers', prixBase: '', variantes: [], excludeVIP: false });
   const [showHistory, setShowHistory] = useState(false); 
   
   const [posCart, setPosCart] = useState([]);
@@ -68,6 +68,10 @@ function FoodjiSystem() {
   const [showBilanGlobal, setShowBilanGlobal] = useState(false); 
   const [showRenduMonnaie, setShowRenduMonnaie] = useState({ active: false, aRendre: 0, received: 0 }); 
   const [showCashOptions, setShowCashOptions] = useState(false);
+  const [showFondsCaissePrompt, setShowFondsCaissePrompt] = useState({ active: false, caissiere: '' });
+  const [fondsInitialInput, setFondsInitialInput] = useState('');
+  const [showDiviserAddition, setShowDiviserAddition] = useState(false);
+  const [diviserPar, setDiviserPar] = useState(2);
 
   const [customizeItem, setCustomizeItem] = useState(null); 
   const [customOptions, setCustomOptions] = useState({ garnitures: [], sauces: [], viandes: [], extras: [], cheesyCrust: false, typePate: '', accompagnements: [], exclusions: [] });
@@ -101,7 +105,7 @@ function FoodjiSystem() {
     });
     const unsubSession = onSnapshot(doc(db, "parametres", "session_caisse"), (s) => {
         if (s.exists()) setSessionCaisse(s.data());
-        else setDoc(doc(db, "parametres", "session_caisse"), { isActive: false, caissiere: '', startTime: null });
+        else setDoc(doc(db, "parametres", "session_caisse"), { isActive: false, caissiere: '', startTime: null, fondsInitial: 0 });
     });
     const unsubServiceGlobal = onSnapshot(doc(db, "parametres", "service_global"), (s) => {
         if (s.exists()) setServiceGlobal(s.data());
@@ -148,11 +152,8 @@ function FoodjiSystem() {
   const toggleStockItem = async (listName, index) => { const newList = [...parametres.stocks[listName]]; newList[index].available = !newList[index].available; await updateDoc(doc(db, "parametres", "stocks"), { ...parametres.stocks, [listName]: newList }); };
   const addNewStockItem = async () => { if(!newItemName.trim()) return; const newList = [...parametres.stocks[activeStockTab], { nom: newItemName.trim(), available: true }]; await updateDoc(doc(db, "parametres", "stocks"), { ...parametres.stocks, [activeStockTab]: newList }); setNewItemName(''); };
   
-  // ACTION DE STATUS AVEC CRM AUTOMATISÉ
   const changerStatus = async (cmd, st) => {
       await updateDoc(doc(db, "commandes", cmd.id), { status: st });
-      
-      // AUTO-CRM : Si la commande Web est servie et a un numéro valide, on nourrit le CRM
       if (st === 'Terminé' && cmd.tel && cmd.tel.trim().length >= 9) {
           const telClean = cmd.tel.replace(/\s+/g, '');
           const exist = clientsDB.find(c => c.tel.replace(/\s+/g, '') === telClean);
@@ -174,10 +175,19 @@ function FoodjiSystem() {
 
   const saveProduit = async () => {
     if(!formProd.nom) return; setLoading(true);
-    const data = { nom: formProd.nom, description: formProd.description, categorie: formProd.categorie, prix: formProd.variantes.length > 0 ? 0 : Number(formProd.prixBase), variantes: formProd.variantes, available: true, date: new Date() };
+    const data = { 
+        nom: formProd.nom, 
+        description: formProd.description, 
+        categorie: formProd.categorie, 
+        prix: formProd.variantes.length > 0 ? 0 : Number(formProd.prixBase), 
+        variantes: formProd.variantes, 
+        available: true, 
+        excludeVIP: formProd.excludeVIP || false,
+        date: new Date() 
+    };
     if(formProd.image) data.image = formProd.image;
     if (editId) { await updateDoc(doc(db, "produits", editId), data); alert("Modifié !"); setEditId(null); } else { await addDoc(collection(db, "produits"), data); alert("Ajouté !"); }
-    setFormProd({ nom: '', description: '', image: '', categorie: 'Panuozzo', prixBase: '', variantes: [] }); setLoading(false);
+    setFormProd({ nom: '', description: '', image: '', categorie: 'Panuozzo', prixBase: '', variantes: [], excludeVIP: false }); setLoading(false);
   };
 
   const reparerPizzas = async () => {
@@ -195,7 +205,7 @@ function FoodjiSystem() {
           }
       }
       setLoading(false);
-      alert("✅ Réparation terminée. Vérifie les prix L dans la liste !");
+      alert("✅ Réparation terminée.");
   };
 
   const ajouterClientManuel = async () => {
@@ -209,12 +219,26 @@ function FoodjiSystem() {
               tel: telClean, nom: newClientName.trim() || "Inconnu", totalCommandes: Number(newClientOrders) || 0, remiseAuto: Number(newClientRemise) || 0, lastOrder: new Date()
           });
           setNewClientPhone(''); setNewClientName(''); setNewClientOrders(''); setNewClientRemise('');
-          alert("✅ Client ajouté avec succès !");
+          alert("✅ Client ajouté !");
       } catch (e) { alert("Erreur lors de l'ajout."); }
       setLoading(false);
   };
 
-  const ouvrirCaisse = async (nomCaissiere) => await updateDoc(doc(db, "parametres", "session_caisse"), { isActive: true, caissiere: nomCaissiere, startTime: new Date() });
+  const demanderOuvertureCaisse = (nomCaissiere) => {
+      setShowFondsCaissePrompt({ active: true, caissiere: nomCaissiere });
+      setFondsInitialInput('');
+  };
+
+  const validerOuvertureCaisse = async () => {
+      const fInitial = Number(fondsInitialInput) || 0;
+      await updateDoc(doc(db, "parametres", "session_caisse"), { 
+          isActive: true, 
+          caissiere: showFondsCaissePrompt.caissiere, 
+          startTime: new Date(),
+          fondsInitial: fInitial
+      });
+      setShowFondsCaissePrompt({ active: false, caissiere: '' });
+  };
 
   const genererBilanShift = () => {
       if (!sessionCaisse.startTime) return null;
@@ -223,14 +247,22 @@ function FoodjiSystem() {
           const d = c.date?.seconds ? new Date(c.date.seconds * 1000) : new Date(c.date);
           return d >= startT && c.status !== 'Refusé' && c.status !== 'Annulé' && c.caissiere === sessionCaisse.caissiere;
       });
-      let totalEspeces = 0, totalTPE = 0, totalDépenses = 0, totalLivrApp = 0;
+      let totalEspeces = 0, totalDépenses = 0, totalLivrApp = 0;
       cmdsSession.forEach(c => {
           if (c.type === 'depense') totalDépenses += Math.abs(c.total);
           else if (c.methodePaiement === 'Espèces') totalEspeces += c.total;
-          else if (c.methodePaiement === 'TPE') totalTPE += c.total;
           else totalLivrApp += c.total; 
       });
-      return { startT, totalGeneral: (totalEspeces + totalTPE + totalLivrApp), totalEspeces, totalTPE, totalDépenses, totalLivrApp, netEnCaisse: (totalEspeces - totalDépenses), nbCommandes: cmdsSession.length };
+      return { 
+          startT, 
+          fondsInitial: sessionCaisse.fondsInitial || 0,
+          totalGeneral: (totalEspeces + totalLivrApp), 
+          totalEspeces, 
+          totalDépenses, 
+          totalLivrApp, 
+          netEnCaisse: ((sessionCaisse.fondsInitial || 0) + totalEspeces - totalDépenses), 
+          nbCommandes: cmdsSession.length 
+      };
   };
 
   const cloturerShift = async () => {
@@ -240,7 +272,7 @@ function FoodjiSystem() {
       setOrderToPrint(xData);
       setTimeout(async () => { 
           window.print(); 
-          await updateDoc(doc(db, "parametres", "session_caisse"), { isActive: false, caissiere: '', startTime: null });
+          await updateDoc(doc(db, "parametres", "session_caisse"), { isActive: false, caissiere: '', startTime: null, fondsInitial: 0 });
           setTimeout(() => setOrderToPrint(null), 1000);
       }, 500);
   };
@@ -252,14 +284,22 @@ function FoodjiSystem() {
           const d = c.date?.seconds ? new Date(c.date.seconds * 1000) : new Date(c.date);
           return d >= startT && c.status !== 'Refusé' && c.status !== 'Annulé';
       });
-      let totalEspeces = 0, totalTPE = 0, totalDépenses = 0, totalLivrApp = 0;
+      let totalEspeces = 0, totalDépenses = 0, totalLivrApp = 0;
       cmdsZ.forEach(c => {
           if (c.type === 'depense') totalDépenses += Math.abs(c.total);
           else if (c.methodePaiement === 'Espèces') totalEspeces += c.total;
-          else if (c.methodePaiement === 'TPE') totalTPE += c.total;
           else totalLivrApp += c.total; 
       });
-      return { startT, totalGeneral: (totalEspeces + totalTPE + totalLivrApp), totalEspeces, totalTPE, totalDépenses, totalLivrApp, netEnCaisse: (totalEspeces - totalDépenses), nbCommandes: cmdsZ.length };
+      return { 
+          startT, 
+          fondsInitial: sessionCaisse.fondsInitial || 0,
+          totalGeneral: (totalEspeces + totalLivrApp), 
+          totalEspeces, 
+          totalDépenses, 
+          totalLivrApp, 
+          netEnCaisse: ((sessionCaisse.fondsInitial || 0) + totalEspeces - totalDépenses), 
+          nbCommandes: cmdsZ.length 
+      };
   };
 
   const cloturerZDefinitif = async () => {
@@ -271,7 +311,7 @@ function FoodjiSystem() {
       setTimeout(async () => { 
           window.print(); 
           await updateDoc(doc(db, "parametres", "service_global"), { lastZDate: now });
-          if(sessionCaisse.isActive) await updateDoc(doc(db, "parametres", "session_caisse"), { isActive: false, caissiere: '', startTime: null });
+          if(sessionCaisse.isActive) await updateDoc(doc(db, "parametres", "session_caisse"), { isActive: false, caissiere: '', startTime: null, fondsInitial: 0 });
           setShowBilanGlobal(false);
           setTimeout(() => setOrderToPrint(null), 1000);
       }, 500);
@@ -311,43 +351,24 @@ function FoodjiSystem() {
       
       if (prod.categorie === 'Tacos' && prod.nom.toLowerCase().includes('mixte')) {
           const maxViandes = vari?.nom === 'XXL' ? 4 : vari?.nom === 'XL' ? 3 : 2;
-          if (customOptions.viandes.length !== maxViandes) {
-              return alert(`Action refusée : Tu dois sélectionner EXACTEMENT ${maxViandes} viandes pour ce Tacos Mixte.`);
-          }
+          if (customOptions.viandes.length !== maxViandes) return alert(`Tu dois sélectionner EXACTEMENT ${maxViandes} viandes.`);
       }
-
-      if (prod.categorie === 'Pâtes' && !customOptions.typePate) {
-          return alert("Action refusée : Tu dois obligatoirement choisir un type de pâtes (Penne, Tagliatelle ou Spaghetti).");
-      }
-
-      if (prod.categorie === 'Plats' && customOptions.accompagnements.length !== 2) {
-          return alert("Action refusée : Tu dois obligatoirement choisir EXACTEMENT 2 accompagnements différents pour ce Plat.");
-      }
+      if (prod.categorie === 'Pâtes' && !customOptions.typePate) return alert("Choisis un type de pâtes.");
+      if (prod.categorie === 'Plats' && customOptions.accompagnements.length !== 2) return alert("Choisis EXACTEMENT 2 accompagnements.");
 
       addToCartFinal(prod, vari, customOptions);
   };
 
   const addToCartFinal = (produit, variante, options) => {
       let basePrice = variante ? variante.prix : produit.prix;
+      if (produit.nom.includes("Pep's")) basePrice = (posOrderType === 'emporter' || posOrderType === 'livraison') ? 33 : 28;
       
-      if (produit.nom.includes("Pep's")) {
-          basePrice = (posOrderType === 'emporter' || posOrderType === 'livraison') ? 33 : 28;
-      }
-
       let extraPrice = 0;
       let details = [];
 
-      if (produit.categorie === 'Pâtes') {
-          details.push(`Type: ${options.typePate}`);
-      }
-      
-      if (produit.categorie === 'Plats') {
-          details.push(`Accompagnements: ${options.accompagnements.join(' et ')}`);
-      }
-
-      if (produit.categorie === 'Burgers' && options.exclusions?.length > 0) {
-          options.exclusions.forEach(exc => details.push(`🚫 ${exc}`));
-      }
+      if (produit.categorie === 'Pâtes') details.push(`Type: ${options.typePate}`);
+      if (produit.categorie === 'Plats') details.push(`Accompagnements: ${options.accompagnements.join(' et ')}`);
+      if (produit.categorie === 'Burgers' && options.exclusions?.length > 0) options.exclusions.forEach(exc => details.push(`🚫 ${exc}`));
 
       if (produit.categorie === 'Pizzas') {
           if (options.garnitures?.length > 0) details.push(`Garnitures: ${options.garnitures.join(', ')}`);
@@ -361,11 +382,7 @@ function FoodjiSystem() {
       if (produit.categorie === 'Tacos') {
           if (options.viandes?.length > 0) details.push(`Viandes: ${options.viandes.join(', ')}`);
           if (options.sauces?.length > 0) details.push(`Sauces: ${options.sauces.join(', ')}`);
-          options.extras?.forEach(ext => {
-              const extPrice = TACOS_EXTRAS[ext];
-              extraPrice += extPrice;
-              details.push(`+ ${ext} (+${extPrice}DH)`);
-          });
+          options.extras?.forEach(ext => { const extPrice = TACOS_EXTRAS[ext]; extraPrice += extPrice; details.push(`+ ${ext} (+${extPrice}DH)`); });
       }
 
       if (['Pizzas', 'Pâtes', 'Plats'].includes(produit.categorie)) {
@@ -386,16 +403,29 @@ function FoodjiSystem() {
           prixFinal: finalPrice, 
           isPrixModifie: false,
           detailsTxt: details,
+          qte: 1,
           idCart: Date.now() + Math.random() 
       }]);
       setCustomizeItem(null);
   };
 
+  const modifierQuantite = (idCart, delta) => {
+      setPosCart(posCart.map(item => {
+          if (item.idCart === idCart) {
+              const nouvelleQte = item.qte + delta;
+              return { ...item, qte: nouvelleQte };
+          }
+          return item;
+      }).filter(item => item.qte > 0)); 
+  };
+
   const removeFromCart = (idCart) => { setPosCart(posCart.filter(item => item.idCart !== idCart)); };
   
-  const sousTotalCart = posCart.reduce((sum, item) => sum + Number(item.prixFinal), 0);
+  const sousTotalCart = posCart.reduce((sum, item) => sum + (Number(item.prixFinal) * item.qte), 0);
+  const sousTotalEligibleVIP = posCart.reduce((sum, item) => sum + (item.excludeVIP ? 0 : (Number(item.prixFinal) * item.qte)), 0);
+  
   const fraisLivraison = (posOrderType === 'livraison' && sousTotalCart > 0 && sousTotalCart < 45) ? 7 : 0;
-  const remiseCRM = clientActif && clientActif.remiseAuto ? Math.round(sousTotalCart * (clientActif.remiseAuto / 100)) : 0;
+  const remiseCRM = clientActif && clientActif.remiseAuto ? Math.round(sousTotalEligibleVIP * (clientActif.remiseAuto / 100)) : 0;
   const totalRemises = remiseGlobale + remiseCRM;
   const totalCart = Math.max(0, sousTotalCart + fraisLivraison - totalRemises);
 
@@ -421,7 +451,7 @@ function FoodjiSystem() {
           const motif = prompt("Motif de la dépense (ex: Eau, Fournitures...) :");
           if (!motif) return;
           setLoading(true);
-          const newDepense = { client: "DÉCAISSEMENT", caissiere: sessionCaisse.caissiere || "Manager", type: "depense", commentaire: motif, items: [{ nom: `Dépense: ${motif}`, prixFinal: -valNum }], total: -valNum, status: "Terminé", methodePaiement: "Espèces", date: new Date() };
+          const newDepense = { client: "DÉCAISSEMENT", caissiere: sessionCaisse.caissiere || "Manager", type: "depense", commentaire: motif, items: [{ nom: `Dépense: ${motif}`, prixFinal: -valNum, qte: 1 }], total: -valNum, status: "Terminé", methodePaiement: "Espèces", date: new Date() };
           const docRef = await addDoc(collection(db, "commandes"), newDepense);
           newDepense.id = docRef.id; newDepense.isDepense = true;
           setOrderToPrint(newDepense); setTimeout(() => { window.print(); setTimeout(() => setOrderToPrint(null), 1000); }, 500);
@@ -476,7 +506,6 @@ function FoodjiSystem() {
 
   const imprimerCommandeExistante = (cmd) => { setOrderToPrint(cmd); setTimeout(() => { window.print(); setTimeout(() => setOrderToPrint(null), 1000); }, 500); };
 
-  // TRADUCTEUR UNIVERSEL POUR LES COMMANDES WEB ET POS
   const getDetaisImpression = (it) => {
       if (it.detailsTxt && it.detailsTxt.length > 0) return it.detailsTxt;
       
@@ -498,7 +527,6 @@ function FoodjiSystem() {
       return d;
   };
 
-  // CALCUL DES COMMANDES WEB EN ATTENTE POUR L'ALERTE
   const commandesWebEnAttente = commandes.filter(c => c.status !== 'Terminé' && c.status !== 'Annulé' && c.status !== 'Refusé').length;
 
   if (authState === "LOADING") return <div style={{ background: COLORS.secondary, height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}><h3>Chargement...</h3></div>;
@@ -513,9 +541,6 @@ function FoodjiSystem() {
       </div>
   );
 
-  // ==========================================
-  // RENDUS D'IMPRESSION (AVEC LE BON LOGO.PNG)
-  // ==========================================
   const renderTickets = () => {
       if (!orderToPrint) return null;
       const PHONE_FOODJI = "05 37 53 66 89";
@@ -537,14 +562,13 @@ function FoodjiSystem() {
                       <table style={{width:'100%', fontSize:'16px'}}>
                           <tbody>
                               <tr><td>Total Espèces</td><td style={{textAlign:'right'}}>{orderToPrint.totalEspeces} DH</td></tr>
-                              <tr><td>Total TPE</td><td style={{textAlign:'right'}}>{orderToPrint.totalTPE} DH</td></tr>
                               <tr><td>Livr. Web/App</td><td style={{textAlign:'right'}}>{orderToPrint.totalLivrApp} DH</td></tr>
                               <tr style={{color: 'red'}}><td>Décaissements</td><td style={{textAlign:'right'}}>- {orderToPrint.totalDépenses} DH</td></tr>
                           </tbody>
                       </table>
                       <hr style={{borderTop:'2px solid black', margin: '15px 0'}}/>
-                      <h2 style={{fontSize:'20px'}}>CA GÉNÉRÉ : {orderToPrint.totalGeneral} DH</h2>
-                      <h2 style={{fontSize:'22px', border:'2px solid black', padding:'10px', textAlign:'center'}}>NET ESPÈCES : {orderToPrint.netEnCaisse} DH</h2>
+                      <p style={{textAlign:'center', fontSize:'14px', marginBottom:'5px'}}>Fonds de Caisse Déclaré : {orderToPrint.fondsInitial} DH</p>
+                      <h2 style={{fontSize:'22px', border:'2px solid black', padding:'10px', textAlign:'center'}}>TIROIR ATTENDU : {orderToPrint.netEnCaisse} DH</h2>
                       <p style={{textAlign:'center', marginTop:'40px'}}>Signature :</p>
                       <div style={{height:'60px', borderBottom:'1px dotted black', margin:'0 20px'}}></div>
                   </div>
@@ -599,7 +623,7 @@ function FoodjiSystem() {
                           const details = getDetaisImpression(it);
                           return (
                               <li key={i} style={{fontSize:'16px', fontWeight:'bold', borderBottom:'1px dotted black', padding:'10px 0'}}>
-                                  <div>{it.nom} {it.varianteNom ? `(${it.varianteNom})` : ''}</div>
+                                  <div>{it.qte > 1 ? `${it.qte}x ` : ''}{it.nom} {it.varianteNom ? `(${it.varianteNom})` : ''}</div>
                                   {details.length > 0 && (
                                       <div style={{fontSize:'14px', marginLeft:'10px', fontWeight:'normal'}}>
                                           {details.map((dt, j) => <div key={j}>• {dt}</div>)}
@@ -652,8 +676,8 @@ function FoodjiSystem() {
                               return (
                                   <React.Fragment key={i}>
                                     <tr>
-                                        <td style={{paddingTop:'5px'}}><strong>{it.nom} {it.varianteNom ? `(${it.varianteNom})` : ''}</strong></td>
-                                        <td style={{textAlign:'right', paddingTop:'5px'}}><strong>{it.prixFinal} DH</strong></td>
+                                        <td style={{paddingTop:'5px'}}><strong>{it.qte > 1 ? `${it.qte}x ` : ''}{it.nom} {it.varianteNom ? `(${it.varianteNom})` : ''}</strong></td>
+                                        <td style={{textAlign:'right', paddingTop:'5px'}}><strong>{it.prixFinal * (it.qte || 1)} DH</strong></td>
                                     </tr>
                                     {(details.length > 0 || it.isPrixModifie) && (
                                         <tr>
@@ -696,24 +720,32 @@ function FoodjiSystem() {
       );
   };
 
-  // ==========================================
-  // CAISSE TACTILE (POS)
-  // ==========================================
   if (appMode === 'POS') {
       if (!sessionCaisse.isActive) {
           return (
               <div style={{display:'flex', height:'100vh', background:COLORS.secondary, alignItems:'center', justifyContent:'center', color:'white', flexDirection:'column'}}>
                   <h1 style={{fontSize:'3rem', marginBottom:'40px'}}>CAISSE FERMÉE</h1>
-                  <div style={{background:'white', color:'black', padding:'40px', borderRadius:'15px', width:'400px', textAlign:'center'}}>
-                      <h2 style={{marginTop:0}}>Ouvrir le service</h2>
-                      <p>Qui est à la caisse ?</p>
-                      <div style={{display:'flex', flexDirection:'column', gap:'15px', marginTop:'20px'}}>
-                          {CAISSIERES.map(nom => (
-                              <button key={nom} onClick={() => ouvrirCaisse(nom)} style={{padding:'20px', fontSize:'1.5rem', fontWeight:'bold', borderRadius:'10px', border:'2px solid #ddd', background:'#f9fafb', cursor:'pointer'}}>{nom}</button>
-                          ))}
+                  
+                  {!showFondsCaissePrompt.active ? (
+                      <div style={{background:'white', color:'black', padding:'40px', borderRadius:'15px', width:'400px', textAlign:'center'}}>
+                          <h2 style={{marginTop:0}}>Ouvrir le service</h2>
+                          <p>Qui est à la caisse ?</p>
+                          <div style={{display:'flex', flexDirection:'column', gap:'15px', marginTop:'20px'}}>
+                              {CAISSIERES.map(nom => (
+                                  <button key={nom} onClick={() => demanderOuvertureCaisse(nom)} style={{padding:'20px', fontSize:'1.5rem', fontWeight:'bold', borderRadius:'10px', border:'2px solid #ddd', background:'#f9fafb', cursor:'pointer'}}>{nom}</button>
+                              ))}
+                          </div>
+                          <button onClick={() => setAppMode('ADMIN')} style={{marginTop:'30px', padding:'10px', border:'none', background:'transparent', color:COLORS.textLight, textDecoration:'underline', cursor:'pointer'}}>⚙️ Retour Administration</button>
                       </div>
-                      <button onClick={() => setAppMode('ADMIN')} style={{marginTop:'30px', padding:'10px', border:'none', background:'transparent', color:COLORS.textLight, textDecoration:'underline', cursor:'pointer'}}>⚙️ Retour Administration</button>
-                  </div>
+                  ) : (
+                      <div style={{background:'white', color:'black', padding:'40px', borderRadius:'15px', width:'400px', textAlign:'center'}}>
+                          <h2 style={{marginTop:0}}>Fonds de Caisse</h2>
+                          <p style={{fontSize:'1.1rem'}}>Déclarer le fond de tiroir pour <strong>{showFondsCaissePrompt.caissiere}</strong> :</p>
+                          <input type="number" placeholder="Ex: 300" value={fondsInitialInput} onChange={e => setFondsInitialInput(e.target.value)} style={{width:'100%', padding:'15px', fontSize:'2rem', textAlign:'center', border:'2px solid #ddd', borderRadius:'10px', marginBottom:'20px', boxSizing:'border-box'}} />
+                          <button onClick={validerOuvertureCaisse} style={{width:'100%', padding:'15px', background:COLORS.success, color:'white', fontWeight:'bold', fontSize:'1.2rem', borderRadius:'10px', border:'none', cursor:'pointer'}}>✅ Valider l'ouverture</button>
+                          <button onClick={() => setShowFondsCaissePrompt({active: false, caissiere: ''})} style={{marginTop:'15px', padding:'10px', border:'none', background:'transparent', color:COLORS.textLight, textDecoration:'underline', cursor:'pointer'}}>Annuler</button>
+                      </div>
+                  )}
               </div>
           );
       }
@@ -722,6 +754,28 @@ function FoodjiSystem() {
           <>
               {renderTickets()}
               
+              {showDiviserAddition && (
+                  <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.8)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:4000}}>
+                      <div style={{background:'white', padding:'30px', borderRadius:'15px', width:'350px', textAlign:'center'}}>
+                          <h2 style={{marginTop:0}}>Diviser l'addition</h2>
+                          <p style={{fontSize:'1.2rem', color:'#666', marginBottom:'20px'}}>Total à diviser : <strong>{totalCart} DH</strong></p>
+                          
+                          <div style={{display:'flex', alignItems:'center', justifyContent:'center', gap:'15px', marginBottom:'20px'}}>
+                              <button onClick={() => setDiviserPar(Math.max(2, diviserPar - 1))} style={{padding:'10px 20px', fontSize:'2rem', borderRadius:'10px', border:'none', background:'#eee', cursor:'pointer'}}>-</button>
+                              <span style={{fontSize:'2.5rem', fontWeight:'bold'}}>{diviserPar}</span>
+                              <button onClick={() => setDiviserPar(diviserPar + 1)} style={{padding:'10px 20px', fontSize:'2rem', borderRadius:'10px', border:'none', background:'#eee', cursor:'pointer'}}>+</button>
+                          </div>
+                          
+                          <div style={{background:'#f0f2f5', padding:'20px', borderRadius:'10px', fontSize:'2rem', fontWeight:'bold', color:COLORS.primary, marginBottom:'20px'}}>
+                              {(totalCart / diviserPar).toFixed(2)} DH <span style={{fontSize:'1rem', color:'#666'}}>/ pers.</span>
+                          </div>
+                          
+                          <button onClick={() => { setShowDiviserAddition(false); validerCommandePOS('Espèces', totalCart); }} style={{width:'100%', padding:'15px', background:COLORS.success, color:'white', border:'none', borderRadius:'10px', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer'}}>✅ Encaisser (Espèces)</button>
+                          <button onClick={() => setShowDiviserAddition(false)} style={{width:'100%', padding:'15px', background:'transparent', color:'#666', border:'none', marginTop:'10px', cursor:'pointer', fontSize:'1.2rem'}}>Annuler</button>
+                      </div>
+                  </div>
+              )}
+
               {showCashOptions && (
                   <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.8)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:4000}}>
                       <div style={{background:'white', padding:'30px', borderRadius:'15px', width:'350px', textAlign:'center'}}>
@@ -729,7 +783,8 @@ function FoodjiSystem() {
                           <p style={{fontSize:'1.5rem', fontWeight:'bold', color:COLORS.primary}}>{totalCart} DH</p>
                           <div style={{display:'flex', flexDirection:'column', gap:'15px', marginTop:'20px'}}>
                               <button onClick={() => { setShowCashOptions(false); validerCommandePOS('Espèces', totalCart); }} style={{padding:'15px', background:COLORS.success, color:'white', border:'none', borderRadius:'10px', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer'}}>✅ Montant Exact</button>
-                              <button onClick={() => { setShowCashOptions(false); openNumpad('encaissement_especes', 'SOMME REÇUE DU CLIENT (DH)'); }} style={{padding:'15px', background:COLORS.secondary, color:'white', border:'none', borderRadius:'10px', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer'}}>🧮 Rendre la monnaie</button>
+                              <button onClick={() => { setShowCashOptions(false); openNumpad('encaissement_especes', 'SOMME REÇUE (Rendre monnaie)'); }} style={{padding:'15px', background:COLORS.secondary, color:'white', border:'none', borderRadius:'10px', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer'}}>🧮 Rendre la monnaie</button>
+                              <button onClick={() => { setShowCashOptions(false); setShowDiviserAddition(true); }} style={{padding:'15px', background:'#3B82F6', color:'white', border:'none', borderRadius:'10px', fontSize:'1.2rem', fontWeight:'bold', cursor:'pointer'}}>➗ Diviser l'addition</button>
                               <button onClick={() => setShowCashOptions(false)} style={{padding:'15px', background:'#eee', color:'black', border:'none', borderRadius:'10px', fontSize:'1rem', fontWeight:'bold', cursor:'pointer'}}>Annuler</button>
                           </div>
                       </div>
@@ -906,7 +961,6 @@ function FoodjiSystem() {
               )}
 
               <div className="no-print" style={{display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', background: '#f0f2f5', fontFamily: 'sans-serif'}}>
-                  {/* COLONNE GAUCHE (MENU) */}
                   <div style={{flex: 1, display: 'flex', flexDirection: 'column', padding: '10px', height: '100%', overflowY: 'auto'}}>
                       <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', background:'white', padding:'15px', borderRadius:'10px', marginBottom:'10px', flexShrink: 0}}>
                           
@@ -914,7 +968,6 @@ function FoodjiSystem() {
                               <h2 style={{margin:0, color:COLORS.primary}}>🍔 Foodji POS</h2>
                               <span style={{background:'#e0e7ff', color:'#3730a3', padding:'5px 10px', borderRadius:'20px', fontWeight:'bold', fontSize:'0.9rem'}}>👤 {sessionCaisse.caissiere}</span>
                               
-                              {/* ALERTE VISUELLE COMMANDES WEB RESTAURÉE */}
                               {commandesWebEnAttente > 0 && (
                                   <button onClick={() => setAppMode('ADMIN')} className="blink-alert" style={{marginLeft: '15px', background: COLORS.danger, color: 'white', border: 'none', borderRadius: '8px', padding: '8px 15px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 0 10px rgba(239,68,68,0.5)'}}>
                                       🔴 {commandesWebEnAttente} WEB EN ATTENTE
@@ -958,9 +1011,7 @@ function FoodjiSystem() {
                       </div>
                   </div>
 
-                  {/* COLONNE DROITE (PANIER & CRM) */}
                   <div style={{width: '400px', flexShrink: 0, background: 'white', display: 'flex', flexDirection: 'column', height: '100%', borderLeft: '2px solid #ddd', boxShadow: '-5px 0 15px rgba(0,0,0,0.05)'}}>
-                      
                       <div style={{padding:'15px', borderBottom:'1px solid #eee', background:COLORS.secondary, color:'white', flexShrink: 0}}>
                           <div style={{display:'flex', gap:'5px', marginBottom:'15px', background:'#374151', padding:'5px', borderRadius:'8px'}}>
                               <button onClick={()=>setPosOrderType('sur_place')} style={{flex:1, padding:'8px', borderRadius:'5px', border:'none', fontWeight:'bold', cursor:'pointer', background: posOrderType==='sur_place' ? COLORS.success : 'transparent', color: posOrderType==='sur_place' ? 'white' : '#ccc'}}>S. Place</button>
@@ -991,18 +1042,28 @@ function FoodjiSystem() {
                       <div style={{flex: 1, overflowY: 'auto', padding: '10px'}}>
                           {posCart.length === 0 ? <div style={{textAlign:'center', color:'#999', marginTop:'50px', fontSize:'1.2rem'}}>Panier vide</div> : null}
                           {posCart.map(item => (
-                              <div key={item.idCart} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px', borderBottom:'1px dashed #ddd', background:'#fafafa', borderRadius:'8px', marginBottom:'5px'}}>
-                                  <div style={{flex:1, cursor:'pointer'}} onClick={()=>openNumpad('prix_article', `Modifier prix global : ${item.nom}`, item.idCart)}>
-                                    <div style={{fontWeight:'bold', fontSize:'1.1rem', color: item.isPrixModifie ? COLORS.promo : 'black'}}>{item.nom}</div>
-                                    {item.detailsTxt?.length > 0 && (
-                                        <div style={{fontSize:'0.85rem', color:COLORS.textLight, marginTop:'4px'}}>
-                                            {item.detailsTxt.map((txt, j) => <div key={j}>• {txt}</div>)}
-                                        </div>
-                                    )}
+                              <div key={item.idCart} style={{padding:'12px', borderBottom:'1px dashed #ddd', background:'#fafafa', borderRadius:'8px', marginBottom:'5px'}}>
+                                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'start'}}>
+                                      <div style={{flex:1, cursor:'pointer'}} onClick={()=>openNumpad('prix_article', `Modifier prix global : ${item.nom}`, item.idCart)}>
+                                        <div style={{fontWeight:'bold', fontSize:'1.1rem', color: item.isPrixModifie ? COLORS.promo : 'black'}}>{item.nom}</div>
+                                        {item.detailsTxt?.length > 0 && (
+                                            <div style={{fontSize:'0.85rem', color:COLORS.textLight, marginTop:'4px'}}>
+                                                {item.detailsTxt.map((txt, j) => <div key={j}>• {txt}</div>)}
+                                            </div>
+                                        )}
+                                      </div>
+                                      <div style={{textAlign:'right'}}>
+                                          <span style={{fontWeight:'bold', color:COLORS.primary, cursor:'pointer', display:'block', marginBottom:'5px'}} onClick={()=>openNumpad('prix_article', `Modifier prix : ${item.nom}`, item.idCart)}>{item.prixFinal} DH</span>
+                                      </div>
                                   </div>
-                                  <div style={{display:'flex', alignItems:'center', gap:'15px'}}>
-                                      <span style={{fontWeight:'bold', color:COLORS.primary, cursor:'pointer'}} onClick={()=>openNumpad('prix_article', `Modifier prix : ${item.nom}`, item.idCart)}>{item.prixFinal} DH</span>
-                                      <button onClick={()=>removeFromCart(item.idCart)} style={{background:'#fee2e2', color:'red', border:'none', padding:'10px 15px', borderRadius:'5px', cursor:'pointer', fontWeight:'bold', fontSize:'1.2rem'}}>X</button>
+                                  
+                                  <div style={{display:'flex', justifyContent:'flex-end', alignItems:'center', gap:'10px', marginTop:'10px'}}>
+                                      <div style={{display:'flex', alignItems:'center', background:'#e5e7eb', borderRadius:'8px', overflow:'hidden'}}>
+                                          <button onClick={()=>modifierQuantite(item.idCart, -1)} style={{padding:'5px 15px', fontSize:'1.2rem', fontWeight:'bold', border:'none', background:'transparent', cursor:'pointer'}}>-</button>
+                                          <span style={{padding:'0 10px', fontWeight:'bold', fontSize:'1.1rem'}}>{item.qte}</span>
+                                          <button onClick={()=>modifierQuantite(item.idCart, 1)} style={{padding:'5px 15px', fontSize:'1.2rem', fontWeight:'bold', border:'none', background:'transparent', cursor:'pointer'}}>+</button>
+                                      </div>
+                                      <button onClick={()=>removeFromCart(item.idCart)} style={{background:'#fee2e2', color:'red', border:'none', padding:'8px 12px', borderRadius:'5px', cursor:'pointer', fontWeight:'bold'}}>🗑️</button>
                                   </div>
                               </div>
                           ))}
@@ -1069,7 +1130,6 @@ function FoodjiSystem() {
                 </div>
             </div>
 
-            {/* HEADER COMPACT (Service & Rush) */}
             <div style={{display:'flex', flexWrap:'wrap', gap:'20px', marginBottom:'20px', background:'white', padding:'15px', borderRadius:'10px', alignItems:'center', boxShadow:'0 2px 5px rgba(0,0,0,0.05)'}}>
                 <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
                     <strong style={{color:'#666'}}>Service :</strong>
@@ -1099,11 +1159,12 @@ function FoodjiSystem() {
                             return (
                                 <>
                                     <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', fontSize:'1.2rem'}}><span>Espèces (Tiroir) :</span> <strong>{bilan.totalEspeces} DH</strong></div>
-                                    <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', fontSize:'1.2rem'}}><span>TPE (Carte) :</span> <strong>{bilan.totalTPE} DH</strong></div>
                                     <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', fontSize:'1.2rem', color:'#666'}}><span>Livr. App/Web :</span> <strong>{bilan.totalLivrApp} DH</strong></div>
                                     <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', fontSize:'1.2rem', color:'red'}}><span>Décaissements :</span> <strong>- {bilan.totalDépenses} DH</strong></div>
-                                    <hr style={{margin:'20px 0'}}/>
-                                    <div style={{display:'flex', justifyContent:'space-between', fontSize:'1.5rem', color:COLORS.primary}}><span>NET EN CAISSE :</span> <strong>{bilan.netEnCaisse} DH</strong></div>
+                                    <hr style={{margin:'10px 0'}}/>
+                                    <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px', fontSize:'1rem', color:'#666'}}><span>Fonds de Caisse déclaré :</span> <strong>+ {bilan.fondsInitial} DH</strong></div>
+                                    <hr style={{margin:'10px 0'}}/>
+                                    <div style={{display:'flex', justifyContent:'space-between', fontSize:'1.5rem', color:COLORS.primary}}><span>TIROIR ATTENDU :</span> <strong>{bilan.netEnCaisse} DH</strong></div>
                                     <div style={{textAlign:'center', marginTop:'10px', color:'#666'}}>Commandes : {bilan.nbCommandes}</div>
                                 </>
                             );
@@ -1139,7 +1200,7 @@ function FoodjiSystem() {
                                   return (
                                       <li key={i} style={{borderBottom:'1px dashed #e5e7eb', padding:'5px 0'}}>
                                           <div style={{display:'flex', justifyContent:'space-between'}}>
-                                              <span>{it.nom} {it.varianteNom ? `(${it.varianteNom})` : ''}</span>
+                                              <span>{it.qte > 1 ? `${it.qte}x ` : ''}{it.nom} {it.varianteNom ? `(${it.varianteNom})` : ''}</span>
                                           </div>
                                           {details.length > 0 && <div style={{color:'#666', fontSize:'0.8rem', marginTop:'2px'}}>{details.join(' / ')}</div>}
                                       </li>
@@ -1155,7 +1216,6 @@ function FoodjiSystem() {
                 </div>
             ) : (
                 <>
-                    {/* COMMANDES WEB EN COURS */}
                     <h3 style={{marginBottom:'15px'}}>Commandes Web & App ({commandesWebEnAttente})</h3>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '20px', marginBottom:'40px' }}>
                       {commandes.filter(c => c.status !== 'Terminé' && c.status !== 'Annulé').map(cmd => (
@@ -1182,8 +1242,8 @@ function FoodjiSystem() {
                                 return (
                                   <li key={i} style={{padding:'5px 0', borderBottom:'1px dashed #eee'}}>
                                     <div style={{display:'flex', justifyContent:'space-between'}}>
-                                        <strong>{it.nom} {it.varianteNom ? `(${it.varianteNom})` : ''}</strong>
-                                        <span>{it.prixFinal} DH</span>
+                                        <strong>{it.qte > 1 ? `${it.qte}x ` : ''}{it.nom} {it.varianteNom ? `(${it.varianteNom})` : ''}</strong>
+                                        <span>{it.prixFinal * (it.qte || 1)} DH</span>
                                     </div>
                                     {details.length > 0 && <div style={{color:'#666', fontSize:'0.8rem', marginTop:'2px'}}>{details.join(' / ')}</div>}
                                   </li>
@@ -1193,7 +1253,6 @@ function FoodjiSystem() {
 
                           <div style={{display:'flex', gap:'10px', flexWrap:'wrap'}}>
                             <button onClick={()=>imprimerCommandeExistante(cmd)} style={{width:'100%', padding:'10px', background: COLORS.secondary, color:'white', border:'none', borderRadius:'8px', fontWeight:'bold', cursor:'pointer', marginBottom:'5px'}}>🖨️ IMPRIMER LE TICKET</button>
-                            {/* LE BOUTON SERVI MET A JOUR LE CRM EN ARRIERE PLAN */}
                             <button onClick={()=>changerStatus(cmd, 'Terminé')} style={{flex:1, padding:'10px', background: COLORS.success, color:'white', border:'none', borderRadius:'8px', fontWeight:'bold'}}>✅ SERVI</button>
                             <button onClick={()=>changerStatus(cmd, 'Annulé')} style={{flex:1, padding:'10px', background: COLORS.danger, color:'white', border:'none', borderRadius:'8px', fontWeight:'bold'}}>❌ ANNULER</button>
                           </div>
@@ -1203,7 +1262,6 @@ function FoodjiSystem() {
                 </>
             )}
 
-            {/* 1. GESTION DES STOCKS REMONTÉE EN PRIORITÉ */}
             <div style={{background:'white', padding:'25px', borderRadius:'15px', marginBottom:'40px', border:`2px solid ${COLORS.primary}`}}>
                   <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px'}}>
                       <h3 style={{margin:0, color: COLORS.primary, fontSize:'1.3rem'}}>🥕 GESTION DES STOCKS (RUPTURES)</h3>
@@ -1230,7 +1288,6 @@ function FoodjiSystem() {
                   </div>
             </div>
 
-            {/* 2. GESTION DU MENU */}
             <h3 style={{marginBottom:'15px'}}>📦 Gestion de la Carte (Produits)</h3>
             <div style={{background:'white', padding:'20px', borderRadius:'15px', marginBottom:'40px'}}>
                <div style={{ overflowX: 'auto', display:'flex', gap:'10px', paddingBottom:'15px', marginBottom:'15px' }}>
@@ -1241,23 +1298,34 @@ function FoodjiSystem() {
                 <div key={p.id} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'15px', borderBottom:'1px solid #f0f0f0', background: p.available === false ? '#FFF5F5' : 'white'}}>
                   <div style={{display:'flex', alignItems:'center', gap:'15px'}}>
                     <button onClick={() => toggleAvailability(p)} style={{padding:'8px 15px', border:'none', borderRadius:'8px', background:p.available?COLORS.success:COLORS.danger, color:'white', fontWeight:'bold', cursor:'pointer'}}>{p.available ? 'EN LIGNE' : 'RUPTURE'}</button>
-                    <div style={{fontWeight:'bold', fontSize:'1.1rem', textDecoration: p.available === false ? 'line-through' : 'none'}}>{p.nom} <span style={{color:COLORS.textLight, fontWeight:'normal'}}>- {p.variantes?.length>0 ? 'Multi-tailles' : p.prix+' DH'}</span></div>
+                    <div style={{fontWeight:'bold', fontSize:'1.1rem', textDecoration: p.available === false ? 'line-through' : 'none'}}>
+                        {p.nom} 
+                        {p.excludeVIP && <span style={{fontSize:'0.8rem', color:COLORS.danger, marginLeft:'5px'}}>(VIP🚫)</span>}
+                        <span style={{color:COLORS.textLight, fontWeight:'normal', marginLeft:'5px'}}>- {p.variantes?.length>0 ? 'Multi-tailles' : p.prix+' DH'}</span>
+                    </div>
                   </div>
                   <div style={{display:'flex', gap:'15px'}}>
-                      <button onClick={() => {setEditId(p.id); setFormProd({nom: p.nom, description: p.description||'', categorie: p.categorie, prixBase: p.prix||'', variantes: p.variantes||[]}); window.scrollTo(0,0);}} style={{border:'none', background:'#f0f2f5', padding:'8px 12px', borderRadius:'8px', fontSize:'1.1rem', cursor:'pointer'}}>✏️ Modifier</button>
+                      <button onClick={() => {setEditId(p.id); setFormProd({nom: p.nom, description: p.description||'', categorie: p.categorie, prixBase: p.prix||'', variantes: p.variantes||[], excludeVIP: p.excludeVIP||false}); window.scrollTo(0,0);}} style={{border:'none', background:'#f0f2f5', padding:'8px 12px', borderRadius:'8px', fontSize:'1.1rem', cursor:'pointer'}}>✏️ Modifier</button>
                       <button onClick={()=>supprimerProduit(p.id)} style={{color:'white', border:'none', background:COLORS.danger, padding:'8px 12px', borderRadius:'8px', cursor:'pointer', fontWeight:'bold'}}>X</button>
                   </div>
                 </div>
               ))}
 
-              {/* Formulaire d'ajout rapide menu */}
               <div style={{marginTop:'30px', background:'#f9fafb', padding:'25px', borderRadius:'15px', border:'1px dashed #ccc'}}>
                  <h4 style={{marginTop:0}}>{editId ? '✏️ Mettre à jour le produit' : '➕ Ajouter un Produit'}</h4>
                  <div style={{display:'flex', flexDirection:'column', gap:'15px'}}>
                      <input placeholder="Nom du produit" value={formProd.nom} onChange={e=>setFormProd({...formProd, nom: e.target.value})} style={{padding:'12px', borderRadius:'8px', border:'1px solid #ddd', fontSize:'1rem'}} />
-                     <select value={formProd.categorie} onChange={handleCategoryChange} style={{padding:'12px', borderRadius:'8px', border:'1px solid #ddd', fontSize:'1rem'}}>
-                         {TOUTES_CATEGORIES.map(cat => <option key={cat}>{cat}</option>)}
-                     </select>
+                     
+                     <div style={{display:'flex', gap:'10px', alignItems:'center'}}>
+                         <select value={formProd.categorie} onChange={handleCategoryChange} style={{flex:1, padding:'12px', borderRadius:'8px', border:'1px solid #ddd', fontSize:'1rem'}}>
+                             {TOUTES_CATEGORIES.map(cat => <option key={cat}>{cat}</option>)}
+                         </select>
+                         
+                         <label style={{display:'flex', alignItems:'center', gap:'10px', cursor:'pointer', fontWeight:'bold', color:COLORS.danger, padding:'10px', background:'#fef2f2', borderRadius:'8px', border:`1px solid ${COLORS.danger}`}}>
+                             <input type="checkbox" checked={formProd.excludeVIP} onChange={e => setFormProd({...formProd, excludeVIP: e.target.checked})} style={{width:'20px', height:'20px'}} />
+                             🚫 Exclure VIP
+                         </label>
+                     </div>
                      
                      {formProd.variantes && formProd.variantes.length > 0 ? (
                          <div style={{display:'flex', gap:'10px', flexWrap:'wrap'}}>
@@ -1285,13 +1353,12 @@ function FoodjiSystem() {
 
                      <div style={{display:'flex', gap:'10px'}}>
                         <button onClick={saveProduit} style={{flex:1, padding:'15px', background:COLORS.primary, color:'white', border:'none', borderRadius:'10px', fontSize:'1.1rem', fontWeight:'bold', cursor:'pointer'}}>{editId ? 'Enregistrer' : 'Ajouter'}</button>
-                        {editId && <button onClick={() => {setEditId(null); setFormProd({nom:'', description:'', categorie:'Panuozzo', prixBase:'', variantes:[]});}} style={{padding:'15px 25px', background:'#9CA3AF', color:'white', border:'none', borderRadius:'10px', fontSize:'1.1rem', fontWeight:'bold', cursor:'pointer'}}>Annuler</button>}
+                        {editId && <button onClick={() => {setEditId(null); setFormProd({nom:'', description:'', categorie:'Panuozzo', prixBase:'', variantes:[], excludeVIP: false});}} style={{padding:'15px 25px', background:'#9CA3AF', color:'white', border:'none', borderRadius:'10px', fontSize:'1.1rem', fontWeight:'bold', cursor:'pointer'}}>Annuler</button>}
                      </div>
                  </div>
               </div>
             </div>
 
-            {/* 3. CRM RELÉGUÉ EN BAS AVEC HAUTEUR LIMITÉE */}
             <div style={{background:'white', padding:'25px', borderRadius:'15px', marginBottom:'40px', border:`2px solid #3B82F6`}}>
                 <h3 style={{marginTop:0, color: '#1D4ED8', fontSize:'1.3rem'}}>👥 CRM : Base Clients Fidèles</h3>
                 
@@ -1306,7 +1373,6 @@ function FoodjiSystem() {
                     </div>
                 </div>
 
-                {/* HAUTEUR BRIDÉE A 250px (Scrolable) */}
                 <div style={{maxHeight:'250px', overflowY:'auto', border:'1px solid #eee', borderRadius:'10px'}}>
                     <table style={{width:'100%', textAlign:'left', borderCollapse:'collapse'}}>
                         <thead style={{position:'sticky', top:0, background:'white', zIndex:10}}>
