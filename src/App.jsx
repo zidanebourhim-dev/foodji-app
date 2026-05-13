@@ -42,8 +42,8 @@ function FoodjiSystem() {
   const [clientsDB, setClientsDB] = useState([]); 
   const [parametres, setParametres] = useState({ isOuvert: true, rushMode: 'standard', stocks: { viandes: INIT_VIANDES, garnitures: INIT_GARNITURES_PIZZA, sauces: INIT_SAUCES, pates: INIT_PATES, tailles_pizza: INIT_TAILLES_PIZZA } });
   
-  const [sessionCaisse, setSessionCaisse] = useState({ isActive: false, caissiere: '', startTime: null, fondsInitial: 0 });
-  const [serviceGlobal, setServiceGlobal] = useState({ lastZDate: null });
+  const [sessionCaisse, setSessionCaisse] = useState({ isActive: false, caissiere: '', startTime: null });
+  const [serviceGlobal, setServiceGlobal] = useState({ lastZDate: null, fondsInitial: 0, fondsDeclare: false });
   
   const [adminCategorie, setAdminCategorie] = useState('Tacos'); 
   const [activeStockTab, setActiveStockTab] = useState('viandes');
@@ -105,11 +105,15 @@ function FoodjiSystem() {
     });
     const unsubSession = onSnapshot(doc(db, "parametres", "session_caisse"), (s) => {
         if (s.exists()) setSessionCaisse(s.data());
-        else setDoc(doc(db, "parametres", "session_caisse"), { isActive: false, caissiere: '', startTime: null, fondsInitial: 0 });
+        else setDoc(doc(db, "parametres", "session_caisse"), { isActive: false, caissiere: '', startTime: null });
     });
     const unsubServiceGlobal = onSnapshot(doc(db, "parametres", "service_global"), (s) => {
-        if (s.exists()) setServiceGlobal(s.data());
-        else setDoc(doc(db, "parametres", "service_global"), { lastZDate: new Date() });
+        if (s.exists()) {
+            const data = s.data();
+            setServiceGlobal({ lastZDate: data.lastZDate, fondsInitial: data.fondsInitial || 0, fondsDeclare: data.fondsDeclare || false });
+        } else {
+            setDoc(doc(db, "parametres", "service_global"), { lastZDate: new Date(), fondsInitial: 0, fondsDeclare: false });
+        }
     });
 
     const unsubMenu = onSnapshot(collection(db, "produits"), (snap) => setMenu(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
@@ -224,18 +228,34 @@ function FoodjiSystem() {
       setLoading(false);
   };
 
-  const demanderOuvertureCaisse = (nomCaissiere) => {
-      setShowFondsCaissePrompt({ active: true, caissiere: nomCaissiere });
-      setFondsInitialInput('');
+  const demanderOuvertureCaisse = async (nomCaissiere) => {
+      if (serviceGlobal.fondsDeclare) {
+          // Si le fonds est déjà déclaré pour la journée, on ouvre directement le shift
+          await updateDoc(doc(db, "parametres", "session_caisse"), { 
+              isActive: true, 
+              caissiere: nomCaissiere, 
+              startTime: new Date() 
+          });
+      } else {
+          // C'est la première ouverture de la journée, on demande le fonds de caisse
+          setShowFondsCaissePrompt({ active: true, caissiere: nomCaissiere });
+          setFondsInitialInput('');
+      }
   };
 
   const validerOuvertureCaisse = async () => {
       const fInitial = Number(fondsInitialInput) || 0;
+      // On sauvegarde le fonds dans la variable GLOBALE de la journée
+      await updateDoc(doc(db, "parametres", "service_global"), { 
+          ...serviceGlobal, 
+          fondsInitial: fInitial, 
+          fondsDeclare: true 
+      });
+      // On ouvre le shift de la caissière
       await updateDoc(doc(db, "parametres", "session_caisse"), { 
           isActive: true, 
           caissiere: showFondsCaissePrompt.caissiere, 
-          startTime: new Date(),
-          fondsInitial: fInitial
+          startTime: new Date() 
       });
       setShowFondsCaissePrompt({ active: false, caissiere: '' });
   };
@@ -255,12 +275,12 @@ function FoodjiSystem() {
       });
       return { 
           startT, 
-          fondsInitial: sessionCaisse.fondsInitial || 0,
+          fondsInitial: serviceGlobal.fondsInitial || 0,
           totalGeneral: (totalEspeces + totalLivrApp), 
           totalEspeces, 
           totalDépenses, 
           totalLivrApp, 
-          netEnCaisse: ((sessionCaisse.fondsInitial || 0) + totalEspeces - totalDépenses), 
+          netEnCaisse: ((serviceGlobal.fondsInitial || 0) + totalEspeces - totalDépenses), 
           nbCommandes: cmdsSession.length 
       };
   };
@@ -272,7 +292,7 @@ function FoodjiSystem() {
       setOrderToPrint(xData);
       setTimeout(async () => { 
           window.print(); 
-          await updateDoc(doc(db, "parametres", "session_caisse"), { isActive: false, caissiere: '', startTime: null, fondsInitial: 0 });
+          await updateDoc(doc(db, "parametres", "session_caisse"), { isActive: false, caissiere: '', startTime: null });
           setTimeout(() => setOrderToPrint(null), 1000);
       }, 500);
   };
@@ -292,12 +312,12 @@ function FoodjiSystem() {
       });
       return { 
           startT, 
-          fondsInitial: sessionCaisse.fondsInitial || 0,
+          fondsInitial: serviceGlobal.fondsInitial || 0,
           totalGeneral: (totalEspeces + totalLivrApp), 
           totalEspeces, 
           totalDépenses, 
           totalLivrApp, 
-          netEnCaisse: ((sessionCaisse.fondsInitial || 0) + totalEspeces - totalDépenses), 
+          netEnCaisse: ((serviceGlobal.fondsInitial || 0) + totalEspeces - totalDépenses), 
           nbCommandes: cmdsZ.length 
       };
   };
@@ -310,8 +330,9 @@ function FoodjiSystem() {
       setOrderToPrint(zData);
       setTimeout(async () => { 
           window.print(); 
-          await updateDoc(doc(db, "parametres", "service_global"), { lastZDate: now });
-          if(sessionCaisse.isActive) await updateDoc(doc(db, "parametres", "session_caisse"), { isActive: false, caissiere: '', startTime: null, fondsInitial: 0 });
+          // On réinitialise complètement le fonds de caisse pour le lendemain
+          await updateDoc(doc(db, "parametres", "service_global"), { lastZDate: now, fondsInitial: 0, fondsDeclare: false });
+          if(sessionCaisse.isActive) await updateDoc(doc(db, "parametres", "session_caisse"), { isActive: false, caissiere: '', startTime: null });
           setShowBilanGlobal(false);
           setTimeout(() => setOrderToPrint(null), 1000);
       }, 500);
@@ -403,6 +424,7 @@ function FoodjiSystem() {
           prixFinal: finalPrice, 
           isPrixModifie: false,
           detailsTxt: details,
+          excludeVIP: produit.excludeVIP || false, // Application de l'exclusion VIP
           qte: 1,
           idCart: Date.now() + Math.random() 
       }]);
