@@ -230,14 +230,12 @@ function FoodjiSystem() {
 
   const demanderOuvertureCaisse = async (nomCaissiere) => {
       if (serviceGlobal.fondsDeclare) {
-          // Si le fonds est déjà déclaré pour la journée, on ouvre directement le shift
           await updateDoc(doc(db, "parametres", "session_caisse"), { 
               isActive: true, 
               caissiere: nomCaissiere, 
               startTime: new Date() 
           });
       } else {
-          // C'est la première ouverture de la journée, on demande le fonds de caisse
           setShowFondsCaissePrompt({ active: true, caissiere: nomCaissiere });
           setFondsInitialInput('');
       }
@@ -245,13 +243,11 @@ function FoodjiSystem() {
 
   const validerOuvertureCaisse = async () => {
       const fInitial = Number(fondsInitialInput) || 0;
-      // On sauvegarde le fonds dans la variable GLOBALE de la journée
       await updateDoc(doc(db, "parametres", "service_global"), { 
           ...serviceGlobal, 
           fondsInitial: fInitial, 
           fondsDeclare: true 
       });
-      // On ouvre le shift de la caissière
       await updateDoc(doc(db, "parametres", "session_caisse"), { 
           isActive: true, 
           caissiere: showFondsCaissePrompt.caissiere, 
@@ -323,14 +319,31 @@ function FoodjiSystem() {
   };
 
   const cloturerZDefinitif = async () => {
-      if (!confirm("⚠️ ATTENTION : Cela va imprimer le bilan final et REMETTRE TOUS LES COMPTEURS À ZÉRO. Confirmer ?")) return;
+      if (!confirm("⚠️ ATTENTION : Cela va imprimer le bilan final, L'ARCHIVER, et REMETTRE TOUS LES COMPTEURS À ZÉRO. Confirmer ?")) return;
       const bilan = genererBilanGlobalZ(); if(!bilan) return;
       const now = new Date();
       const zData = { isZ: true, date: now, ...bilan };
       setOrderToPrint(zData);
+
+      // ARCHIVAGE SÉCURISÉ DU Z DANS FIREBASE
+      try {
+          await addDoc(collection(db, "historique_z"), {
+              dateCloture: now,
+              startT: bilan.startT,
+              fondsInitial: bilan.fondsInitial,
+              totalEspeces: bilan.totalEspeces,
+              totalDépenses: bilan.totalDépenses,
+              totalLivrApp: bilan.totalLivrApp,
+              totalGeneral: bilan.totalGeneral,
+              netEnCaisse: bilan.netEnCaisse,
+              nbCommandes: bilan.nbCommandes
+          });
+      } catch (e) {
+          console.error("Erreur lors de l'archivage du Z :", e);
+      }
+
       setTimeout(async () => { 
           window.print(); 
-          // On réinitialise complètement le fonds de caisse pour le lendemain
           await updateDoc(doc(db, "parametres", "service_global"), { lastZDate: now, fondsInitial: 0, fondsDeclare: false });
           if(sessionCaisse.isActive) await updateDoc(doc(db, "parametres", "session_caisse"), { isActive: false, caissiere: '', startTime: null });
           setShowBilanGlobal(false);
@@ -424,7 +437,7 @@ function FoodjiSystem() {
           prixFinal: finalPrice, 
           isPrixModifie: false,
           detailsTxt: details,
-          excludeVIP: produit.excludeVIP || false, // Application de l'exclusion VIP
+          excludeVIP: produit.excludeVIP || false,
           qte: 1,
           idCart: Date.now() + Math.random() 
       }]);
