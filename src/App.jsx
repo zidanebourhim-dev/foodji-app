@@ -40,6 +40,7 @@ function FoodjiSystem() {
   const [menu, setMenu] = useState([]);
   const [commandes, setCommandes] = useState([]);
   const [clientsDB, setClientsDB] = useState([]); 
+  const [promotions, setPromotions] = useState([]);
   const [parametres, setParametres] = useState({ isOuvert: true, rushMode: 'standard', stocks: { viandes: INIT_VIANDES, garnitures: INIT_GARNITURES_PIZZA, sauces: INIT_SAUCES, pates: INIT_PATES, tailles_pizza: INIT_TAILLES_PIZZA } });
   
   const [sessionCaisse, setSessionCaisse] = useState({ isActive: false, caissiere: '', startTime: null });
@@ -51,6 +52,8 @@ function FoodjiSystem() {
   const [editId, setEditId] = useState(null); 
   const [formProd, setFormProd] = useState({ nom: '', description: '', image: '', categorie: 'Burgers', prixBase: '', variantes: [], excludeVIP: false });
   const [showHistory, setShowHistory] = useState(false); 
+  const [showPromoManager, setShowPromoManager] = useState(false);
+  const [formPromo, setFormPromo] = useState({ titre: '', description: '', prix: '', status: true });
   
   const [posCart, setPosCart] = useState([]);
   const [posPhone, setPosPhone] = useState('');
@@ -117,6 +120,7 @@ function FoodjiSystem() {
     });
 
     const unsubMenu = onSnapshot(collection(db, "produits"), (snap) => setMenu(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    const unsubPromos = onSnapshot(collection(db, "promotions"), (snap) => setPromotions(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
     const unsubClients = onSnapshot(collection(db, "clients"), (snap) => setClientsDB(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
     const unsubCmd = onSnapshot(query(collection(db, "commandes")), (snap) => {
       try {
@@ -132,7 +136,7 @@ function FoodjiSystem() {
       } catch (e) { console.error("Erreur tri", e); }
     });
 
-    return () => { unsubStatus(); unsubHoraires(); unsubStocks(); unsubSession(); unsubServiceGlobal(); unsubMenu(); unsubClients(); unsubCmd(); };
+    return () => { unsubStatus(); unsubHoraires(); unsubStocks(); unsubSession(); unsubServiceGlobal(); unsubMenu(); unsubPromos(); unsubClients(); unsubCmd(); };
   }, [authState]);
 
   useEffect(() => {
@@ -156,6 +160,17 @@ function FoodjiSystem() {
   const toggleStockItem = async (listName, index) => { const newList = [...parametres.stocks[listName]]; newList[index].available = !newList[index].available; await updateDoc(doc(db, "parametres", "stocks"), { ...parametres.stocks, [listName]: newList }); };
   const addNewStockItem = async () => { if(!newItemName.trim()) return; const newList = [...parametres.stocks[activeStockTab], { nom: newItemName.trim(), available: true }]; await updateDoc(doc(db, "parametres", "stocks"), { ...parametres.stocks, [activeStockTab]: newList }); setNewItemName(''); };
   
+  const savePromotion = async () => {
+      if(!formPromo.titre || !formPromo.prix) return alert("Remplis le titre et le prix.");
+      await addDoc(collection(db, "promotions"), { titre: formPromo.titre, description: formPromo.description, prix: Number(formPromo.prix), status: formPromo.status, date: new Date() });
+      setFormPromo({ titre: '', description: '', prix: '', status: true });
+      alert("Deal ajouté avec succès !");
+  };
+
+  const togglePromoStatus = async (id, currentStatus) => {
+      await updateDoc(doc(db, "promotions", id), { status: !currentStatus });
+  };
+
   const changerStatus = async (cmd, st) => {
       await updateDoc(doc(db, "commandes", cmd.id), { status: st });
       if (st === 'Terminé' && cmd.tel && cmd.tel.trim().length >= 9) {
@@ -216,7 +231,7 @@ function FoodjiSystem() {
       const telClean = newClientPhone.replace(/\s+/g, '');
       if (telClean.length < 9) return alert("Numéro de téléphone invalide (au moins 9 chiffres).");
       const exist = clientsDB.find(c => c.tel.replace(/\s+/g, '') === telClean);
-      if (exist) return alert("❌ Ce numéro existe déjà. Modifie sa fiche dans le tableau en dessous.");
+      if (exist) return alert("❌ Ce numéro existe déjà. Modifie sa fiche dans le tableau.");
       setLoading(true);
       try {
           await addDoc(collection(db, "clients"), {
@@ -325,7 +340,6 @@ function FoodjiSystem() {
       const zData = { isZ: true, date: now, ...bilan };
       setOrderToPrint(zData);
 
-      // ARCHIVAGE SÉCURISÉ DU Z DANS FIREBASE
       try {
           await addDoc(collection(db, "historique_z"), {
               dateCloture: now,
@@ -1147,7 +1161,7 @@ function FoodjiSystem() {
   }
 
   // ==========================================
-  // RENDU ADMIN & STOCKS (BACK-OFFICE COMPACT)
+  // RENDU ADMIN & STOCKS (BACK-OFFICE COMPLET)
   // ==========================================
   return (
     <>
@@ -1158,12 +1172,49 @@ function FoodjiSystem() {
             <div style={{marginBottom:'20px', display:'flex', flexWrap:'wrap', gap:'10px', alignItems:'center', justifyContent:'space-between'}}>
                 <h2 style={{margin:0}}>⚙️ Admin Foodji</h2>
                 <div style={{display:'flex', gap:'10px'}}>
+                    <button onClick={()=>setShowPromoManager(!showPromoManager)} style={{padding:'8px 12px', borderRadius:'8px', border:'none', background: COLORS.promo, color:'white', fontWeight:'bold', cursor:'pointer'}}>🎁 GESTION PROMOS</button>
                     <button onClick={()=>setShowHistory(!showHistory)} style={{padding:'8px 12px', borderRadius:'8px', border:`2px solid ${COLORS.secondary}`, background: showHistory ? COLORS.secondary : 'transparent', color: showHistory ? 'white' : COLORS.secondary, fontWeight:'bold', cursor:'pointer'}}>🕒 Historique</button>
                     <button onClick={()=>setShowBilanGlobal(true)} style={{padding:'8px 12px', borderRadius:'8px', border:'none', background:'#1D4ED8', color:'white', fontWeight:'bold', cursor:'pointer'}}>📊 Bilan (Z)</button>
                     <button onClick={()=>setAppMode('POS')} style={{padding:'8px 12px', borderRadius:'8px', border:'none', background:COLORS.primary, color:'white', fontWeight:'bold', cursor:'pointer'}}>🍔 RETOUR CAISSE</button>
                     <button onClick={() => auth.signOut()} style={{padding:'8px 12px', borderRadius:'8px', border:'none', background:'#eee', cursor:'pointer'}}>Quitter</button>
                 </div>
             </div>
+
+            {showPromoManager && (
+                <div style={{background:'white', padding:'25px', borderRadius:'15px', marginBottom:'30px', border:`2px solid ${COLORS.promo}`}}>
+                    <h3 style={{marginTop:0, color: COLORS.promo}}>🎁 Module Indépendant : Deals & Offres Spéciales</h3>
+                    
+                    <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'20px', marginBottom:'20px'}}>
+                        <div style={{background:'#fffbeb', padding:'15px', borderRadius:'10px', border:'1px solid #fef3c7'}}>
+                            <h4>➕ Créer un nouveau Deal d'Été / Dimanche</h4>
+                            <div style={{display:'flex', flexDirection:'column', gap:'10px'}}>
+                                <input placeholder="Nom du Deal (ex: Offre Dimanche)" value={formPromo.titre} onChange={e=>setFormPromo({...formPromo, titre: e.target.value})} style={{padding:'10px', borderRadius:'5px', border:'1px solid #ddd'}} />
+                                <input placeholder="Description (ex: 2 pizzas achetées = 1 offerte)" value={formPromo.description} onChange={e=>setFormPromo({...formPromo, description: e.target.value})} style={{padding:'10px', borderRadius:'5px', border:'1px solid #ddd'}} />
+                                <input type="number" placeholder="Prix du Pack complet (DH)" value={formPromo.prix} onChange={e=>setFormPromo({...formPromo, prix: e.target.value})} style={{padding:'10px', borderRadius:'5px', border:'1px solid #ddd'}} />
+                                <button onClick={savePromotion} style={{padding:'12px', background:COLORS.promo, color:'white', border:'none', borderRadius:'5px', fontWeight:'bold', cursor:'pointer'}}>Mettre en ligne l'offre</button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h4>📋 Statut des Promos Actuelles (Filtre dynamique client)</h4>
+                            <div style={{maxHeight:'220px', overflowY:'auto', border:'1px solid #eee', borderRadius:'10px', padding:'10px'}}>
+                                {promotions.map(promo => (
+                                    <div key={promo.id} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px', borderBottom:'1px solid #f0f0f0', background: promo.status ? '#f0fdf4' : '#fef2f2', borderRadius:'5px', marginBottom:'5px'}}>
+                                        <div>
+                                            <strong>{promo.titre}</strong>
+                                            <div style={{fontSize:'0.85rem', color:'#666'}}>{promo.prix} DH</div>
+                                        </div>
+                                        <button onClick={()=>togglePromoStatus(promo.id, promo.status)} style={{padding:'8px 12px', border:'none', borderRadius:'5px', background: promo.status ? COLORS.success : COLORS.danger, color:'white', fontWeight:'bold', cursor:'pointer'}}>
+                                            {promo.status ? '🟢 ACTIF' : '🔴 COUPÉ'}
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                    <button onClick={()=>setShowPromoManager(false)} style={{background:'#eee', border:'none', padding:'5px 10px', borderRadius:'5px', cursor:'pointer'}}>Masquer le module</button>
+                </div>
+            )}
 
             <div style={{display:'flex', flexWrap:'wrap', gap:'20px', marginBottom:'20px', background:'white', padding:'15px', borderRadius:'10px', alignItems:'center', boxShadow:'0 2px 5px rgba(0,0,0,0.05)'}}>
                 <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
@@ -1235,7 +1286,7 @@ function FoodjiSystem() {
                                   return (
                                       <li key={i} style={{borderBottom:'1px dashed #e5e7eb', padding:'5px 0'}}>
                                           <div style={{display:'flex', justifyContent:'space-between'}}>
-                                              <span>{it.qte > 1 ? `${it.qte}x ` : ''}{it.nom} {it.varianteNom ? `(${it.varianteNom})` : ''}</span>
+                                              <span>{it.categorie ? `[${it.categorie.toUpperCase()}] ` : ''}{it.qte > 1 ? `${it.qte}x ` : ''}{it.nom} {it.varianteNom ? `(${it.varianteNom})` : ''}</span>
                                           </div>
                                           {details.length > 0 && <div style={{color:'#666', fontSize:'0.8rem', marginTop:'2px'}}>{details.join(' / ')}</div>}
                                       </li>
@@ -1259,9 +1310,7 @@ function FoodjiSystem() {
                             <div>
                                 <strong style={{fontSize:'1.2rem'}}>{cmd.client || 'Client'}</strong>
                                 <div style={{color: COLORS.textLight}}>📞 {cmd.tel || 'N/A'}</div>
-                                <div style={{fontSize:'0.8rem', color: '#666'}}>
-                                    {cmd.type === 'livraison' ? `🛵 Livraison : ${cmd.adresse}` : '🛍️ Emporter / Sur Place'}
-                                </div>
+                                <div style={{fontSize:'0.8rem', color: '#666'}}>{cmd.type === 'livraison' ? `🛵 Livraison : ${cmd.adresse}` : '🛍️ Emporter / Sur Place'}</div>
                             </div>
                             <div style={{textAlign:'right'}}>
                               <div style={{fontSize:'1.3rem', fontWeight:'bold', color: COLORS.primary}}>{cmd.total} DH</div>
@@ -1277,7 +1326,7 @@ function FoodjiSystem() {
                                 return (
                                   <li key={i} style={{padding:'5px 0', borderBottom:'1px dashed #eee'}}>
                                     <div style={{display:'flex', justifyContent:'space-between'}}>
-                                        <strong>{it.qte > 1 ? `${it.qte}x ` : ''}{it.nom} {it.varianteNom ? `(${it.varianteNom})` : ''}</strong>
+                                        <strong>{it.categorie ? `[${it.categorie.toUpperCase()}] ` : ''}{it.qte > 1 ? `${it.qte}x ` : ''}{it.nom} {it.varianteNom ? `(${it.varianteNom})` : ''}</strong>
                                         <span>{it.prixFinal * (it.qte || 1)} DH</span>
                                     </div>
                                     {details.length > 0 && <div style={{color:'#666', fontSize:'0.8rem', marginTop:'2px'}}>{details.join(' / ')}</div>}
