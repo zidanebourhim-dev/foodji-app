@@ -281,7 +281,7 @@ function FoodjiSystem() {
       const startT = sessionCaisse.startTime.seconds ? new Date(sessionCaisse.startTime.seconds * 1000) : new Date(sessionCaisse.startTime);
       const cmdsSession = commandes.filter(c => {
           const d = c.date?.seconds ? new Date(c.date.seconds * 1000) : new Date(c.date);
-          return d >= startT && c.status === 'Terminé' && c.caissiere === sessionCaisse.caissiere;
+          return d >= startT && (c.status === 'Terminé' || c.status === 'En Livraison') && c.caissiere === sessionCaisse.caissiere;
       });
       let totalEspeces = 0, totalDépenses = 0, totalLivrApp = 0;
       cmdsSession.forEach(c => {
@@ -304,12 +304,12 @@ function FoodjiSystem() {
       }, 500);
   };
 
-  const genererBilanGlobalZ = () => {
+const genererBilanGlobalZ = () => {
       if (!serviceGlobal.lastZDate) return null;
       const startT = serviceGlobal.lastZDate.seconds ? new Date(serviceGlobal.lastZDate.seconds * 1000) : new Date(serviceGlobal.lastZDate);
       const cmdsZ = commandes.filter(c => {
           const d = c.date?.seconds ? new Date(c.date.seconds * 1000) : new Date(c.date);
-          return d >= startT && c.status === 'Terminé'; 
+          return d >= startT && (c.status === 'Terminé' || c.status === 'En Livraison'); 
       });
       let totalEspeces = 0, totalDépenses = 0, totalLivrApp = 0;
       cmdsZ.forEach(c => {
