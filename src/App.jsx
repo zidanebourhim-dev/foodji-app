@@ -1236,7 +1236,7 @@ const genererBilanGlobalZ = () => {
                 <div style={{background:'white', padding:'25px', borderRadius:'15px', marginBottom:'40px'}}>
                     <h3 style={{marginTop:0, color: COLORS.secondary}}>🕒 50 Dernières Commandes</h3>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '20px' }}>
-                      {commandes.filter(c => c.status === 'Terminé' || c.status === 'Annulé').slice(0, 50).map(cmd => (
+                     {commandes.filter(c => c.status === 'Terminé' || c.status === 'En Livraison' || c.status === 'Annulé').slice(0, 50).map(cmd => (
                         <div key={cmd.id} style={{ border:`1px solid #ddd`, borderRadius:'10px', padding:'15px', opacity: cmd.status === 'Annulé' ? 0.6 : 1, background: cmd.status === 'Annulé' ? '#fef2f2' : '#f9fafb' }}>
                           <div style={{display:'flex', justifyContent:'space-between', borderBottom:'1px solid #eee', paddingBottom:'10px', marginBottom:'10px'}}>
                               <div>
