@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db, auth } from './firebase';
 import { signInWithEmailAndPassword, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'firebase/auth';
-import { collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, setDoc, query } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, setDoc, query, getDoc } from 'firebase/firestore';
 import './App.css';
 
 const COLORS = { primary: '#A84438', secondary: '#1A1E29', bg: '#F3F4F6', card: '#FFFFFF', success: '#10B981', danger: '#EF4444', warning: '#F59E0B', promo: '#D97706', textLight: '#6B7280', pending: '#F97316' };
@@ -261,7 +261,10 @@ function FoodjiSystem() {
   };
 
   const demanderOuvertureCaisse = async (nomCaissiere) => {
-      if (serviceGlobal.fondsDeclare) {
+      const serviceDoc = await getDoc(doc(db, "parametres", "service_global"));
+      const currentData = serviceDoc.exists() ? serviceDoc.data() : { fondsDeclare: false, fondsInitial: 0 };
+      
+      if (currentData.fondsDeclare && currentData.fondsInitial > 0) {
           await updateDoc(doc(db, "parametres", "session_caisse"), { isActive: true, caissiere: nomCaissiere, startTime: new Date() });
       } else {
           setShowFondsCaissePrompt({ active: true, caissiere: nomCaissiere });
@@ -276,7 +279,7 @@ function FoodjiSystem() {
       setShowFondsCaissePrompt({ active: false, caissiere: '' });
   };
 
-  const genererBilanShift = () => {
+ const genererBilanShift = () => {
       if (!sessionCaisse.startTime) return null;
       const startT = sessionCaisse.startTime.seconds ? new Date(sessionCaisse.startTime.seconds * 1000) : new Date(sessionCaisse.startTime);
       const cmdsSession = commandes.filter(c => {
@@ -285,11 +288,13 @@ function FoodjiSystem() {
       });
       let totalEspeces = 0, totalDépenses = 0, totalLivrApp = 0;
       cmdsSession.forEach(c => {
-          if (c.type === 'depense') totalDépenses += Math.abs(c.total);
-          else if (c.methodePaiement === 'Espèces') totalEspeces += c.total;
-          else totalLivrApp += c.total; 
+          const m = Number(c.total) || 0;
+          if (c.type === 'depense') totalDépenses += Math.abs(m);
+          else if (c.methodePaiement === 'Espèces') totalEspeces += m;
+          else totalLivrApp += m; 
       });
-      return { startT, fondsInitial: serviceGlobal.fondsInitial || 0, totalGeneral: (totalEspeces + totalLivrApp), totalEspeces, totalDépenses, totalLivrApp, netEnCaisse: ((serviceGlobal.fondsInitial || 0) + totalEspeces - totalDépenses), nbCommandes: cmdsSession.length };
+      const f = Number(serviceGlobal.fondsInitial) || 0;
+      return { startT, fondsInitial: f, totalGeneral: (totalEspeces + totalLivrApp), totalEspeces, totalDépenses, totalLivrApp, netEnCaisse: (f + totalEspeces - totalDépenses), nbCommandes: cmdsSession.length };
   };
 
   const cloturerShift = async () => {
@@ -313,11 +318,13 @@ const genererBilanGlobalZ = () => {
       });
       let totalEspeces = 0, totalDépenses = 0, totalLivrApp = 0;
       cmdsZ.forEach(c => {
-          if (c.type === 'depense') totalDépenses += Math.abs(c.total);
-          else if (c.methodePaiement === 'Espèces') totalEspeces += c.total;
-          else totalLivrApp += c.total; 
+          const m = Number(c.total) || 0;
+          if (c.type === 'depense') totalDépenses += Math.abs(m);
+          else if (c.methodePaiement === 'Espèces') totalEspeces += m;
+          else totalLivrApp += m; 
       });
-      return { startT, fondsInitial: serviceGlobal.fondsInitial || 0, totalGeneral: (totalEspeces + totalLivrApp), totalEspeces, totalDépenses, totalLivrApp, netEnCaisse: ((serviceGlobal.fondsInitial || 0) + totalEspeces - totalDépenses), nbCommandes: cmdsZ.length };
+      const f = Number(serviceGlobal.fondsInitial) || 0;
+      return { startT, fondsInitial: f, totalGeneral: (totalEspeces + totalLivrApp), totalEspeces, totalDépenses, totalLivrApp, netEnCaisse: (f + totalEspeces - totalDépenses), nbCommandes: cmdsZ.length };
   };
 
   const cloturerZDefinitif = async () => {
