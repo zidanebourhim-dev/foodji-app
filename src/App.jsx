@@ -263,10 +263,36 @@ function FoodjiSystem() {
   const demanderOuvertureCaisse = async (nomCaissiere) => {
       const serviceDoc = await getDoc(doc(db, "parametres", "service_global"));
       const currentData = serviceDoc.exists() ? serviceDoc.data() : { fondsDeclare: false, fondsInitial: 0 };
-      
-      if (currentData.fondsDeclare && currentData.fondsInitial > 0) {
+
+      const now = new Date();
+      let isSessionPerimee = false;
+
+      // Vérification de la barrière de 06h00 du matin
+      if (currentData.lastZDate) {
+          const zDate = currentData.lastZDate.seconds ? new Date(currentData.lastZDate.seconds * 1000) : new Date(currentData.lastZDate);
+          const limiteAujourdhui = new Date(now);
+          limiteAujourdhui.setHours(6, 0, 0, 0);
+
+          // Si on est après 06h00 ET que le dernier Z date d'avant 06h00 aujourd'hui = Oubli de clôture
+          if (now >= limiteAujourdhui && zDate < limiteAujourdhui) {
+              isSessionPerimee = true;
+          }
+      } else {
+          isSessionPerimee = true; // Sécurité si aucune donnée
+      }
+
+      if (isSessionPerimee) {
+          // Purge automatique des données de la veille
+          await updateDoc(doc(db, "parametres", "service_global"), { lastZDate: now, fondsDeclare: false, fondsInitial: 0 });
+          await updateDoc(doc(db, "parametres", "session_caisse"), { isActive: false, caissiere: '', startTime: null });
+
+          setShowFondsCaissePrompt({ active: true, caissiere: nomCaissiere });
+          setFondsInitialInput('');
+      } else if (currentData.fondsDeclare && currentData.fondsInitial > 0) {
+          // Caisse déjà déclarée et session valide pour aujourd'hui
           await updateDoc(doc(db, "parametres", "session_caisse"), { isActive: true, caissiere: nomCaissiere, startTime: new Date() });
       } else {
+          // Demande standard du fond de caisse
           setShowFondsCaissePrompt({ active: true, caissiere: nomCaissiere });
           setFondsInitialInput('');
       }
@@ -310,12 +336,21 @@ function FoodjiSystem() {
   };
 
 const genererBilanGlobalZ = () => {
-      if (!serviceGlobal.lastZDate) return null;
-      const startT = serviceGlobal.lastZDate.seconds ? new Date(serviceGlobal.lastZDate.seconds * 1000) : new Date(serviceGlobal.lastZDate);
+      let startT;
+      if (serviceGlobal.lastZDate) {
+          startT = serviceGlobal.lastZDate.seconds ? new Date(serviceGlobal.lastZDate.seconds * 1000) : new Date(serviceGlobal.lastZDate);
+      } else {
+          // Fallback de sécurité : début de la journée en cours à 06h00
+          startT = new Date();
+          startT.setHours(6, 0, 0, 0);
+          if (new Date() < startT) startT.setDate(startT.getDate() - 1);
+      }
+
       const cmdsZ = commandes.filter(c => {
           const d = c.date?.seconds ? new Date(c.date.seconds * 1000) : new Date(c.date);
           return d >= startT && (c.status === 'Terminé' || c.status === 'En Livraison'); 
       });
+
       let totalEspeces = 0, totalDépenses = 0, totalLivrApp = 0;
       cmdsZ.forEach(c => {
           const m = Number(c.total) || 0;
@@ -323,6 +358,7 @@ const genererBilanGlobalZ = () => {
           else if (c.methodePaiement === 'Espèces') totalEspeces += m;
           else totalLivrApp += m; 
       });
+
       const f = Number(serviceGlobal.fondsInitial) || 0;
       return { startT, fondsInitial: f, totalGeneral: (totalEspeces + totalLivrApp), totalEspeces, totalDépenses, totalLivrApp, netEnCaisse: (f + totalEspeces - totalDépenses), nbCommandes: cmdsZ.length };
   };
@@ -1213,7 +1249,9 @@ const genererBilanGlobalZ = () => {
                 <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:4000}}>
                     <div style={{background:'white', padding:'30px', borderRadius:'15px', width:'90%', maxWidth:'450px', boxShadow:'0 10px 25px rgba(0,0,0,0.2)'}}>
                         <h2 style={{marginTop:0, textAlign:'center', color:COLORS.danger}}>📊 BILAN JOURNÉE (Z)</h2>
-                        <p style={{textAlign:'center', color:'#666'}}>Depuis le {serviceGlobal.lastZDate ? new Date(serviceGlobal.lastZDate.seconds ? serviceGlobal.lastZDate.seconds * 1000 : serviceGlobal.lastZDate).toLocaleString() : 'Début'}</p>
+                        <p style={{textAlign:'center', color:'#666'}}>
+                            Depuis {serviceGlobal.lastZDate ? new Date(serviceGlobal.lastZDate.seconds ? serviceGlobal.lastZDate.seconds * 1000 : serviceGlobal.lastZDate).toLocaleString() : 'le dernier Z ou début de service (06:00)'}
+                        </p>
                         <hr style={{margin:'20px 0'}}/>
                         {(() => {
                             const bilan = genererBilanGlobalZ();
