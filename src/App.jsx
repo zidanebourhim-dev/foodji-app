@@ -33,7 +33,6 @@ const COLORS = {
   pending: '#F97316' 
 };
 
-// --- LISTES PAR DÉFAUT (Pour l'initialisation Firebase si vide) ---
 const INIT_VIANDES = [
     { nom: "Poulet", available: true }, { nom: "Viande Hachée", available: true }, 
     { nom: "Cordon Bleu", available: true }, { nom: "Nuggets", available: true }, 
@@ -246,7 +245,6 @@ function App() {
       }
   }, [clientTel]);
 
-  // Écouteurs Firebase : Status Centralisé
   useEffect(() => {
     const unsubStatus = onSnapshot(doc(db, "parametres", "status"), (docSnap) => {
       if (docSnap.exists()) {
@@ -355,7 +353,6 @@ function App() {
   }, [menu, adminCategorie]);
 
   let categoriesClient = [...categoriesReelles];
-  // La logique Dimanche écoute désormais Firebase et non plus l'horloge locale
   if (parametresStatus.promoDimancheActive) categoriesClient = ['🔥 PROMOTIONS', ...categoriesReelles];
 
   useEffect(() => {
@@ -459,7 +456,6 @@ function App() {
       return prix;
   };
 
-  // MOTEUR DE CALCUL GLOBAL (INCLUANT LE DUO -50%)
   const calculerTotalInterne = () => {
       let sousTotal = 0, pizzasDimanche = [];
       let eligibleDuoPrices = [];
@@ -471,7 +467,6 @@ function App() {
           if (item.isPromoEligible) {
               pizzasDimanche.push({ ...item, prixCalcul: p });
           } else {
-              // Extraction des données pour le moteur Duo
               const isSalade = item.categorie === 'Salades';
               const vNom = item.varianteNom || '';
               const isLarge = vNom === 'L' || vNom === 'XL' || vNom === 'XXL';
@@ -604,7 +599,7 @@ function App() {
 
     const telClean = clientTel.replace(/\s/g, ''); 
     if (!/^(06|07)\d{8}$/.test(telClean)) return alert("Numéro invalide (06... ou 07...)");
-    if (typeCommande === 'livraison' && !adresse.trim()) return alert("⚠️ Adresse obligatoire pour la livraison.");
+    if (typeCommande === 'livraison' && !adresse.trim()) return alert("⚠️ Adresse complète obligatoire pour la livraison.");
     if (distanceClient !== null && distanceClient > 10) return alert("Trop loin (>10km).");
 
     setLoading(true);
@@ -612,7 +607,6 @@ function App() {
     localStorage.setItem('clientTel', telClean);
     if(adresse) localStorage.setItem('clientAdresse', adresse);
 
-    // Formatage identique au POS
     const panierFinal = panier.map(item => ({
         ...item,
         prixFinal: getPrixItemAjuste(item)
@@ -634,8 +628,8 @@ function App() {
         commentaire: commentaireFinal,
         items: panierFinal, 
         total: grandTotal, 
-        remisePromo: remiseDimanche, // Ancienne nomenclature gardée pour l'historique
-        remisePromoDuo: remiseDuo,   // Injection spécifique pour le Z
+        remisePromo: remiseDimanche,
+        remisePromoDuo: remiseDuo,   
         remise: remisePromo + remiseAppliquee, 
         fraisLivraison, 
         date: new Date(), 
@@ -1014,6 +1008,7 @@ function App() {
                   </button>
               )}
 
+              {/* Accès Admin Caché (Double Tap ou Click sur le cadenas) */}
               <button onClick={handleStaffAccess} style={{
                   marginTop:'60px', background: 'transparent', border: 'none', fontSize: '1.5rem', cursor:'pointer', opacity:0.5
               }}>
@@ -1029,11 +1024,7 @@ function App() {
             <img src={iconImg} style={{height:'35px', objectFit:'contain'}} alt="Accueil" />
             <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '800', letterSpacing: '-0.5px', color: COLORS.secondary }}>Foodji</h1>
           </div>
-          {user ? (
-            <button onClick={() => setView(view === 'admin' ? 'client' : 'admin')} style={{background: COLORS.secondary, color: 'white', border: 'none', padding: '8px 15px', borderRadius: '20px', fontSize:'0.8rem', fontWeight:'600'}}>{view === 'admin' ? 'App' : 'Admin'}</button>
-          ) : (
-             <div style={{width:'30px'}}></div>
-          )}
+          <div style={{width:'30px'}}></div>
         </div>
       )}
 
@@ -1602,7 +1593,6 @@ function PromoWizard({ menu, onClose, onValidate }) {
         const prixFinal = varianteM.prix;
         const varianteNom = varianteM.nom;
         
-        // FORMATAGE DU NOM POUR LE TICKET
         const nomComplet = `[PIZZAS] ${pizza.nom} (${varianteNom})`;
 
         setChoix([...choix, { 
@@ -1763,7 +1753,6 @@ function ProductModal({ product, stocks, onClose, onAdd }) {
             if (minChoix > 0 && optionsChoisies.length < minChoix) return alert(`Veuillez choisir au moins ${minChoix} options !`); 
             if (isTacos && sauces.length === 0) return alert("⚠️ Veuillez choisir au moins une sauce (ou 'Pas de sauce') !");
 
-            // FORMATAGE IDENTIQUE AU POS
             const catUpper = product.categorie ? product.categorie.toUpperCase() : 'PLAT';
             const nomComplet = selectedVar ? `[${catUpper}] ${product.nom} (${selectedVar.nom})` : `[${catUpper}] ${product.nom}`;
             
