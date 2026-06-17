@@ -41,7 +41,7 @@ function FoodjiSystem() {
   const [commandes, setCommandes] = useState([]);
   const [clientsDB, setClientsDB] = useState([]); 
   const [promotions, setPromotions] = useState([]);
-  const [parametres, setParametres] = useState({ isOuvert: true, rushMode: 'standard', stocks: { viandes: INIT_VIANDES, garnitures: INIT_GARNITURES_PIZZA, sauces: INIT_SAUCES, pates: INIT_PATES, tailles_pizza: INIT_TAILLES_PIZZA } });
+  const [parametres, setParametres] = useState({ isOuvert: true, rushMode: 'standard', promoDuoActive: false, stocks: { viandes: INIT_VIANDES, garnitures: INIT_GARNITURES_PIZZA, sauces: INIT_SAUCES, pates: INIT_PATES, tailles_pizza: INIT_TAILLES_PIZZA } });
   
   const [sessionCaisse, setSessionCaisse] = useState({ isActive: false, caissiere: '', startTime: null });
   const [serviceGlobal, setServiceGlobal] = useState({ lastZDate: null, fondsInitial: 0, fondsDeclare: false });
@@ -63,7 +63,7 @@ function FoodjiSystem() {
   const [posOrderType, setPosOrderType] = useState('sur_place'); 
   const [posAddress, setPosAddress] = useState('');
   const [posBipeur, setPosBipeur] = useState(''); 
-  const [remiseGlobale, setRemiseGlobale] = useState(0);
+  const [remiseGlobale, setRemiseGlobale] = useState(0); // Désormais en Pourcentage (0-100)
   const [clientActif, setClientActif] = useState(null); 
   
   const [orderToPrint, setOrderToPrint] = useState(null);
@@ -101,7 +101,11 @@ function FoodjiSystem() {
     if (!authState || authState === "LOADING") return;
 
     const unsubHoraires = onSnapshot(doc(db, "parametres", "horaires"), (s) => s.exists() && setParametres(prev => ({...prev, isOuvert: s.data().isOuvert})));
-    const unsubStatus = onSnapshot(doc(db, "parametres", "status"), (s) => s.exists() && setParametres(prev => ({...prev, rushMode: s.data().mode})));
+    const unsubStatus = onSnapshot(doc(db, "parametres", "status"), (s) => {
+        if(s.exists()) {
+            setParametres(prev => ({...prev, rushMode: s.data().mode || 'standard', promoDuoActive: s.data().promoDuoActive || false}));
+        }
+    });
     const unsubStocks = onSnapshot(doc(db, "parametres", "stocks"), (s) => {
         if (s.exists()) setParametres(prev => ({...prev, stocks: s.data()}));
         else setDoc(doc(db, "parametres", "stocks"), parametres.stocks);
@@ -183,6 +187,10 @@ function FoodjiSystem() {
 
   const togglePromoStatus = async (id, currentStatus) => {
       await updateDoc(doc(db, "promotions", id), { status: !currentStatus });
+  };
+
+  const togglePromoDuoAdmin = async () => {
+      await updateDoc(doc(db, "parametres", "status"), { promoDuoActive: !parametres.promoDuoActive });
   };
 
   const changerStatus = async (cmd, st) => {
@@ -273,26 +281,22 @@ function FoodjiSystem() {
           const limiteAujourdhui = new Date(now);
           limiteAujourdhui.setHours(6, 0, 0, 0);
 
-          // Si on est après 06h00 ET que le dernier Z date d'avant 06h00 aujourd'hui = Oubli de clôture
           if (now >= limiteAujourdhui && zDate < limiteAujourdhui) {
               isSessionPerimee = true;
           }
       } else {
-          isSessionPerimee = true; // Sécurité si aucune donnée
+          isSessionPerimee = true;
       }
 
       if (isSessionPerimee) {
-          // Purge automatique des données de la veille
           await updateDoc(doc(db, "parametres", "service_global"), { lastZDate: now, fondsDeclare: false, fondsInitial: 0 });
           await updateDoc(doc(db, "parametres", "session_caisse"), { isActive: false, caissiere: '', startTime: null });
 
           setShowFondsCaissePrompt({ active: true, caissiere: nomCaissiere });
           setFondsInitialInput('');
       } else if (currentData.fondsDeclare && currentData.fondsInitial > 0) {
-          // Caisse déjà déclarée et session valide pour aujourd'hui
           await updateDoc(doc(db, "parametres", "session_caisse"), { isActive: true, caissiere: nomCaissiere, startTime: new Date() });
       } else {
-          // Demande standard du fond de caisse
           setShowFondsCaissePrompt({ active: true, caissiere: nomCaissiere });
           setFondsInitialInput('');
       }
@@ -305,7 +309,7 @@ function FoodjiSystem() {
       setShowFondsCaissePrompt({ active: false, caissiere: '' });
   };
 
- const genererBilanShift = () => {
+  const genererBilanShift = () => {
       if (!sessionCaisse.startTime) return null;
       const startT = sessionCaisse.startTime.seconds ? new Date(sessionCaisse.startTime.seconds * 1000) : new Date(sessionCaisse.startTime);
       const cmdsSession = commandes.filter(c => {
@@ -335,12 +339,11 @@ function FoodjiSystem() {
       }, 500);
   };
 
-const genererBilanGlobalZ = () => {
+  const genererBilanGlobalZ = () => {
       let startT;
       if (serviceGlobal.lastZDate) {
           startT = serviceGlobal.lastZDate.seconds ? new Date(serviceGlobal.lastZDate.seconds * 1000) : new Date(serviceGlobal.lastZDate);
       } else {
-          // Fallback de sécurité : début de la journée en cours à 06h00
           startT = new Date();
           startT.setHours(6, 0, 0, 0);
           if (new Date() < startT) startT.setDate(startT.getDate() - 1);
@@ -445,7 +448,7 @@ const genererBilanGlobalZ = () => {
       const finalPrice = basePrice + extraPrice;
       const nomComplet = variante ? `[${produit.categorie}] ${produit.nom} (${variante.nom})` : `[${produit.categorie}] ${produit.nom}`;
 
-      setPosCart([...posCart, { ...produit, categorie: produit.categorie, nom: nomComplet, prixFinal: finalPrice, isPrixModifie: false, detailsTxt: details, excludeVIP: produit.excludeVIP || false, qte: 1, idCart: Date.now() + Math.random() }]);
+      setPosCart([...posCart, { ...produit, varianteNom: variante ? variante.nom : null, categorie: produit.categorie, nom: nomComplet, prixFinal: finalPrice, isPrixModifie: false, detailsTxt: details, excludeVIP: produit.excludeVIP || false, qte: 1, idCart: Date.now() + Math.random() }]);
       setCustomizeItem(null);
   };
 
@@ -455,11 +458,38 @@ const genererBilanGlobalZ = () => {
 
   const removeFromCart = (idCart) => { setPosCart(posCart.filter(item => item.idCart !== idCart)); };
   
+  // CALCULS PANIER & MOTEUR PROMO DUO
   const sousTotalCart = posCart.reduce((sum, item) => sum + (Number(item.prixFinal) * item.qte), 0);
   const sousTotalEligibleVIP = posCart.reduce((sum, item) => sum + (item.excludeVIP ? 0 : (Number(item.prixFinal) * item.qte)), 0);
   const fraisLivraison = (posOrderType === 'livraison' && sousTotalCart > 0 && sousTotalCart < 45) ? 7 : 0;
+  
+  // Moteur Promo 1 acheté = 2ème à -50%
+  let promoDuoDiscount = 0;
+  if (parametres.promoDuoActive) {
+      let eligiblePrices = [];
+      posCart.forEach(item => {
+          const isSalade = item.categorie === 'Salades';
+          const vNom = item.varianteNom || '';
+          const isLarge = vNom === 'L' || vNom === 'XL' || vNom === 'XXL';
+          
+          if (!isSalade && !isLarge && !item.isPrixModifie && !item.nom.toLowerCase().includes("pep's")) {
+              for(let i=0; i<item.qte; i++) {
+                  eligiblePrices.push(Number(item.prixFinal));
+              }
+          }
+      });
+      // Tri du moins cher au plus cher, réduction sur la première moitié des paires
+      eligiblePrices.sort((a, b) => a - b);
+      const itemsToDiscount = Math.floor(eligiblePrices.length / 2);
+      for (let i = 0; i < itemsToDiscount; i++) {
+          promoDuoDiscount += (eligiblePrices[i] * 0.5);
+      }
+      promoDuoDiscount = Math.round(promoDuoDiscount);
+  }
+
+  const montantRemiseGlobale = Math.round(sousTotalCart * ((Number(remiseGlobale) || 0) / 100));
   const remiseCRM = clientActif && clientActif.remiseAuto ? Math.round(sousTotalEligibleVIP * (clientActif.remiseAuto / 100)) : 0;
-  const totalRemises = remiseGlobale + remiseCRM;
+  const totalRemises = montantRemiseGlobale + remiseCRM + promoDuoDiscount;
   const totalCart = Math.max(0, sousTotalCart + fraisLivraison - totalRemises);
 
   const openNumpad = (mode, label, targetId = null) => { setNumpad({ active: true, mode, label, targetId, value: '' }); };
@@ -471,7 +501,10 @@ const genererBilanGlobalZ = () => {
 
   const applyNumpadValue = async () => {
       const valNum = Number(numpad.value) || 0;
-      if (numpad.mode === 'remise_globale') setRemiseGlobale(valNum);
+      if (numpad.mode === 'remise_globale') {
+          if(valNum > 100) return alert("La remise ne peut pas dépasser 100%");
+          setRemiseGlobale(valNum);
+      }
       else if (numpad.mode === 'prix_article') setPosCart(posCart.map(it => it.idCart === numpad.targetId ? { ...it, prixFinal: valNum, isPrixModifie: true } : it));
       else if (numpad.mode === 'encaissement_especes') {
           if (valNum < totalCart) return alert("Le montant donné est inférieur au total.");
@@ -509,6 +542,8 @@ const genererBilanGlobalZ = () => {
           items: posCart,
           sousTotal: sousTotalCart,
           fraisLivraison: fraisLivraison,
+          remiseGlobalePct: remiseGlobale,
+          remisePromoDuo: promoDuoDiscount,
           remise: totalRemises,
           total: totalCart,
           status: forceStatus,
@@ -646,7 +681,7 @@ const genererBilanGlobalZ = () => {
                           const details = getDetaisImpression(it);
                           return (
                               <li key={i} style={{fontSize:'16px', fontWeight:'bold', borderBottom:'1px dotted black', padding:'10px 0'}}>
-                                  <div>{it.qte > 1 ? `${it.qte}x ` : ''}{it.nom} {it.varianteNom ? `(${it.varianteNom})` : ''}</div>
+                                  <div>{it.qte > 1 ? `${it.qte}x ` : ''}{it.nom}</div>
                                   {details.length > 0 && (
                                       <div style={{fontSize:'14px', marginLeft:'10px', fontWeight:'normal'}}>
                                           {details.map((dt, j) => <div key={j}>• {dt}</div>)}
@@ -697,18 +732,18 @@ const genererBilanGlobalZ = () => {
                               const details = getDetaisImpression(it);
                               return (
                                   <React.Fragment key={i}>
-                                    <tr>
-                                        <td style={{paddingTop:'5px'}}><strong>{it.qte > 1 ? `${it.qte}x ` : ''}{it.nom} {it.varianteNom ? `(${it.varianteNom})` : ''}</strong></td>
-                                        <td style={{textAlign:'right', paddingTop:'5px'}}><strong>{it.prixFinal * (it.qte || 1)} DH</strong></td>
-                                    </tr>
-                                    {(details.length > 0 || it.isPrixModifie) && (
-                                        <tr>
-                                            <td colSpan="2" style={{fontSize:'12px', paddingLeft:'10px', paddingBottom:'5px', color:'#333'}}>
-                                                {details.join(' / ')}
-                                                {it.isPrixModifie && <span style={{display:'block', color:'red'}}>*Prix manuel appliqué</span>}
-                                            </td>
-                                        </tr>
-                                    )}
+                                      <tr>
+                                          <td style={{paddingTop:'5px'}}><strong>{it.qte > 1 ? `${it.qte}x ` : ''}{it.nom}</strong></td>
+                                          <td style={{textAlign:'right', paddingTop:'5px'}}><strong>{it.prixFinal * (it.qte || 1)} DH</strong></td>
+                                      </tr>
+                                      {(details.length > 0 || it.isPrixModifie) && (
+                                          <tr>
+                                              <td colSpan="2" style={{fontSize:'12px', paddingLeft:'10px', paddingBottom:'5px', color:'#333'}}>
+                                                  {details.join(' / ')}
+                                                  {it.isPrixModifie && <span style={{display:'block', color:'red'}}>*Prix manuel appliqué</span>}
+                                              </td>
+                                          </tr>
+                                      )}
                                   </React.Fragment>
                               );
                           })}
@@ -721,8 +756,14 @@ const genererBilanGlobalZ = () => {
                       </div>
                   )}
                   
+                  {orderToPrint.remisePromoDuo > 0 && (
+                      <div style={{display:'flex', justifyContent:'space-between', fontSize:'14px', marginBottom:'5px', fontWeight:'bold'}}>
+                          <span>🎁 PROMO DUO (-50%)</span><span>- {orderToPrint.remisePromoDuo} DH</span>
+                      </div>
+                  )}
+
                   {orderToPrint.remise > 0 && (
-                      <div style={{textAlign:'right', fontSize:'16px', borderTop:'1px dashed black', paddingTop:'5px'}}>Sous-total: {orderToPrint.sousTotal} DH<br/><strong>REMISE: -{orderToPrint.remise} DH</strong></div>
+                      <div style={{textAlign:'right', fontSize:'16px', borderTop:'1px dashed black', paddingTop:'5px'}}>Sous-total brût: {orderToPrint.sousTotal} DH<br/><strong>TOTAL REMISES: -{orderToPrint.remise} DH</strong></div>
                   )}
 
                   <hr style={{borderTop:'2px dashed black', margin: '10px 0'}}/>
@@ -743,7 +784,7 @@ const genererBilanGlobalZ = () => {
   };
 
   if (appMode === 'POS') {
-      if (!sessionCaisse.isActive) {
+      if (!sessionCaisse.isActive || !sessionCaisse.startTime || !serviceGlobal.fondsDeclare) {
           return (
               <div style={{display:'flex', height:'100vh', background:COLORS.secondary, alignItems:'center', justifyContent:'center', color:'white', flexDirection:'column'}}>
                   <h1 style={{fontSize:'3rem', marginBottom:'40px'}}>CAISSE FERMÉE</h1>
@@ -818,7 +859,7 @@ const genererBilanGlobalZ = () => {
                       <div style={{background:'white', width:'350px', borderRadius:'20px', padding:'25px', display:'flex', flexDirection:'column'}}>
                           <h2 style={{marginTop:0, textAlign:'center'}}>{numpad.label}</h2>
                           <div style={{background:'#f0f2f5', padding:'20px', fontSize:'2.5rem', textAlign:'right', borderRadius:'10px', marginBottom:'20px', fontWeight:'bold', minHeight:'40px'}}>
-                              {numpad.value} {numpad.value ? 'DH' : ''}
+                              {numpad.value} {numpad.mode === 'remise_globale' ? '%' : (numpad.value ? 'DH' : '')}
                           </div>
                           <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:'15px'}}>
                               {['7','8','9','4','5','6','1','2','3','0','DEL'].map(btn => (
@@ -998,7 +1039,6 @@ const genererBilanGlobalZ = () => {
                           </div>
 
                           <div style={{display:'flex', gap:'8px'}}>
-                              {/* BOUTON RUPTURE RAPIDE */}
                               <select onChange={handleRuptureRapide} value="" style={{padding:'10px 15px', background:'#fee2e2', color:COLORS.danger, borderRadius:'8px', border:`2px solid ${COLORS.danger}`, cursor:'pointer', fontWeight:'bold', outline:'none'}}>
                                   <option value="" disabled>🔴 Rupture Rapide...</option>
                                   {STOCK_TABS.map(tab => (
@@ -1079,7 +1119,6 @@ const genererBilanGlobalZ = () => {
                               <div key={item.idCart} style={{padding:'12px', borderBottom:'1px dashed #ddd', background:'#fafafa', borderRadius:'8px', marginBottom:'5px'}}>
                                   <div style={{display:'flex', justifyContent:'space-between', alignItems:'start'}}>
                                       <div style={{flex:1, cursor:'pointer'}} onClick={()=>openNumpad('prix_article', `Modifier prix global : ${item.nom}`, item.idCart)}>
-                                        {/* PANIER HIÉRARCHISÉ */}
                                         <div style={{fontWeight:'bold', fontSize:'18px', color: item.isPrixModifie ? COLORS.promo : 'black'}}>{item.nom}</div>
                                         {item.detailsTxt?.length > 0 && (
                                             <div style={{fontSize:'14px', color:'#666', marginTop:'4px', paddingLeft:'10px'}}>
@@ -1117,11 +1156,18 @@ const genererBilanGlobalZ = () => {
                               </div>
                           )}
                           
-                          {remiseGlobale > 0 && (
-                              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'5px', fontSize:'1rem', color:COLORS.danger, fontWeight:'bold'}}>
-                                  <span>Remise globale</span><span>- {remiseGlobale} DH</span>
+                          {promoDuoDiscount > 0 && (
+                              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'5px', fontSize:'1rem', color:COLORS.success, fontWeight:'bold'}}>
+                                  <span>🎁 Promo Duo Activa (-50%)</span><span>- {promoDuoDiscount} DH</span>
                               </div>
                           )}
+
+                          {montantRemiseGlobale > 0 && (
+                              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'5px', fontSize:'1rem', color:COLORS.danger, fontWeight:'bold'}}>
+                                  <span>Remise globale ({remiseGlobale}%)</span><span>- {montantRemiseGlobale} DH</span>
+                              </div>
+                          )}
+                          
                           {remiseCRM > 0 && (
                               <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'10px', fontSize:'1rem', color:COLORS.success, fontWeight:'bold'}}>
                                   <span>Remise VIP ({clientActif.remiseAuto}%)</span><span>- {remiseCRM} DH</span>
@@ -1135,11 +1181,11 @@ const genererBilanGlobalZ = () => {
                           
                           <div style={{display:'flex', gap:'10px', marginBottom:'10px'}}>
                               {posOrderType === 'livraison' ? (
-                                  <button onClick={() => validerCommandePOS('En attente', null, 'En Livraison')} disabled={loading || posCart.length===0} style={{flex:2, padding:'20px 10px', background:'#3B82F6', color:'white', border:'none', borderRadius:'10px', fontSize:'1.1rem', fontWeight:'bold', cursor:'pointer', opacity: posCart.length===0?0.5:1}}>🛵 DÉPART LIVREUR (Non payé)</button>
+                                  <button onClick={() => validerCommandePOS('En attente', null, 'En Livraison')} disabled={loading || posCart.length===0} style={{flex:2, padding:'20px 10px', background:'#3B82F6', color:'white', border:'none', borderRadius:'10px', fontSize:'1.1rem', fontWeight:'bold', cursor:'pointer', opacity: posCart.length===0?0.5:1}}>🛵 DÉPART LIVREUR</button>
                               ) : (
                                   <button onClick={() => setShowCashOptions(true)} disabled={loading || posCart.length===0} style={{flex:2, padding:'20px 10px', background:COLORS.success, color:'white', border:'none', borderRadius:'10px', fontSize:'1.1rem', fontWeight:'bold', cursor:'pointer', opacity: posCart.length===0?0.5:1}}>💵 ENCAISSER</button>
                               )}
-                              <button onClick={()=>openNumpad('remise_globale', 'Saisir la remise totale (en DH)')} disabled={loading || posCart.length===0} style={{flex:1, padding:'20px 10px', background:'#fef3c7', color:'#b45309', border:'none', borderRadius:'10px', fontSize:'1rem', fontWeight:'bold', cursor:'pointer', opacity: posCart.length===0?0.5:1}}>🎁 REMISE</button>
+                              <button onClick={()=>openNumpad('remise_globale', 'Saisir la remise totale (%)')} disabled={loading || posCart.length===0} style={{flex:1, padding:'20px 10px', background:'#fef3c7', color:'#b45309', border:'none', borderRadius:'10px', fontSize:'1rem', fontWeight:'bold', cursor:'pointer', opacity: posCart.length===0?0.5:1}}>🎁 REMISE %</button>
                           </div>
                           
                           <button onClick={()=>{ if(confirm("Vider entièrement le panier ?")) {setPosCart([]); setRemiseGlobale(0); setClientActif(null); setPosBipeur('');} }} style={{width:'100%', padding:'15px', background:'#fee2e2', color:'red', border:'none', borderRadius:'10px', fontWeight:'bold', cursor:'pointer', fontSize:'1rem'}}>🗑️ Vider le panier</button>
@@ -1167,7 +1213,6 @@ const genererBilanGlobalZ = () => {
                 </div>
             </div>
 
-            {/* LE SAS RETOUR LIVREURS */}
             {commandesEnLivraison.length > 0 && (
                 <div style={{background:'#FEF2F2', padding:'20px', borderRadius:'15px', marginBottom:'40px', border:`2px solid ${COLORS.danger}`, boxShadow:'0 5px 15px rgba(239, 68, 68, 0.2)'}}>
                     <h3 style={{marginTop:0, color: COLORS.danger, fontSize:'1.3rem'}}>🛵 RETOURS LIVREURS EN ATTENTE DE CAISSE</h3>
@@ -1243,6 +1288,13 @@ const genererBilanGlobalZ = () => {
                         <option value="gros_rush">🔥 Gros Rush (1h+)</option>
                     </select>
                 </div>
+                <div style={{width:'1px', height:'30px', background:'#eee'}}></div>
+                <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+                    <strong style={{color:'#666'}}>Promotions :</strong>
+                    <button onClick={togglePromoDuoAdmin} style={{padding:'8px 15px', borderRadius:'5px', background: parametres.promoDuoActive ? COLORS.success : '#eee', color: parametres.promoDuoActive ? 'white' : 'black', border:'none', cursor:'pointer', fontWeight:'bold'}}>
+                        {parametres.promoDuoActive ? '🟢 PROMO DUO ACTIVE' : '🔴 PROMO DUO COUPÉE'}
+                    </button>
+                </div>
             </div>
 
             {showBilanGlobal && (
@@ -1300,7 +1352,7 @@ const genererBilanGlobalZ = () => {
                                   return (
                                       <li key={i} style={{borderBottom:'1px dashed #e5e7eb', padding:'5px 0'}}>
                                           <div style={{display:'flex', justifyContent:'space-between'}}>
-                                              <span>{it.categorie ? `[${it.categorie.toUpperCase()}] ` : ''}{it.qte > 1 ? `${it.qte}x ` : ''}{it.nom} {it.varianteNom ? `(${it.varianteNom})` : ''}</span>
+                                              <span>{it.categorie ? `[${it.categorie.toUpperCase()}] ` : ''}{it.qte > 1 ? `${it.qte}x ` : ''}{it.nom}</span>
                                           </div>
                                           {details.length > 0 && <div style={{color:'#666', fontSize:'0.8rem', marginTop:'2px'}}>{details.join(' / ')}</div>}
                                       </li>
@@ -1340,8 +1392,7 @@ const genererBilanGlobalZ = () => {
                                 return (
                                   <li key={i} style={{padding:'5px 0', borderBottom:'1px dashed #eee'}}>
                                     <div style={{display:'flex', justifyContent:'space-between'}}>
-                                        {/* CATÉGORIE FORCÉE ICI */}
-                                        <strong><span style={{color: COLORS.primary}}>[{it.categorie ? it.categorie.toUpperCase() : 'NON CLASSÉ'}]</span> {it.qte > 1 ? `${it.qte}x ` : ''}{it.nom} {it.varianteNom ? `(${it.varianteNom})` : ''}</strong>
+                                        <strong><span style={{color: COLORS.primary}}>[{it.categorie ? it.categorie.toUpperCase() : 'NON CLASSÉ'}]</span> {it.qte > 1 ? `${it.qte}x ` : ''}{it.nom}</strong>
                                         <span>{it.prixFinal * (it.qte || 1)} DH</span>
                                     </div>
                                     {details.length > 0 && <div style={{color:'#666', fontSize:'0.8rem', marginTop:'2px'}}>{details.join(' / ')}</div>}
