@@ -22,6 +22,7 @@ const TACOS_EXTRAS = { "Sauce Fromagère": 10, "Supplément Cheddar": 7, "Suppl�
 
 const ACCOMPAGNEMENTS_PLATS = ["Frites", "Légumes Sautés", "Pâtes"];
 const EXCLUSIONS_BURGER = ["Sans Oignons", "Sans Tomates", "Sans Salade", "Sans Fromage", "Sans Sauce", "Sans Cornichons"];
+const PIZZAS_EXCLUES_PROMO = ["4 saisons", "fruits de mer", "cannibale", "2 saisons"];
 
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { hasError: false, errorMsg: '' }; }
@@ -41,7 +42,7 @@ function FoodjiSystem() {
   const [commandes, setCommandes] = useState([]);
   const [clientsDB, setClientsDB] = useState([]); 
   const [promotions, setPromotions] = useState([]);
-  const [parametres, setParametres] = useState({ isOuvert: true, rushMode: 'standard', promoDuoActive: false, stocks: { viandes: INIT_VIANDES, garnitures: INIT_GARNITURES_PIZZA, sauces: INIT_SAUCES, pates: INIT_PATES, tailles_pizza: INIT_TAILLES_PIZZA } });
+  const [parametres, setParametres] = useState({ isOuvert: true, rushMode: 'standard', promoDuoActive: false, promoDimancheActive: false, stocks: { viandes: INIT_VIANDES, garnitures: INIT_GARNITURES_PIZZA, sauces: INIT_SAUCES, pates: INIT_PATES, tailles_pizza: INIT_TAILLES_PIZZA } });
   
   const [sessionCaisse, setSessionCaisse] = useState({ isActive: false, caissiere: '', startTime: null });
   const [serviceGlobal, setServiceGlobal] = useState({ lastZDate: null, fondsInitial: 0, fondsDeclare: false });
@@ -63,7 +64,7 @@ function FoodjiSystem() {
   const [posOrderType, setPosOrderType] = useState('sur_place'); 
   const [posAddress, setPosAddress] = useState('');
   const [posBipeur, setPosBipeur] = useState(''); 
-  const [remiseGlobale, setRemiseGlobale] = useState(0); // Désormais en Pourcentage (0-100)
+  const [remiseGlobale, setRemiseGlobale] = useState(0); 
   const [clientActif, setClientActif] = useState(null); 
   
   const [orderToPrint, setOrderToPrint] = useState(null);
@@ -103,7 +104,8 @@ function FoodjiSystem() {
     const unsubHoraires = onSnapshot(doc(db, "parametres", "horaires"), (s) => s.exists() && setParametres(prev => ({...prev, isOuvert: s.data().isOuvert})));
     const unsubStatus = onSnapshot(doc(db, "parametres", "status"), (s) => {
         if(s.exists()) {
-            setParametres(prev => ({...prev, rushMode: s.data().mode || 'standard', promoDuoActive: s.data().promoDuoActive || false}));
+            const data = s.data();
+            setParametres(prev => ({...prev, rushMode: data.mode || 'standard', promoDuoActive: data.promoDuoActive || false, promoDimancheActive: data.promoDimancheActive || false}));
         }
     });
     const unsubStocks = onSnapshot(doc(db, "parametres", "stocks"), (s) => {
@@ -193,6 +195,10 @@ function FoodjiSystem() {
       await updateDoc(doc(db, "parametres", "status"), { promoDuoActive: !parametres.promoDuoActive });
   };
 
+  const togglePromoDimancheAdmin = async () => {
+      await updateDoc(doc(db, "parametres", "status"), { promoDimancheActive: !parametres.promoDimancheActive });
+  };
+
   const changerStatus = async (cmd, st) => {
       if (st === 'Annulé' && cmd.total > 100) {
           if (!confirm(`⚠️ ALERTE SÉCURITÉ\n\nÊtes-vous sûr de vouloir ANNULER cette commande de ${cmd.total} DH ?`)) return;
@@ -275,7 +281,6 @@ function FoodjiSystem() {
       const now = new Date();
       let isSessionPerimee = false;
 
-      // Vérification de la barrière de 06h00 du matin
       if (currentData.lastZDate) {
           const zDate = currentData.lastZDate.seconds ? new Date(currentData.lastZDate.seconds * 1000) : new Date(currentData.lastZDate);
           const limiteAujourdhui = new Date(now);
@@ -458,27 +463,50 @@ function FoodjiSystem() {
 
   const removeFromCart = (idCart) => { setPosCart(posCart.filter(item => item.idCart !== idCart)); };
   
-  // CALCULS PANIER & MOTEUR PROMO DUO
+  // CALCULS PANIER & MOTEURS PROMOS POS
   const sousTotalCart = posCart.reduce((sum, item) => sum + (Number(item.prixFinal) * item.qte), 0);
   const sousTotalEligibleVIP = posCart.reduce((sum, item) => sum + (item.excludeVIP ? 0 : (Number(item.prixFinal) * item.qte)), 0);
   const fraisLivraison = (posOrderType === 'livraison' && sousTotalCart > 0 && sousTotalCart < 45) ? 7 : 0;
   
-  // Moteur Promo 1 acheté = 2ème à -50%
+  let promoDimancheDiscount = 0;
   let promoDuoDiscount = 0;
+
+  if (parametres.promoDimancheActive) {
+      let pizzasDimanchePrices = [];
+      posCart.forEach(item => {
+          const vNom = item.varianteNom || '';
+          const isMoyenne = vNom === 'M' || vNom === 'Standard';
+          const isExcluded = PIZZAS_EXCLUES_PROMO.some(ex => item.nom.toLowerCase().includes(ex));
+          
+          if (item.categorie === 'Pizzas' && isMoyenne && !isExcluded && !item.isPrixModifie) {
+              for(let i=0; i<item.qte; i++) {
+                  pizzasDimanchePrices.push(Number(item.prixFinal));
+              }
+          }
+      });
+      if (pizzasDimanchePrices.length >= 3) {
+          pizzasDimanchePrices.sort((a, b) => a - b);
+          const itemsToDiscount = Math.floor(pizzasDimanchePrices.length / 3);
+          for (let i = 0; i < itemsToDiscount; i++) {
+              promoDimancheDiscount += pizzasDimanchePrices[i];
+          }
+      }
+  }
+
   if (parametres.promoDuoActive) {
       let eligiblePrices = [];
       posCart.forEach(item => {
           const isSalade = item.categorie === 'Salades';
           const vNom = item.varianteNom || '';
           const isLarge = vNom === 'L' || vNom === 'XL' || vNom === 'XXL';
+          const isPeps = item.nom.toLowerCase().includes("pep's");
           
-          if (!isSalade && !isLarge && !item.isPrixModifie && !item.nom.toLowerCase().includes("pep's")) {
+          if (!isSalade && !isLarge && !item.isPrixModifie && !isPeps) {
               for(let i=0; i<item.qte; i++) {
                   eligiblePrices.push(Number(item.prixFinal));
               }
           }
       });
-      // Tri du moins cher au plus cher, réduction sur la première moitié des paires
       eligiblePrices.sort((a, b) => a - b);
       const itemsToDiscount = Math.floor(eligiblePrices.length / 2);
       for (let i = 0; i < itemsToDiscount; i++) {
@@ -489,7 +517,7 @@ function FoodjiSystem() {
 
   const montantRemiseGlobale = Math.round(sousTotalCart * ((Number(remiseGlobale) || 0) / 100));
   const remiseCRM = clientActif && clientActif.remiseAuto ? Math.round(sousTotalEligibleVIP * (clientActif.remiseAuto / 100)) : 0;
-  const totalRemises = montantRemiseGlobale + remiseCRM + promoDuoDiscount;
+  const totalRemises = montantRemiseGlobale + remiseCRM + promoDuoDiscount + promoDimancheDiscount;
   const totalCart = Math.max(0, sousTotalCart + fraisLivraison - totalRemises);
 
   const openNumpad = (mode, label, targetId = null) => { setNumpad({ active: true, mode, label, targetId, value: '' }); };
@@ -544,6 +572,7 @@ function FoodjiSystem() {
           fraisLivraison: fraisLivraison,
           remiseGlobalePct: remiseGlobale,
           remisePromoDuo: promoDuoDiscount,
+          remisePromoDimanche: promoDimancheDiscount,
           remise: totalRemises,
           total: totalCart,
           status: forceStatus,
@@ -753,6 +782,12 @@ function FoodjiSystem() {
                   {orderToPrint.fraisLivraison > 0 && (
                       <div style={{display:'flex', justifyContent:'space-between', fontSize:'14px', marginBottom:'5px'}}>
                           <span>Frais de livraison</span><span>{orderToPrint.fraisLivraison} DH</span>
+                      </div>
+                  )}
+
+                  {orderToPrint.remisePromoDimanche > 0 && (
+                      <div style={{display:'flex', justifyContent:'space-between', fontSize:'14px', marginBottom:'5px', fontWeight:'bold'}}>
+                          <span>🎁 PROMO DIMANCHE (3ème Gratuite)</span><span>- {orderToPrint.remisePromoDimanche} DH</span>
                       </div>
                   )}
                   
@@ -1156,6 +1191,12 @@ function FoodjiSystem() {
                               </div>
                           )}
                           
+                          {promoDimancheDiscount > 0 && (
+                              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'5px', fontSize:'1rem', color:COLORS.success, fontWeight:'bold'}}>
+                                  <span>🎁 Promo Dimanche Activa</span><span>- {promoDimancheDiscount} DH</span>
+                              </div>
+                          )}
+
                           {promoDuoDiscount > 0 && (
                               <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'5px', fontSize:'1rem', color:COLORS.success, fontWeight:'bold'}}>
                                   <span>🎁 Promo Duo Activa (-50%)</span><span>- {promoDuoDiscount} DH</span>
@@ -1292,7 +1333,10 @@ function FoodjiSystem() {
                 <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
                     <strong style={{color:'#666'}}>Promotions :</strong>
                     <button onClick={togglePromoDuoAdmin} style={{padding:'8px 15px', borderRadius:'5px', background: parametres.promoDuoActive ? COLORS.success : '#eee', color: parametres.promoDuoActive ? 'white' : 'black', border:'none', cursor:'pointer', fontWeight:'bold'}}>
-                        {parametres.promoDuoActive ? '🟢 PROMO DUO ACTIVE' : '🔴 PROMO DUO COUPÉE'}
+                        {parametres.promoDuoActive ? '🟢 DUO (-50%)' : '🔴 DUO (-50%)'}
+                    </button>
+                    <button onClick={togglePromoDimancheAdmin} style={{padding:'8px 15px', borderRadius:'5px', background: parametres.promoDimancheActive ? COLORS.success : '#eee', color: parametres.promoDimancheActive ? 'white' : 'black', border:'none', cursor:'pointer', fontWeight:'bold'}}>
+                        {parametres.promoDimancheActive ? '🟢 DIMANCHE (3ème Gratuite)' : '🔴 DIMANCHE (3ème Gratuite)'}
                     </button>
                 </div>
             </div>
@@ -1352,7 +1396,7 @@ function FoodjiSystem() {
                                   return (
                                       <li key={i} style={{borderBottom:'1px dashed #e5e7eb', padding:'5px 0'}}>
                                           <div style={{display:'flex', justifyContent:'space-between'}}>
-                                              <span>{it.categorie ? `[${it.categorie.toUpperCase()}] ` : ''}{it.qte > 1 ? `${it.qte}x ` : ''}{it.nom}</span>
+                                              <span>{it.categorie ? `[${it.categorie.toUpperCase()}] ` : ''}{it.qte > 1 ? `${it.qte}x ` : ''}{it.nom} {it.varianteNom ? `(${it.varianteNom})` : ''}</span>
                                           </div>
                                           {details.length > 0 && <div style={{color:'#666', fontSize:'0.8rem', marginTop:'2px'}}>{details.join(' / ')}</div>}
                                       </li>
@@ -1392,7 +1436,7 @@ function FoodjiSystem() {
                                 return (
                                   <li key={i} style={{padding:'5px 0', borderBottom:'1px dashed #eee'}}>
                                     <div style={{display:'flex', justifyContent:'space-between'}}>
-                                        <strong><span style={{color: COLORS.primary}}>[{it.categorie ? it.categorie.toUpperCase() : 'NON CLASSÉ'}]</span> {it.qte > 1 ? `${it.qte}x ` : ''}{it.nom}</strong>
+                                        <strong><span style={{color: COLORS.primary}}>[{it.categorie ? it.categorie.toUpperCase() : 'NON CLASSÉ'}]</span> {it.qte > 1 ? `${it.qte}x ` : ''}{it.nom} {it.varianteNom ? `(${it.varianteNom})` : ''}</strong>
                                         <span>{it.prixFinal * (it.qte || 1)} DH</span>
                                     </div>
                                     {details.length > 0 && <div style={{color:'#666', fontSize:'0.8rem', marginTop:'2px'}}>{details.join(' / ')}</div>}
