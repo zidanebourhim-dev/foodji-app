@@ -14,7 +14,7 @@ const INIT_TAILLES_PIZZA = [{ nom: "M", available: true }, { nom: "L", available
 
 const TOUTES_CATEGORIES = ["Tacos", "Pizzas", "Burgers", "Panuozzo", "Pâtes", "Sides", "Les Burritos", "Koniks", "Plats", "Salades", "Boissons", "Suppléments"];
 const STOCK_TABS = [{ id: 'viandes', label: '🌮 Viandes' }, { id: 'garnitures', label: '🍕 Garnitures' }, { id: 'sauces', label: '🥣 Sauces' }, { id: 'pates', label: '🍝 Pâtes' }, { id: 'tailles_pizza', label: '📏 Tailles Pizza' }];
-const CAISSIERES = ["Rim", "Amal", "Manager"];
+const CAISSIERES = ["Rim", "Hanane", "Manager"];
 const NOTIF_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
 
 const EXTRAS_BASE = { "Champignons": 10, "Mozzarella": 10, "Parmesan": 15, "Cheddar": 15 };
@@ -1632,3 +1632,4 @@ export default function App() {
         </ErrorBoundary>
     ); 
 }
+
