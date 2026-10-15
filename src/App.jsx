@@ -493,15 +493,17 @@ function FoodjiSystem() {
       }
   }
 
-  if (parametres.promoDuoActive) {
+    if (parametres.promoDuoActive) {
       let eligiblePrices = [];
       posCart.forEach(item => {
           const isSalade = item.categorie === 'Salades';
-          const vNom = item.varianteNom || '';
-          const isLarge = vNom === 'L' || vNom === 'XL' || vNom === 'XXL';
           const isPeps = item.nom.toLowerCase().includes("pep's");
+          const vNom = item.varianteNom || '';
           
-          if (!isSalade && !isLarge && !item.isPrixModifie && !isPeps) {
+          const isTacosLarge = item.categorie === 'Tacos' && (vNom === 'L' || vNom === 'XL' || vNom === 'XXL');
+          const isPizzaM = item.categorie === 'Pizzas' && (vNom === 'M' || vNom === 'Standard');
+          
+          if (!isSalade && !item.isPrixModifie && !isPeps && !isTacosLarge && !isPizzaM) {
               for(let i=0; i<item.qte; i++) {
                   eligiblePrices.push(Number(item.prixFinal));
               }
