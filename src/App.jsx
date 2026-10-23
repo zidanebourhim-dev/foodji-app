@@ -9,6 +9,9 @@ const COLORS = {
   primary: '#A84438',
   primaryHover: '#8F372C',
   secondary: '#18181B', // Zinc 900
+  darkBg: '#09090B',    // Zinc 950 (Panier sombre)
+  darkCard: '#18181B',  // Zinc 900 (Carte article panier)
+  darkBorder: '#27272A',// Zinc 800
   bg: '#F4F4F5',        // Zinc 100
   card: '#FFFFFF',
   border: '#E4E4E7',    // Zinc 200
@@ -38,7 +41,9 @@ const TACOS_EXTRAS = { "Sauce Fromagère": 10, "Supplément Cheddar": 7, "Suppl�
 
 const ACCOMPAGNEMENTS_PLATS = ["Frites", "Légumes Sautés", "Pâtes"];
 const EXCLUSIONS_BURGER = ["Sans Oignons", "Sans Tomates", "Sans Salade", "Sans Fromage", "Sans Sauce", "Sans Cornichons"];
-const PIZZAS_EXCLUES_PROMO = ["4 saisons", "fruits de mer", "cannibale", "2 saisons"];
+
+// Correction : "4 saisons" et "2 saisons" ont été retirées d'ici pour activer la Promo Dimanche automatiquement
+const PIZZAS_EXCLUES_PROMO = ["fruits de mer", "cannibale"];
 
 // Helper universel pour convertir proprement les dates Firestore ou JS sans crash
 const toJSDate = (d) => {
@@ -78,6 +83,7 @@ function FoodjiSystem() {
     rushMode: 'standard',
     promoDuoActive: false,
     promoDimancheActive: false,
+    promoTacosActive: true,
     stocks: { viandes: INIT_VIANDES, garnitures: INIT_GARNITURES_PIZZA, sauces: INIT_SAUCES, pates: INIT_PATES, tailles_pizza: INIT_TAILLES_PIZZA }
   });
 
@@ -117,6 +123,20 @@ function FoodjiSystem() {
   const [customizeItem, setCustomizeItem] = useState(null);
   const [customOptions, setCustomOptions] = useState({ garnitures: [], sauces: [], viandes: [], extras: [], cheesyCrust: false, typePate: '', accompagnements: [], exclusions: [] });
 
+  // État dédié pour le configurateur Pack Promo 2 Tacos (L = 55 DH / XL = 89 DH)
+  const [promoTacosModal, setPromoTacosModal] = useState({
+    active: false,
+    taille: 'L',
+    prixPack: 55,
+    tacos1Viandes: [],
+    tacos1Sauces: [],
+    tacos1Extras: [],
+    tacos2Viandes: [],
+    tacos2Sauces: [],
+    tacos2Extras: [],
+    avecFritesBoisson: false
+  });
+
   const [newClientPhone, setNewClientPhone] = useState('');
   const [newClientName, setNewClientName] = useState('');
   const [newClientOrders, setNewClientOrders] = useState('');
@@ -146,7 +166,13 @@ function FoodjiSystem() {
     const unsubStatus = onSnapshot(doc(db, "parametres", "status"), (s) => {
       if (s.exists()) {
         const data = s.data();
-        setParametres(prev => ({ ...prev, rushMode: data.mode || 'standard', promoDuoActive: data.promoDuoActive || false, promoDimancheActive: data.promoDimancheActive || false }));
+        setParametres(prev => ({
+          ...prev,
+          rushMode: data.mode || 'standard',
+          promoDuoActive: data.promoDuoActive || false,
+          promoDimancheActive: data.promoDimancheActive || false,
+          promoTacosActive: data.promoTacosActive !== undefined ? data.promoTacosActive : true
+        }));
       }
     });
     const unsubStocks = onSnapshot(doc(db, "parametres", "stocks"), (s) => {
@@ -189,7 +215,7 @@ function FoodjiSystem() {
     return () => { unsubStatus(); unsubHoraires(); unsubStocks(); unsubSession(); unsubServiceGlobal(); unsubMenu(); unsubPromos(); unsubClients(); unsubCmd(); };
   }, [authState]);
 
-  // Correction bug Pep's : préserve les suppléments payants (extraPrice) lors du changement Sur Place / Emporter
+  // Préserve les suppléments payants (extraPrice) sur le Pep's lors du changement Sur Place / Emporter
   useEffect(() => {
     setPosCart(prevCart => prevCart.map(item => {
       if (item.nom.includes("Pep's") && !item.isPrixModifie) {
@@ -246,6 +272,7 @@ function FoodjiSystem() {
   const togglePromoStatus = async (id, currentStatus) => await updateDoc(doc(db, "promotions", id), { status: !currentStatus });
   const togglePromoDuoAdmin = async () => await updateDoc(doc(db, "parametres", "status"), { promoDuoActive: !parametres.promoDuoActive });
   const togglePromoDimancheAdmin = async () => await updateDoc(doc(db, "parametres", "status"), { promoDimancheActive: !parametres.promoDimancheActive });
+  const togglePromoTacosAdmin = async () => await updateDoc(doc(db, "parametres", "status"), { promoTacosActive: !parametres.promoTacosActive });
 
   const crediterPointsFidelite = async (telRaw, nomClient) => {
     if (!telRaw || telRaw.trim().length < 9) return;
@@ -306,24 +333,6 @@ function FoodjiSystem() {
     setLoading(false);
   };
 
-  const reparerPizzas = async () => {
-    if (!window.confirm("Ceci va forcer les tailles M et L sur toutes les pizzas. Confirmer ?")) return;
-    setLoading(true);
-    const pizzas = menu.filter(p => p.categorie === 'Pizzas');
-    for (let p of pizzas) {
-      let vars = [...(p.variantes || [])];
-      let hasM = vars.find(v => v.nom === 'M');
-      let hasL = vars.find(v => v.nom === 'L');
-      if (!hasM || !hasL) {
-        if (!hasM) vars.push({ nom: 'M', prix: p.prix || 0, available: true });
-        if (!hasL) vars.push({ nom: 'L', prix: Math.round((p.prix || 0) * 1.5), available: true });
-        await updateDoc(doc(db, "produits", p.id), { variantes: vars });
-      }
-    }
-    setLoading(false);
-    alert("✅ Réparation terminée.");
-  };
-
   const ajouterClientManuel = async () => {
     const telClean = newClientPhone.replace(/\s+/g, '');
     if (telClean.length < 9) return alert("Numéro de téléphone invalide (au moins 9 chiffres).");
@@ -380,7 +389,6 @@ function FoodjiSystem() {
     setShowFondsCaissePrompt({ active: false, caissiere: '' });
   };
 
-  // Correction Comptable : séparation stricte entre Espèces encaissées, Livraisons en cours et Web/Carte
   const calculerVentilationComptable = (listeCommandes, fondsInitial) => {
     let totalEspeces = 0, totalDépenses = 0, totalLivrApp = 0, totalEnLivraison = 0, nbCommandes = 0;
     listeCommandes.forEach(c => {
@@ -510,6 +518,102 @@ function FoodjiSystem() {
     });
   };
 
+  // Helpers pour le configurateur Pack Promo 2 Tacos
+  const openPromoTacosBuilder = (taille) => {
+    setPromoTacosModal({
+      active: true,
+      taille,
+      prixPack: taille === 'XL' ? 89 : 55,
+      tacos1Viandes: [],
+      tacos1Sauces: [],
+      tacos1Extras: [],
+      tacos2Viandes: [],
+      tacos2Sauces: [],
+      tacos2Extras: [],
+      avecFritesBoisson: false
+    });
+  };
+
+  const togglePromoTacosOption = (field, value, maxLimit = null) => {
+    setPromoTacosModal(prev => {
+      const arr = prev[field] || [];
+      if (arr.includes(value)) {
+        return { ...prev, [field]: arr.filter(v => v !== value) };
+      }
+      if (maxLimit && arr.length >= maxLimit) return prev;
+      return { ...prev, [field]: [...arr, value] };
+    });
+  };
+
+  const validerPackPromoTacos = () => {
+    const maxV = promoTacosModal.taille === 'XL' ? 3 : 2;
+    if (promoTacosModal.tacos1Viandes.length === 0 || promoTacosModal.tacos2Viandes.length === 0) {
+      return alert(`Sélectionne au moins 1 viande (max ${maxV}) pour chacun des 2 Tacos.`);
+    }
+
+    let extraPrice = 0;
+    let details = [];
+
+    if (promoTacosModal.avecFritesBoisson) {
+      extraPrice += 15;
+      details.push("🍟🥤 + MENU FRITES & BOISSON 1L (+15DH)");
+    } else {
+      details.push("🚫 LES 2 SANS FRITES (Offre Promo)");
+    }
+
+    const t1Sauces = promoTacosModal.tacos1Sauces.length > 0 ? ` | Sauces: ${promoTacosModal.tacos1Sauces.join(', ')}` : '';
+    details.push(`Tacos #1 (${promoTacosModal.taille}): ${promoTacosModal.tacos1Viandes.join(', ')}${t1Sauces}`);
+    promoTacosModal.tacos1Extras.forEach(ext => {
+      const p = TACOS_EXTRAS[ext] || 0;
+      extraPrice += p;
+      details.push(`  + [Tacos #1] ${ext} (+${p}DH)`);
+    });
+
+    const t2Sauces = promoTacosModal.tacos2Sauces.length > 0 ? ` | Sauces: ${promoTacosModal.tacos2Sauces.join(', ')}` : '';
+    details.push(`Tacos #2 (${promoTacosModal.taille}): ${promoTacosModal.tacos2Viandes.join(', ')}${t2Sauces}`);
+    promoTacosModal.tacos2Extras.forEach(ext => {
+      const p = TACOS_EXTRAS[ext] || 0;
+      extraPrice += p;
+      details.push(`  + [Tacos #2] ${ext} (+${p}DH)`);
+    });
+
+    const finalPrice = promoTacosModal.prixPack + extraPrice;
+
+    setPosCart(prev => [...prev, {
+      id: `promo_tacos_${promoTacosModal.taille}`,
+      categorie: 'PromoTacos',
+      varianteNom: promoTacosModal.taille,
+      nom: `[PROMO] 2 Tacos ${promoTacosModal.taille}${promoTacosModal.avecFritesBoisson ? ' + Frites & 1L' : ' (Sans Frites)'}`,
+      extraPrice,
+      prixFinal: finalPrice,
+      isPrixModifie: false,
+      isPromoPack: true,
+      detailsTxt: details,
+      excludeVIP: true,
+      qte: 1,
+      idCart: Date.now() + Math.random()
+    }]);
+
+    setPromoTacosModal(prev => ({ ...prev, active: false }));
+  };
+
+  const ajouterOptionFritesBoissonPromo = () => {
+    setPosCart(prev => [...prev, {
+      id: 'supplement_promo_tacos_menu',
+      categorie: 'Suppléments',
+      varianteNom: null,
+      nom: '🍟🥤 Option Promo : Frites + Boisson 1L',
+      extraPrice: 15,
+      prixFinal: 15,
+      isPrixModifie: false,
+      isPromoPack: true,
+      detailsTxt: ['🍟🥤 Avec Frites + Boisson 1L pour Promo Tacos'],
+      excludeVIP: true,
+      qte: 1,
+      idCart: Date.now() + Math.random()
+    }]);
+  };
+
   const validerEtAjouter = () => {
     const prod = customizeItem.produit; const vari = customizeItem.variante;
     if (prod.categorie === 'Tacos' && prod.nom.toLowerCase().includes('mixte')) {
@@ -588,15 +692,18 @@ function FoodjiSystem() {
 
   let promoDimancheDiscount = 0;
   let promoDuoDiscount = 0;
+  let promoTacosDiscount = 0;
 
+  // 1. MOTEUR PROMO DIMANCHE (2 Pizzas M achetées = 3ème offerte, inclut désormais 2 saisons et 4 saisons)
   if (parametres.promoDimancheActive) {
     let pizzasDimanchePrices = [];
     posCart.forEach(item => {
-      const vNom = item.varianteNom || '';
-      const isMoyenne = vNom === 'M' || vNom === 'Standard';
+      const vNom = (item.varianteNom || '').trim().toUpperCase();
+      const isMoyenne = vNom !== 'L'; // Accepte 'M', 'Standard' ou pizza sans taille L
       const isExcluded = PIZZAS_EXCLUES_PROMO.some(ex => item.nom.toLowerCase().includes(ex));
       if (item.categorie === 'Pizzas' && isMoyenne && !isExcluded && !item.isPrixModifie) {
-        for (let i = 0; i < item.qte; i++) pizzasDimanchePrices.push(Number(item.prixFinal));
+        const basePizzaPrice = Math.max(0, Number(item.prixFinal) - (Number(item.extraPrice) || 0));
+        for (let i = 0; i < item.qte; i++) pizzasDimanchePrices.push(basePizzaPrice);
       }
     });
     if (pizzasDimanchePrices.length >= 3) {
@@ -606,6 +713,36 @@ function FoodjiSystem() {
     }
   }
 
+  // 2. MOTEUR PROMO TACOS AUTOMATIQUE (Si la caissière saisit 2 Tacos L ou 2 Tacos XL séparément)
+  if (parametres.promoTacosActive) {
+    let tacosLBasePrices = [];
+    let tacosXLBasePrices = [];
+    posCart.forEach(item => {
+      if (item.categorie === 'Tacos' && !item.isPrixModifie && !item.isPromoPack) {
+        const vNom = (item.varianteNom || '').trim().toUpperCase();
+        const baseTacosPrice = Math.max(0, Number(item.prixFinal) - (Number(item.extraPrice) || 0));
+        if (vNom === 'L') {
+          for (let i = 0; i < item.qte; i++) tacosLBasePrices.push(baseTacosPrice);
+        } else if (vNom === 'XL') {
+          for (let i = 0; i < item.qte; i++) tacosXLBasePrices.push(baseTacosPrice);
+        }
+      }
+    });
+
+    tacosLBasePrices.sort((a, b) => a - b);
+    for (let i = 0; i + 1 < tacosLBasePrices.length; i += 2) {
+      const pairSum = tacosLBasePrices[i] + tacosLBasePrices[i + 1];
+      if (pairSum > 55) promoTacosDiscount += (pairSum - 55);
+    }
+
+    tacosXLBasePrices.sort((a, b) => a - b);
+    for (let i = 0; i + 1 < tacosXLBasePrices.length; i += 2) {
+      const pairSum = tacosXLBasePrices[i] + tacosXLBasePrices[i + 1];
+      if (pairSum > 89) promoTacosDiscount += (pairSum - 89);
+    }
+  }
+
+  // 3. MOTEUR PROMO DUO (-50% sur le 2ème)
   if (parametres.promoDuoActive) {
     let eligiblePrices = [];
     posCart.forEach(item => {
@@ -615,7 +752,7 @@ function FoodjiSystem() {
       const isTacosLarge = item.categorie === 'Tacos' && (vNom === 'L' || vNom === 'XL' || vNom === 'XXL');
       const isPizzaM = item.categorie === 'Pizzas' && (vNom === 'M' || vNom === 'Standard');
 
-      if (!isSalade && !item.isPrixModifie && !isPeps && !isTacosLarge && !isPizzaM) {
+      if (!isSalade && !item.isPrixModifie && !item.isPromoPack && !isPeps && !isTacosLarge && !isPizzaM) {
         for (let i = 0; i < item.qte; i++) eligiblePrices.push(Number(item.prixFinal));
       }
     });
@@ -627,7 +764,7 @@ function FoodjiSystem() {
 
   const montantRemiseGlobale = Math.round(sousTotalCart * ((Number(remiseGlobale) || 0) / 100));
   const remiseCRM = clientActif && clientActif.remiseAuto ? Math.round(sousTotalEligibleVIP * (clientActif.remiseAuto / 100)) : 0;
-  const totalRemises = montantRemiseGlobale + remiseCRM + promoDuoDiscount + promoDimancheDiscount;
+  const totalRemises = montantRemiseGlobale + remiseCRM + promoDuoDiscount + promoDimancheDiscount + promoTacosDiscount;
   const totalCart = Math.max(0, sousTotalCart + fraisLivraison - totalRemises);
 
   const openNumpad = (mode, label, targetId = null) => setNumpad({ active: true, mode, label, targetId, value: '' });
@@ -684,6 +821,19 @@ function FoodjiSystem() {
     setLoading(true);
     const finalClientName = posClientName.trim() ? posClientName.trim() : "Non spécifié";
 
+    // Si promoTacosDiscount est appliquée automatiquement sur des Tacos individuels sans pack frites+boisson, on le signale clairement à la cuisine
+    const hasOptionFritesBoisson = posCart.some(it => it.id === 'supplement_promo_tacos_menu');
+    const itemsFinal = posCart.map(it => {
+      if (promoTacosDiscount > 0 && it.categorie === 'Tacos' && (it.varianteNom === 'L' || it.varianteNom === 'XL') && !it.isPromoPack) {
+        const mentionFrites = hasOptionFritesBoisson ? '🍟🥤 AVEC FRITES + BOISSON 1L (Promo)' : '🚫 SANS FRITES (Promo Tacos)';
+        const existingDetails = it.detailsTxt || [];
+        if (!existingDetails.includes(mentionFrites)) {
+          return { ...it, detailsTxt: [mentionFrites, ...existingDetails] };
+        }
+      }
+      return it;
+    });
+
     const newCmd = {
       client: finalClientName,
       caissiere: sessionCaisse.caissiere || "Inconnu",
@@ -692,12 +842,13 @@ function FoodjiSystem() {
       bipeur: posBipeur,
       type: posOrderType,
       commentaire: posNote.trim(),
-      items: posCart,
+      items: itemsFinal,
       sousTotal: sousTotalCart,
       fraisLivraison: fraisLivraison,
       remiseGlobalePct: remiseGlobale,
       remisePromoDuo: promoDuoDiscount,
       remisePromoDimanche: promoDimancheDiscount,
+      remisePromoTacos: promoTacosDiscount,
       remise: totalRemises,
       total: totalCart,
       status: forceStatus,
@@ -848,7 +999,7 @@ function FoodjiSystem() {
                   <div>{it.qte > 1 ? `${it.qte}x ` : ''}{it.nom}</div>
                   {details.length > 0 && (
                     <div style={{ fontSize: '14px', marginLeft: '10px', fontWeight: 'normal' }}>
-                      {details.map((dt, j) => <div key={j}>• {dt}</div>)}
+                      {details.map((dt, j) => <div key={j} style={{ fontWeight: (dt.includes('🚫') || dt.includes('🍟🥤')) ? 'bold' : 'normal' }}>• {dt}</div>)}
                     </div>
                   )}
                 </li>
@@ -926,6 +1077,12 @@ function FoodjiSystem() {
             </div>
           )}
 
+          {orderToPrint.remisePromoTacos > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '5px', fontWeight: 'bold' }}>
+              <span>🌮 PROMO TACOS (2L=55 / 2XL=89)</span><span>- {orderToPrint.remisePromoTacos} DH</span>
+            </div>
+          )}
+
           {orderToPrint.remisePromoDuo > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '5px', fontWeight: 'bold' }}>
               <span>🎁 PROMO DUO (-50%)</span><span>- {orderToPrint.remisePromoDuo} DH</span>
@@ -986,6 +1143,131 @@ function FoodjiSystem() {
     return (
       <>
         {renderTickets()}
+
+        {/* MODALE CONFIGURATEUR PACK PROMO 2 TACOS (L = 55 DH / XL = 89 DH) */}
+        {promoTacosModal.active && (
+          <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(9, 9, 11, 0.8)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2500 }}>
+            <div className="modal-box" style={{ background: 'white', width: '92%', maxWidth: '880px', borderRadius: '20px', padding: '24px', display: 'flex', flexDirection: 'column', maxHeight: '92vh' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${COLORS.border}`, paddingBottom: '14px' }}>
+                <div>
+                  <h2 style={{ margin: 0, color: COLORS.primary, letterSpacing: '-0.02em' }}>
+                    🌮 Pack Promo : 2 Tacos {promoTacosModal.taille} ({promoTacosModal.prixPack} DH)
+                  </h2>
+                  <div style={{ fontSize: '0.9rem', color: COLORS.textLight, marginTop: '4px' }}>
+                    Par défaut : <strong style={{ color: COLORS.danger }}>🚫 Les deux sans frites</strong> • Option Menu Frites + Boisson 1L à +15 DH
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button className="pos-btn num-tabular" onClick={() => setPromoTacosModal(p => ({ ...p, taille: 'L', prixPack: 55, tacos1Viandes: [], tacos2Viandes: [] }))} style={{ padding: '10px 16px', borderRadius: '10px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: promoTacosModal.taille === 'L' ? COLORS.primary : COLORS.bg, color: promoTacosModal.taille === 'L' ? 'white' : COLORS.textMain }}>2x L (55 DH)</button>
+                  <button className="pos-btn num-tabular" onClick={() => setPromoTacosModal(p => ({ ...p, taille: 'XL', prixPack: 89, tacos1Viandes: [], tacos2Viandes: [] }))} style={{ padding: '10px 16px', borderRadius: '10px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: promoTacosModal.taille === 'XL' ? COLORS.primary : COLORS.bg, color: promoTacosModal.taille === 'XL' ? 'white' : COLORS.textMain }}>2x XL (89 DH)</button>
+                </div>
+              </div>
+
+              <div style={{ flex: 1, overflowY: 'auto', padding: '14px 0' }}>
+                {/* OPTION +15 DH FRITES & BOISSON 1L */}
+                <button
+                  className="pos-btn num-tabular"
+                  onClick={() => setPromoTacosModal(p => ({ ...p, avecFritesBoisson: !p.avecFritesBoisson }))}
+                  style={{
+                    width: '100%',
+                    padding: '16px 20px',
+                    borderRadius: '14px',
+                    border: promoTacosModal.avecFritesBoisson ? `2px solid ${COLORS.success}` : `2px dashed ${COLORS.promo}`,
+                    background: promoTacosModal.avecFritesBoisson ? '#ECFDF5' : '#FFFBEB',
+                    color: promoTacosModal.avecFritesBoisson ? '#065F46' : '#92400E',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    fontWeight: 'bold',
+                    fontSize: '1.1rem',
+                    cursor: 'pointer',
+                    marginBottom: '18px'
+                  }}
+                >
+                  <span>{promoTacosModal.avecFritesBoisson ? '✅ MENU ACTIVÉ : Avec Frites + Boisson 1L' : '🍟🥤 Rajouter Frites + Boisson 1L (Sinon : 🚫 Sans Frites)'}</span>
+                  <span style={{ background: promoTacosModal.avecFritesBoisson ? COLORS.success : COLORS.promo, color: 'white', padding: '6px 12px', borderRadius: '8px' }}>+ 15 DH</span>
+                </button>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '16px' }}>
+                  {/* TACOS #1 */}
+                  <div style={{ background: COLORS.bg, padding: '16px', borderRadius: '14px', border: `1px solid ${COLORS.border}` }}>
+                    <h3 style={{ marginTop: 0, color: COLORS.secondary, fontSize: '1.1rem' }}>
+                      🌮 Tacos #1 ({promoTacosModal.taille}) — Viandes ({promoTacosModal.tacos1Viandes.length}/{promoTacosModal.taille === 'XL' ? 3 : 2})
+                    </h3>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '14px' }}>
+                      {(parametres.stocks.viandes || []).filter(v => v.available).map((v, idx) => {
+                        const sel = promoTacosModal.tacos1Viandes.includes(v.nom);
+                        const maxV = promoTacosModal.taille === 'XL' ? 3 : 2;
+                        return (
+                          <button key={idx} className="pos-btn" onClick={() => togglePromoTacosOption('tacos1Viandes', v.nom, maxV)} style={{ padding: '8px 14px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', background: sel ? COLORS.primary : 'white', color: sel ? 'white' : COLORS.textMain, border: `1px solid ${sel ? COLORS.primary : COLORS.border}` }}>{v.nom}</button>
+                        );
+                      })}
+                    </div>
+                    <h4 style={{ margin: '0 0 8px 0', fontSize: '0.95rem', color: COLORS.textLight }}>🥣 Sauces Tacos #1</h4>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '14px' }}>
+                      {(parametres.stocks.sauces || []).filter(s => s.available).map((s, idx) => {
+                        const sel = promoTacosModal.tacos1Sauces.includes(s.nom);
+                        return (
+                          <button key={idx} className="pos-btn" onClick={() => togglePromoTacosOption('tacos1Sauces', s.nom)} style={{ padding: '7px 12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', background: sel ? COLORS.secondary : 'white', color: sel ? 'white' : COLORS.textMain, border: `1px solid ${COLORS.border}`, fontSize: '0.9rem' }}>{s.nom}</button>
+                        );
+                      })}
+                    </div>
+                    <h4 style={{ margin: '0 0 8px 0', fontSize: '0.95rem', color: COLORS.textLight }}>➕ Extras Tacos #1</h4>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                      {Object.keys(TACOS_EXTRAS).map(ext => {
+                        const sel = promoTacosModal.tacos1Extras.includes(ext);
+                        return (
+                          <button key={ext} className="pos-btn num-tabular" onClick={() => togglePromoTacosOption('tacos1Extras', ext)} style={{ padding: '7px 12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', background: sel ? COLORS.success : 'white', color: sel ? 'white' : COLORS.textMain, border: `1px solid ${COLORS.border}`, fontSize: '0.85rem' }}>{ext} (+{TACOS_EXTRAS[ext]}DH)</button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* TACOS #2 */}
+                  <div style={{ background: COLORS.bg, padding: '16px', borderRadius: '14px', border: `1px solid ${COLORS.border}` }}>
+                    <h3 style={{ marginTop: 0, color: COLORS.secondary, fontSize: '1.1rem' }}>
+                      🌮 Tacos #2 ({promoTacosModal.taille}) — Viandes ({promoTacosModal.tacos2Viandes.length}/{promoTacosModal.taille === 'XL' ? 3 : 2})
+                    </h3>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '14px' }}>
+                      {(parametres.stocks.viandes || []).filter(v => v.available).map((v, idx) => {
+                        const sel = promoTacosModal.tacos2Viandes.includes(v.nom);
+                        const maxV = promoTacosModal.taille === 'XL' ? 3 : 2;
+                        return (
+                          <button key={idx} className="pos-btn" onClick={() => togglePromoTacosOption('tacos2Viandes', v.nom, maxV)} style={{ padding: '8px 14px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', background: sel ? COLORS.primary : 'white', color: sel ? 'white' : COLORS.textMain, border: `1px solid ${sel ? COLORS.primary : COLORS.border}` }}>{v.nom}</button>
+                        );
+                      })}
+                    </div>
+                    <h4 style={{ margin: '0 0 8px 0', fontSize: '0.95rem', color: COLORS.textLight }}>🥣 Sauces Tacos #2</h4>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '14px' }}>
+                      {(parametres.stocks.sauces || []).filter(s => s.available).map((s, idx) => {
+                        const sel = promoTacosModal.tacos2Sauces.includes(s.nom);
+                        return (
+                          <button key={idx} className="pos-btn" onClick={() => togglePromoTacosOption('tacos2Sauces', s.nom)} style={{ padding: '7px 12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', background: sel ? COLORS.secondary : 'white', color: sel ? 'white' : COLORS.textMain, border: `1px solid ${COLORS.border}`, fontSize: '0.9rem' }}>{s.nom}</button>
+                        );
+                      })}
+                    </div>
+                    <h4 style={{ margin: '0 0 8px 0', fontSize: '0.95rem', color: COLORS.textLight }}>➕ Extras Tacos #2</h4>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                      {Object.keys(TACOS_EXTRAS).map(ext => {
+                        const sel = promoTacosModal.tacos2Extras.includes(ext);
+                        return (
+                          <button key={ext} className="pos-btn num-tabular" onClick={() => togglePromoTacosOption('tacos2Extras', ext)} style={{ padding: '7px 12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', background: sel ? COLORS.success : 'white', color: sel ? 'white' : COLORS.textMain, border: `1px solid ${COLORS.border}`, fontSize: '0.85rem' }}>{ext} (+{TACOS_EXTRAS[ext]}DH)</button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', marginTop: '14px', borderTop: `1px solid ${COLORS.border}`, paddingTop: '14px' }}>
+                <button className="pos-btn" onClick={() => setPromoTacosModal(p => ({ ...p, active: false }))} style={{ flex: 1, padding: '15px', background: COLORS.bg, color: COLORS.textLight, borderRadius: '12px', border: 'none', fontSize: '1.05rem', fontWeight: 'bold', cursor: 'pointer' }}>Annuler</button>
+                <button className="pos-btn num-tabular" onClick={validerPackPromoTacos} style={{ flex: 2, padding: '15px', background: COLORS.success, color: 'white', borderRadius: '12px', border: 'none', fontSize: '1.15rem', fontWeight: 'bold', cursor: 'pointer' }}>
+                  ✅ Ajouter Pack Promo ({promoTacosModal.prixPack + (promoTacosModal.avecFritesBoisson ? 15 : 0)} DH + extras)
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {showDiviserAddition && (
           <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(9, 9, 11, 0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 4000 }}>
@@ -1194,6 +1476,7 @@ function FoodjiSystem() {
         )}
 
         <div className="no-print" style={{ display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', background: COLORS.bg }}>
+          {/* COLONNE GAUCHE : CATALOGUE & ACTIONS POS */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '12px', height: '100%', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'white', padding: '14px 18px', borderRadius: '14px', marginBottom: '12px', flexShrink: 0, border: `1px solid ${COLORS.border}` }}>
 
@@ -1208,7 +1491,11 @@ function FoodjiSystem() {
                 )}
               </div>
 
-              <div style={{ display: 'flex', gap: '8px' }}>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button className="pos-btn num-tabular" onClick={() => openPromoTacosBuilder('L')} style={{ padding: '10px 14px', background: COLORS.promo, color: 'white', borderRadius: '10px', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>
+                  🌮 Promo Tacos (55 / 89 DH)
+                </button>
+
                 <select onChange={handleRuptureRapide} value="" style={{ padding: '10px 14px', background: '#FEF2F2', color: COLORS.danger, borderRadius: '10px', border: `1px solid ${COLORS.danger}`, cursor: 'pointer', fontWeight: 'bold', outline: 'none' }}>
                   <option value="" disabled>🔴 Rupture Rapide...</option>
                   {STOCK_TABS.map(tab => (
@@ -1231,6 +1518,27 @@ function FoodjiSystem() {
                 <button key={c} className="pos-btn" onClick={() => setPosCategory(c)} style={{ padding: '12px 22px', fontSize: '1.05rem', fontWeight: 'bold', borderRadius: '12px', border: posCategory === c ? 'none' : `1px solid ${COLORS.border}`, background: posCategory === c ? COLORS.primary : 'white', color: posCategory === c ? 'white' : COLORS.textMain, cursor: 'pointer', flexShrink: 0 }}>{c}</button>
               ))}
             </div>
+
+            {/* BANNIÈRE D'ACCÈS RAPIDE PROMO TACOS DANS L'ONGLET TACOS */}
+            {posCategory === 'Tacos' && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '10px', marginBottom: '12px', flexShrink: 0 }}>
+                <button className="pos-btn num-tabular" onClick={() => openPromoTacosBuilder('L')} style={{ padding: '14px 18px', borderRadius: '14px', border: `2px solid ${COLORS.promo}`, background: '#FFFBEB', color: '#92400E', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', textAlign: 'left' }}>
+                  <div>
+                    <div style={{ fontWeight: 'bold', fontSize: '1.05rem' }}>🔥 PACK 2 TACOS L (Sans Frites)</div>
+                    <div style={{ fontSize: '0.8rem', opacity: 0.85 }}>Option +15 DH : Frites + Boisson 1L</div>
+                  </div>
+                  <span style={{ background: COLORS.promo, color: 'white', padding: '6px 12px', borderRadius: '10px', fontWeight: 'bold', fontSize: '1.15rem' }}>55 DH</span>
+                </button>
+
+                <button className="pos-btn num-tabular" onClick={() => openPromoTacosBuilder('XL')} style={{ padding: '14px 18px', borderRadius: '14px', border: `2px solid ${COLORS.primary}`, background: '#FEF2F2', color: '#991B1B', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', textAlign: 'left' }}>
+                  <div>
+                    <div style={{ fontWeight: 'bold', fontSize: '1.05rem' }}>🔥 PACK 2 TACOS XL (Sans Frites)</div>
+                    <div style={{ fontSize: '0.8rem', opacity: 0.85 }}>Option +15 DH : Frites + Boisson 1L</div>
+                  </div>
+                  <span style={{ background: COLORS.primary, color: 'white', padding: '6px 12px', borderRadius: '10px', fontWeight: 'bold', fontSize: '1.15rem' }}>89 DH</span>
+                </button>
+              </div>
+            )}
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(165px, 1fr))', gap: '10px' }}>
               {menu.filter(p => p.categorie === posCategory && p.available !== false).map(p => (
@@ -1257,9 +1565,11 @@ function FoodjiSystem() {
             </div>
           </div>
 
-          <div style={{ width: '410px', flexShrink: 0, background: 'white', display: 'flex', flexDirection: 'column', height: '100%', borderLeft: `1px solid ${COLORS.border}` }}>
-            <div style={{ padding: '14px', background: COLORS.secondary, color: 'white', flexShrink: 0 }}>
-              <div style={{ display: 'flex', gap: '4px', marginBottom: '12px', background: '#27272A', padding: '4px', borderRadius: '10px' }}>
+          {/* COLONNE DROITE : PANIER DE COMMANDE EN DARK UI (ZINC 950 / 900) */}
+          <div style={{ width: '420px', flexShrink: 0, background: COLORS.darkBg, color: '#FAFAFA', display: 'flex', flexDirection: 'column', height: '100%', borderLeft: `1px solid ${COLORS.darkBorder}` }}>
+            {/* EN-TÊTE CLIENT & TYPE DE COMMANDE */}
+            <div style={{ padding: '14px', background: COLORS.darkCard, color: 'white', flexShrink: 0, borderBottom: `1px solid ${COLORS.darkBorder}` }}>
+              <div style={{ display: 'flex', gap: '4px', marginBottom: '12px', background: '#09090B', padding: '4px', borderRadius: '10px', border: `1px solid ${COLORS.darkBorder}` }}>
                 <button className="pos-btn" onClick={() => setPosOrderType('sur_place')} style={{ flex: 1, padding: '8px', borderRadius: '7px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: posOrderType === 'sur_place' ? COLORS.success : 'transparent', color: posOrderType === 'sur_place' ? 'white' : '#A1A1AA' }}>Sur Place</button>
                 <button className="pos-btn" onClick={() => setPosOrderType('emporter')} style={{ flex: 1, padding: '8px', borderRadius: '7px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: posOrderType === 'emporter' ? COLORS.promo : 'transparent', color: posOrderType === 'emporter' ? 'white' : '#A1A1AA' }}>Emporter</button>
                 <button className="pos-btn" onClick={() => setPosOrderType('livraison')} style={{ flex: 1, padding: '8px', borderRadius: '7px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: posOrderType === 'livraison' ? COLORS.blue : 'transparent', color: posOrderType === 'livraison' ? 'white' : '#A1A1AA' }}>Livraison</button>
@@ -1267,96 +1577,133 @@ function FoodjiSystem() {
 
               <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
                 <div style={{ position: 'relative', flex: 1 }}>
-                  <input type="tel" className="num-tabular" placeholder="Tél (06...)" value={posPhone} onChange={e => handlePhoneInput(e.target.value)} style={{ width: '100%', padding: '11px', borderRadius: '8px', border: `2px solid ${COLORS.blue}`, fontSize: '1.05rem', boxSizing: 'border-box', fontWeight: 'bold' }} />
+                  <input type="tel" className="num-tabular" placeholder="Tél (06...)" value={posPhone} onChange={e => handlePhoneInput(e.target.value)} style={{ width: '100%', padding: '11px', borderRadius: '8px', border: `2px solid ${COLORS.blue}`, background: '#09090B', color: '#FAFAFA', fontSize: '1.05rem', boxSizing: 'border-box', fontWeight: 'bold' }} />
                   {clientActif && clientActif.totalCommandes >= 10 && (
                     <span style={{ position: 'absolute', right: '8px', top: '10px', background: COLORS.promo, color: 'white', padding: '2px 8px', borderRadius: '6px', fontWeight: 'bold', fontSize: '0.75rem' }}>⭐ VIP</span>
                   )}
                 </div>
-                <select value={posBipeur} onChange={e => setPosBipeur(e.target.value)} style={{ width: '96px', padding: '11px', borderRadius: '8px', border: 'none', fontSize: '0.95rem', fontWeight: 'bold', cursor: 'pointer' }}>
+                <select value={posBipeur} onChange={e => setPosBipeur(e.target.value)} style={{ width: '96px', padding: '11px', borderRadius: '8px', border: `1px solid ${COLORS.darkBorder}`, background: '#27272A', color: '#FAFAFA', fontSize: '0.95rem', fontWeight: 'bold', cursor: 'pointer' }}>
                   <option value="">Bipeur</option>
                   {Array.from({ length: 20 }, (_, i) => <option key={i + 1} value={i + 1}>N° {i + 1}</option>)}
                 </select>
               </div>
 
-              <input type="text" placeholder="Nom Client (Auto si fidèle)" value={posClientName} onChange={e => setPosClientName(e.target.value)} style={{ width: '100%', padding: '11px', borderRadius: '8px', border: 'none', marginBottom: posOrderType === 'livraison' ? '8px' : '0', fontSize: '0.95rem', boxSizing: 'border-box' }} />
+              <input type="text" placeholder="Nom Client (Auto si fidèle)" value={posClientName} onChange={e => setPosClientName(e.target.value)} style={{ width: '100%', padding: '11px', borderRadius: '8px', border: `1px solid ${COLORS.darkBorder}`, background: '#27272A', color: '#FAFAFA', marginBottom: posOrderType === 'livraison' ? '8px' : '0', fontSize: '0.95rem', boxSizing: 'border-box' }} />
 
               {posOrderType === 'livraison' && (
-                <input type="text" placeholder="Adresse complète de livraison" value={posAddress} onChange={e => setPosAddress(e.target.value)} style={{ width: '100%', padding: '11px', borderRadius: '8px', border: 'none', fontSize: '0.95rem', boxSizing: 'border-box' }} />
+                <input type="text" placeholder="Adresse complète de livraison" value={posAddress} onChange={e => setPosAddress(e.target.value)} style={{ width: '100%', padding: '11px', borderRadius: '8px', border: `1px solid ${COLORS.darkBorder}`, background: '#27272A', color: '#FAFAFA', fontSize: '0.95rem', boxSizing: 'border-box' }} />
               )}
             </div>
 
-            <div style={{ flex: 1, overflowY: 'auto', padding: '10px' }}>
+            {/* LISTE DES ARTICLES CHOISIS (FOND SOMBRE #09090B & CARTES #18181B) */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '12px', background: COLORS.darkBg }}>
               {posCart.length === 0 ? (
-                <div style={{ textAlign: 'center', color: COLORS.textLight, marginTop: '60px', fontSize: '1.05rem' }}>Aucun article dans le panier</div>
+                <div style={{ textAlign: 'center', color: '#71717A', marginTop: '60px', fontSize: '1.05rem', padding: '24px', border: `1px dashed ${COLORS.darkBorder}`, borderRadius: '12px' }}>
+                  Aucun article dans le panier
+                </div>
               ) : null}
+
               {posCart.map(item => (
-                <div key={item.idCart} style={{ padding: '12px', border: `1px solid ${COLORS.border}`, background: COLORS.bg, borderRadius: '10px', marginBottom: '8px' }}>
+                <div key={item.idCart} style={{ padding: '12px', border: `1px solid ${COLORS.darkBorder}`, background: COLORS.darkCard, borderRadius: '12px', marginBottom: '10px', boxShadow: '0 4px 12px rgba(0,0,0,0.25)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: '8px' }}>
                     <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => openNumpad('prix_article', `Modifier prix unitaire : ${item.nom}`, item.idCart)}>
-                      <div style={{ fontWeight: 'bold', fontSize: '1rem', color: item.isPrixModifie ? COLORS.promo : COLORS.textMain }}>{item.nom}</div>
+                      <div style={{ fontWeight: 'bold', fontSize: '1rem', color: item.isPrixModifie ? '#FBBF24' : '#FAFAFA' }}>{item.nom}</div>
                       {item.detailsTxt?.length > 0 && (
-                        <div style={{ fontSize: '0.85rem', color: COLORS.textLight, marginTop: '4px', paddingLeft: '6px' }}>
-                          {item.detailsTxt.map((txt, j) => <div key={j} style={{ color: txt.includes('🚫') ? COLORS.danger : 'inherit' }}>• {txt}</div>)}
+                        <div style={{ fontSize: '0.85rem', color: '#A1A1AA', marginTop: '6px', paddingLeft: '6px' }}>
+                          {item.detailsTxt.map((txt, j) => (
+                            <div key={j} style={{ color: txt.includes('🚫') ? '#F87171' : txt.includes('🍟🥤') ? '#34D399' : '#A1A1AA', fontWeight: (txt.includes('🚫') || txt.includes('🍟🥤')) ? 'bold' : 'normal', marginBottom: '2px' }}>
+                              • {txt}
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <span className="num-tabular" style={{ fontWeight: 'bold', fontSize: '1.05rem', color: COLORS.primary, cursor: 'pointer', display: 'block' }} onClick={() => openNumpad('prix_article', `Modifier prix : ${item.nom}`, item.idCart)}>{item.prixFinal * item.qte} DH</span>
+                      <span className="num-tabular" style={{ fontWeight: 'bold', fontSize: '1.1rem', color: '#FB923C', cursor: 'pointer', display: 'block' }} onClick={() => openNumpad('prix_article', `Modifier prix : ${item.nom}`, item.idCart)}>{item.prixFinal * item.qte} DH</span>
                     </div>
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '10px', marginTop: '10px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', background: 'white', border: `1px solid ${COLORS.border}`, borderRadius: '8px', overflow: 'hidden' }}>
-                      <button className="pos-btn" onClick={() => modifierQuantite(item.idCart, -1)} style={{ padding: '4px 14px', fontSize: '1.1rem', fontWeight: 'bold', border: 'none', background: 'transparent', cursor: 'pointer' }}>-</button>
-                      <span className="num-tabular" style={{ padding: '0 10px', fontWeight: 'bold', fontSize: '1rem' }}>{item.qte}</span>
-                      <button className="pos-btn" onClick={() => modifierQuantite(item.idCart, 1)} style={{ padding: '4px 14px', fontSize: '1.1rem', fontWeight: 'bold', border: 'none', background: 'transparent', cursor: 'pointer' }}>+</button>
+                    <div style={{ display: 'flex', alignItems: 'center', background: '#27272A', border: '1px solid #3F3F46', borderRadius: '8px', overflow: 'hidden' }}>
+                      <button className="pos-btn" onClick={() => modifierQuantite(item.idCart, -1)} style={{ padding: '4px 14px', fontSize: '1.1rem', fontWeight: 'bold', border: 'none', background: 'transparent', color: '#FAFAFA', cursor: 'pointer' }}>-</button>
+                      <span className="num-tabular" style={{ padding: '0 10px', fontWeight: 'bold', fontSize: '1rem', color: '#FAFAFA' }}>{item.qte}</span>
+                      <button className="pos-btn" onClick={() => modifierQuantite(item.idCart, 1)} style={{ padding: '4px 14px', fontSize: '1.1rem', fontWeight: 'bold', border: 'none', background: 'transparent', color: '#FAFAFA', cursor: 'pointer' }}>+</button>
                     </div>
-                    <button className="pos-btn" onClick={() => removeFromCart(item.idCart)} style={{ background: '#FEE2E2', color: COLORS.danger, border: 'none', padding: '6px 10px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>🗑️</button>
+                    <button className="pos-btn" onClick={() => removeFromCart(item.idCart)} style={{ background: 'rgba(239, 68, 68, 0.18)', color: '#F87171', border: '1px solid rgba(239, 68, 68, 0.35)', padding: '6px 10px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>🗑️</button>
                   </div>
                 </div>
               ))}
+
+              {/* BOUTON RAPIDE +15 DH FRITES & BOISSON 1L SI PROMO TACOS DÉTECTÉE DANS LE PANIER */}
+              {promoTacosDiscount > 0 && (
+                <button
+                  className="pos-btn num-tabular"
+                  onClick={ajouterOptionFritesBoissonPromo}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '10px',
+                    border: '1px dashed #F59E0B',
+                    background: 'rgba(245, 158, 11, 0.15)',
+                    color: '#FBBF24',
+                    fontWeight: 'bold',
+                    fontSize: '0.9rem',
+                    cursor: 'pointer',
+                    marginTop: '4px'
+                  }}
+                >
+                  🍟🥤 + Rajouter Frites & Boisson 1L (+15 DH)
+                </button>
+              )}
             </div>
 
-            <div style={{ padding: '16px', borderTop: `1px solid ${COLORS.border}`, background: 'white', flexShrink: 0 }}>
-              <textarea placeholder="Note cuisine / client..." value={posNote} onChange={e => setPosNote(e.target.value)} rows={2} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: `1px solid ${COLORS.border}`, marginBottom: '12px', resize: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+            {/* PIED DE CAISSE SOMBRE */}
+            <div style={{ padding: '16px', borderTop: `1px solid ${COLORS.darkBorder}`, background: COLORS.darkCard, flexShrink: 0 }}>
+              <textarea placeholder="Note cuisine / client..." value={posNote} onChange={e => setPosNote(e.target.value)} rows={2} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: `1px solid ${COLORS.darkBorder}`, background: '#27272A', color: '#FAFAFA', marginBottom: '12px', resize: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
 
-              <div className="num-tabular" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', fontSize: '0.95rem', color: COLORS.textLight }}>
+              <div className="num-tabular" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', fontSize: '0.95rem', color: '#A1A1AA' }}>
                 <span>Sous-total</span><span>{sousTotalCart} DH</span>
               </div>
 
               {fraisLivraison > 0 && (
-                <div className="num-tabular" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', fontSize: '0.95rem', color: COLORS.blue, fontWeight: 'bold' }}>
+                <div className="num-tabular" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', fontSize: '0.95rem', color: '#60A5FA', fontWeight: 'bold' }}>
                   <span>Frais de livraison</span><span>+ {fraisLivraison} DH</span>
                 </div>
               )}
 
               {promoDimancheDiscount > 0 && (
-                <div className="num-tabular" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', fontSize: '0.95rem', color: COLORS.success, fontWeight: 'bold' }}>
-                  <span>🎁 Promo Dimanche</span><span>- {promoDimancheDiscount} DH</span>
+                <div className="num-tabular" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', fontSize: '0.95rem', color: '#34D399', fontWeight: 'bold' }}>
+                  <span>🎁 Promo Dimanche (3ème Pizza)</span><span>- {promoDimancheDiscount} DH</span>
+                </div>
+              )}
+
+              {promoTacosDiscount > 0 && (
+                <div className="num-tabular" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', fontSize: '0.95rem', color: '#FBBF24', fontWeight: 'bold' }}>
+                  <span>🌮 Promo Tacos (Sans frites)</span><span>- {promoTacosDiscount} DH</span>
                 </div>
               )}
 
               {promoDuoDiscount > 0 && (
-                <div className="num-tabular" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', fontSize: '0.95rem', color: COLORS.success, fontWeight: 'bold' }}>
+                <div className="num-tabular" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', fontSize: '0.95rem', color: '#34D399', fontWeight: 'bold' }}>
                   <span>🎁 Promo Duo (-50%)</span><span>- {promoDuoDiscount} DH</span>
                 </div>
               )}
 
               {montantRemiseGlobale > 0 && (
-                <div className="num-tabular" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', fontSize: '0.95rem', color: COLORS.danger, fontWeight: 'bold' }}>
+                <div className="num-tabular" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', fontSize: '0.95rem', color: '#F87171', fontWeight: 'bold' }}>
                   <span>Remise manuelle ({remiseGlobale}%)</span><span>- {montantRemiseGlobale} DH</span>
                 </div>
               )}
 
               {remiseCRM > 0 && (
-                <div className="num-tabular" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', fontSize: '0.95rem', color: COLORS.success, fontWeight: 'bold' }}>
+                <div className="num-tabular" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', fontSize: '0.95rem', color: '#34D399', fontWeight: 'bold' }}>
                   <span>Remise Fidélité ({clientActif.remiseAuto}%)</span><span>- {remiseCRM} DH</span>
                 </div>
               )}
 
-              <div className="num-tabular" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '10px 0 14px 0', fontSize: '1.75rem', fontWeight: 'bold', letterSpacing: '-0.02em' }}>
+              <div className="num-tabular" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '10px 0 14px 0', fontSize: '1.75rem', fontWeight: 'bold', letterSpacing: '-0.02em', color: '#FAFAFA' }}>
                 <span>TOTAL</span>
-                <span style={{ color: COLORS.primary }}>{totalCart} DH</span>
+                <span style={{ color: '#FB923C' }}>{totalCart} DH</span>
               </div>
 
               <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
@@ -1365,10 +1712,10 @@ function FoodjiSystem() {
                 ) : (
                   <button className="pos-btn" onClick={() => setShowCashOptions(true)} disabled={loading || posCart.length === 0} style={{ flex: 2, padding: '16px 10px', background: COLORS.success, color: 'white', border: 'none', borderRadius: '12px', fontSize: '1.05rem', fontWeight: 'bold', cursor: 'pointer', opacity: posCart.length === 0 ? 0.5 : 1 }}>💵 ENCAISSER</button>
                 )}
-                <button className="pos-btn" onClick={() => openNumpad('remise_globale', 'Remise globale (%)')} disabled={loading || posCart.length === 0} style={{ flex: 1, padding: '16px 10px', background: '#FEF3C7', color: '#B45309', border: 'none', borderRadius: '12px', fontSize: '0.95rem', fontWeight: 'bold', cursor: 'pointer', opacity: posCart.length === 0 ? 0.5 : 1 }}>🎁 REMISE %</button>
+                <button className="pos-btn" onClick={() => openNumpad('remise_globale', 'Remise globale (%)')} disabled={loading || posCart.length === 0} style={{ flex: 1, padding: '16px 10px', background: '#27272A', color: '#FBBF24', border: '1px solid #3F3F46', borderRadius: '12px', fontSize: '0.95rem', fontWeight: 'bold', cursor: 'pointer', opacity: posCart.length === 0 ? 0.5 : 1 }}>🎁 REMISE %</button>
               </div>
 
-              <button className="pos-btn" onClick={() => { if (window.confirm("Vider entièrement le panier ?")) { setPosCart([]); setRemiseGlobale(0); setClientActif(null); setPosBipeur(''); } }} style={{ width: '100%', padding: '12px', background: '#FEE2E2', color: COLORS.danger, border: 'none', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.95rem' }}>🗑️ Vider le panier</button>
+              <button className="pos-btn" onClick={() => { if (window.confirm("Vider entièrement le panier ?")) { setPosCart([]); setRemiseGlobale(0); setClientActif(null); setPosBipeur(''); } }} style={{ width: '100%', padding: '12px', background: 'rgba(239, 68, 68, 0.15)', color: '#F87171', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.95rem' }}>🗑️ Vider le panier</button>
             </div>
           </div>
         </div>
@@ -1424,8 +1771,8 @@ function FoodjiSystem() {
                 <div style={{ background: '#FFFBEB', padding: '16px', borderRadius: '12px', border: '1px solid #FEF3C7' }}>
                   <h4 style={{ marginTop: 0 }}>➕ Créer un nouveau Deal</h4>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    <input placeholder="Nom du Deal (ex: Offre Dimanche)" value={formPromo.titre} onChange={e => setFormPromo({ ...formPromo, titre: e.target.value })} style={{ padding: '10px', borderRadius: '8px', border: `1px solid ${COLORS.border}` }} />
-                    <input placeholder="Description (ex: 2 pizzas achetées = 1 offerte)" value={formPromo.description} onChange={e => setFormPromo({ ...formPromo, description: e.target.value })} style={{ padding: '10px', borderRadius: '8px', border: `1px solid ${COLORS.border}` }} />
+                    <input placeholder="Nom du Deal (ex: Offre Tacos)" value={formPromo.titre} onChange={e => setFormPromo({ ...formPromo, titre: e.target.value })} style={{ padding: '10px', borderRadius: '8px', border: `1px solid ${COLORS.border}` }} />
+                    <input placeholder="Description (ex: 2 Tacos L 55 DH / 2 XL 89 DH sans frites)" value={formPromo.description} onChange={e => setFormPromo({ ...formPromo, description: e.target.value })} style={{ padding: '10px', borderRadius: '8px', border: `1px solid ${COLORS.border}` }} />
                     <input type="number" placeholder="Prix du Pack complet (DH)" value={formPromo.prix} onChange={e => setFormPromo({ ...formPromo, prix: e.target.value })} style={{ padding: '10px', borderRadius: '8px', border: `1px solid ${COLORS.border}` }} />
                     <button className="pos-btn" onClick={savePromotion} style={{ padding: '12px', background: COLORS.promo, color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Mettre en ligne l'offre</button>
                   </div>
@@ -1470,6 +1817,9 @@ function FoodjiSystem() {
             <div style={{ width: '1px', height: '28px', background: COLORS.border }}></div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
               <strong style={{ color: COLORS.textLight }}>Promotions POS :</strong>
+              <button className="pos-btn" onClick={togglePromoTacosAdmin} style={{ padding: '8px 14px', borderRadius: '8px', background: parametres.promoTacosActive ? COLORS.success : COLORS.bg, color: parametres.promoTacosActive ? 'white' : COLORS.textMain, border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>
+                {parametres.promoTacosActive ? '🟢 TACOS (2L=55 / 2XL=89)' : '🔴 TACOS (2L=55 / 2XL=89)'}
+              </button>
               <button className="pos-btn" onClick={togglePromoDuoAdmin} style={{ padding: '8px 14px', borderRadius: '8px', background: parametres.promoDuoActive ? COLORS.success : COLORS.bg, color: parametres.promoDuoActive ? 'white' : COLORS.textMain, border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>
                 {parametres.promoDuoActive ? '🟢 DUO (-50%)' : '🔴 DUO (-50%)'}
               </button>
@@ -1599,10 +1949,10 @@ function FoodjiSystem() {
             </>
           )}
 
+          {/* GESTION DES STOCKS (SANS LE BOUTON RÉPARER PIZZAS) */}
           <div style={{ background: 'white', padding: '24px', borderRadius: '16px', marginBottom: '36px', border: `1px solid ${COLORS.border}` }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
               <h3 style={{ margin: 0, color: COLORS.primary, fontSize: '1.25rem', letterSpacing: '-0.02em' }}>🥕 GESTION DES STOCKS & INGRÉDIENTS</h3>
-              <button className="pos-btn" onClick={reparerPizzas} style={{ padding: '10px 14px', background: COLORS.secondary, color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>🔧 Réparer Tailles Pizzas</button>
             </div>
 
             <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '8px', display: 'flex', gap: '8px', marginBottom: '18px', scrollbarWidth: 'none' }}>
