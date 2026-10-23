@@ -4,7 +4,7 @@ import { signInWithEmailAndPassword, onAuthStateChanged, setPersistence, browser
 import { collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, setDoc, query, getDoc, orderBy, limit } from 'firebase/firestore';
 import './App.css';
 
-// PALETTE CALIBRÉE (UI DESIGN TASTE PRO - ZINC & BRAND FOODJI)
+// PALETTE CALIBRÉE (90% NEUTRAL ZINC / 10% INTENTIONAL ACCENT)
 const COLORS = {
   primary: '#A84438',
   primaryHover: '#8F372C',
@@ -15,15 +15,94 @@ const COLORS = {
   bg: '#F4F4F5',        // Zinc 100
   card: '#FFFFFF',
   border: '#E4E4E7',    // Zinc 200
+  borderStrong: '#D4D4D8', // Zinc 300
   success: '#10B981',
   danger: '#EF4444',
   warning: '#F59E0B',
   promo: '#D97706',
   textMain: '#09090B',  // Zinc 950
+  textMuted: '#52525B', // Zinc 600
   textLight: '#71717A', // Zinc 500
   pending: '#F97316',
   blue: '#2563EB'
 };
+
+// MOTEUR D'ICÔNES VECTORIELLES SVG (STYLE LUCIDE - TRAIT 1.75PX)
+const Icon = ({ name, size = 16, color = "currentColor", style = {} }) => {
+  const props = {
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: color,
+    strokeWidth: "1.75",
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    style: { flexShrink: 0, display: 'inline-block', verticalAlign: 'middle', ...style }
+  };
+
+  switch (name) {
+    case 'user':
+      return <svg {...props}><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
+    case 'users':
+      return <svg {...props}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
+    case 'store':
+      return <svg {...props}><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/></svg>;
+    case 'settings':
+      return <svg {...props}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>;
+    case 'trash':
+      return <svg {...props}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>;
+    case 'plus':
+      return <svg {...props}><path d="M12 5v14"/><path d="M5 12h14"/></svg>;
+    case 'minus':
+      return <svg {...props}><path d="M5 12h14"/></svg>;
+    case 'check':
+      return <svg {...props}><polyline points="20 6 9 17 4 12"/></svg>;
+    case 'x':
+      return <svg {...props}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+    case 'printer':
+      return <svg {...props}><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>;
+    case 'truck':
+      return <svg {...props}><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>;
+    case 'clock':
+      return <svg {...props}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
+    case 'chart':
+      return <svg {...props}><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>;
+    case 'tag':
+      return <svg {...props}><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/><path d="M7 7h.01"/></svg>;
+    case 'wallet':
+      return <svg {...props}><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>;
+    case 'power':
+      return <svg {...props}><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>;
+    case 'edit':
+      return <svg {...props}><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>;
+    case 'phone':
+      return <svg {...props}><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>;
+    case 'alert':
+      return <svg {...props}><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
+    case 'ban':
+      return <svg {...props}><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>;
+    case 'layers':
+      return <svg {...props}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>;
+    case 'logOut':
+      return <svg {...props}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
+    default:
+      return null;
+  }
+};
+
+// PASTILLE GÉOMÉTRIQUE D'ÉTAT (REMPLACE LES ÉMOJIS 🟢 / 🔴)
+const StatusDot = ({ active, colorActive = COLORS.success, colorInactive = '#A1A1AA' }) => (
+  <span style={{
+    display: 'inline-block',
+    width: '7px',
+    height: '7px',
+    borderRadius: '999px',
+    backgroundColor: active ? colorActive : colorInactive,
+    boxShadow: active ? `0 0 0 3px ${colorActive}28` : 'none',
+    flexShrink: 0
+  }} />
+);
 
 const INIT_VIANDES = [{ nom: "Poulet", available: true }, { nom: "Viande Hachée", available: true }, { nom: "Cordon Bleu", available: true }, { nom: "Nuggets", available: true }, { nom: "Poulet Crispy", available: true }];
 const INIT_GARNITURES_PIZZA = [{ nom: "Viande Hachée", available: true }, { nom: "Poulet", available: true }, { nom: "4 Fromages", available: true }, { nom: "Cannibale", available: true }, { nom: "Pepperoni", available: true }, { nom: "Thon", available: true }, { nom: "Charcuterie", available: true }, { nom: "Végétarienne", available: true }, { nom: "Fruits de Mer", available: true }];
@@ -32,7 +111,13 @@ const INIT_PATES = [{ nom: "Penne", available: true }, { nom: "Tagliatelle", ava
 const INIT_TAILLES_PIZZA = [{ nom: "M", available: true }, { nom: "L", available: true }];
 
 const TOUTES_CATEGORIES = ["Tacos", "Pizzas", "Burgers", "Panuozzo", "Pâtes", "Sides", "Les Burritos", "Koniks", "Plats", "Salades", "Boissons", "Suppléments"];
-const STOCK_TABS = [{ id: 'viandes', label: '🌮 Viandes' }, { id: 'garnitures', label: '🍕 Garnitures' }, { id: 'sauces', label: '🥣 Sauces' }, { id: 'pates', label: '🍝 Pâtes' }, { id: 'tailles_pizza', label: '📏 Tailles Pizza' }];
+const STOCK_TABS = [
+  { id: 'viandes', label: 'Viandes' },
+  { id: 'garnitures', label: 'Garnitures Pizza' },
+  { id: 'sauces', label: 'Sauces' },
+  { id: 'pates', label: 'Pâtes' },
+  { id: 'tailles_pizza', label: 'Tailles Pizza' }
+];
 const CAISSIERES = ["Fatima Zahra", "Nada", "Manager"];
 const NOTIF_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
 
@@ -42,10 +127,9 @@ const TACOS_EXTRAS = { "Sauce Fromagère": 10, "Supplément Cheddar": 7, "Suppl�
 const ACCOMPAGNEMENTS_PLATS = ["Frites", "Légumes Sautés", "Pâtes"];
 const EXCLUSIONS_BURGER = ["Sans Oignons", "Sans Tomates", "Sans Salade", "Sans Fromage", "Sans Sauce", "Sans Cornichons"];
 
-// Correction : "4 saisons" et "2 saisons" ont été retirées d'ici pour activer la Promo Dimanche automatiquement
+// Seules Fruits de mer et Cannibale sont exclues de la Promo Dimanche (4 saisons et 2 saisons sont incluses)
 const PIZZAS_EXCLUES_PROMO = ["fruits de mer", "cannibale"];
 
-// Helper universel pour convertir proprement les dates Firestore ou JS sans crash
 const toJSDate = (d) => {
   if (!d) return new Date();
   if (d instanceof Date) return d;
@@ -61,9 +145,9 @@ class ErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) return (
       <div style={{ padding: '40px', background: '#FEF2F2', color: '#991B1B', minHeight: '100vh', fontFamily: 'sans-serif' }}>
-        <h2>🚨 ERREUR FATALE INTERCEPTÉE</h2>
+        <h2 style={{ letterSpacing: '-0.02em' }}>Erreur système interceptée</h2>
         <div style={{ background: '#7F1D1D', color: 'white', padding: '20px', borderRadius: '12px', marginTop: '20px', fontFamily: 'monospace' }}>{this.state.errorMsg}</div>
-        <button onClick={() => window.location.reload()} style={{ marginTop: '20px', padding: '12px 24px', background: '#991B1B', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>🔄 Recharger l'application</button>
+        <button onClick={() => window.location.reload()} style={{ marginTop: '20px', padding: '12px 24px', background: '#991B1B', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Recharger l'application</button>
       </div>
     );
     return this.props.children;
@@ -73,6 +157,22 @@ class ErrorBoundary extends React.Component {
 function FoodjiSystem() {
   const [authState, setAuthState] = useState("LOADING");
   const [appMode, setAppMode] = useState('ADMIN');
+
+  // SYSTÈME DE TOASTS & MODALE DE CONFIRMATION (ZÉRO ALERT / CONFIRM / PROMPT NATIFS)
+  const [toasts, setToasts] = useState([]);
+  const [confirmModal, setConfirmModal] = useState({ active: false, title: '', message: '', confirmLabel: 'Confirmer', danger: false, onConfirm: null });
+
+  const notify = (message, type = 'info') => {
+    const id = Date.now() + Math.random();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 2800);
+  };
+
+  const requestConfirm = (title, message, onConfirm, danger = false, confirmLabel = 'Confirmer') => {
+    setConfirmModal({ active: true, title, message, confirmLabel, danger, onConfirm });
+  };
 
   const [menu, setMenu] = useState([]);
   const [commandes, setCommandes] = useState([]);
@@ -111,7 +211,7 @@ function FoodjiSystem() {
   const [clientActif, setClientActif] = useState(null);
 
   const [orderToPrint, setOrderToPrint] = useState(null);
-  const [numpad, setNumpad] = useState({ active: false, mode: '', targetId: null, label: '', value: '' });
+  const [numpad, setNumpad] = useState({ active: false, mode: '', targetId: null, label: '', value: '', motif: '' });
   const [showBilanGlobal, setShowBilanGlobal] = useState(false);
   const [showRenduMonnaie, setShowRenduMonnaie] = useState({ active: false, aRendre: 0, received: 0 });
   const [showCashOptions, setShowCashOptions] = useState(false);
@@ -123,7 +223,7 @@ function FoodjiSystem() {
   const [customizeItem, setCustomizeItem] = useState(null);
   const [customOptions, setCustomOptions] = useState({ garnitures: [], sauces: [], viandes: [], extras: [], cheesyCrust: false, typePate: '', accompagnements: [], exclusions: [] });
 
-  // État dédié pour le configurateur Pack Promo 2 Tacos (L = 55 DH / XL = 89 DH)
+  // Configurateur Pack Promo 2 Tacos (L = 55 DH / XL = 89 DH)
   const [promoTacosModal, setPromoTacosModal] = useState({
     active: false,
     taille: 'L',
@@ -148,7 +248,6 @@ function FoodjiSystem() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Correction de la fuite mémoire sur onAuthStateChanged
   useEffect(() => {
     let unsubscribeAuth = () => {};
     setPersistence(auth, browserLocalPersistence)
@@ -196,7 +295,6 @@ function FoodjiSystem() {
     const unsubPromos = onSnapshot(collection(db, "promotions"), (snap) => setPromotions(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
     const unsubClients = onSnapshot(collection(db, "clients"), (snap) => setClientsDB(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
 
-    // Protection Quota Firestore : Tri descendant + Limite aux 150 dernières commandes
     const qCmd = query(collection(db, "commandes"), orderBy("date", "desc"), limit(150));
     const unsubCmd = onSnapshot(qCmd, (snap) => {
       try {
@@ -215,7 +313,6 @@ function FoodjiSystem() {
     return () => { unsubStatus(); unsubHoraires(); unsubStocks(); unsubSession(); unsubServiceGlobal(); unsubMenu(); unsubPromos(); unsubClients(); unsubCmd(); };
   }, [authState]);
 
-  // Préserve les suppléments payants (extraPrice) sur le Pep's lors du changement Sur Place / Emporter
   useEffect(() => {
     setPosCart(prevCart => prevCart.map(item => {
       if (item.nom.includes("Pep's") && !item.isPrixModifie) {
@@ -230,21 +327,44 @@ function FoodjiSystem() {
     e.preventDefault();
     if (!email || !password) return;
     setLoading(true);
-    try { await signInWithEmailAndPassword(auth, email, password); } catch (err) { alert(`Erreur d'authentification : ${err.code}`); }
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (err) {
+      notify(`Identifiants incorrects (${err.code})`, 'error');
+    }
     setLoading(false);
   };
 
-  const toggleAvailability = async (item) => await updateDoc(doc(db, "produits", item.id), { available: !item.available });
-  const supprimerProduit = async (id) => { if (window.confirm("Supprimer définitivement ce produit du catalogue ?")) await deleteDoc(doc(db, "produits", id)); };
+  const toggleAvailability = async (item) => {
+    await updateDoc(doc(db, "produits", item.id), { available: !item.available });
+    notify(`${item.nom} : ${!item.available ? 'En ligne' : 'Mis en rupture'}`, !item.available ? 'success' : 'info');
+  };
+
+  const supprimerProduit = (id, nomProd) => {
+    requestConfirm(
+      "Supprimer le produit",
+      `Voulez-vous supprimer définitivement "${nomProd || 'ce produit'}" du catalogue ?`,
+      async () => {
+        await deleteDoc(doc(db, "produits", id));
+        notify("Produit supprimé du catalogue", "info");
+      },
+      true,
+      "Supprimer"
+    );
+  };
+
   const toggleStockItem = async (listName, index) => {
     const newList = [...(parametres.stocks[listName] || [])];
     newList[index].available = !newList[index].available;
     await updateDoc(doc(db, "parametres", "stocks"), { ...parametres.stocks, [listName]: newList });
+    notify(`${newList[index].nom} : ${newList[index].available ? 'Disponible' : 'Rupture'}`, newList[index].available ? 'success' : 'info');
   };
+
   const addNewStockItem = async () => {
     if (!newItemName.trim()) return;
     const newList = [...(parametres.stocks[activeStockTab] || []), { nom: newItemName.trim(), available: true }];
     await updateDoc(doc(db, "parametres", "stocks"), { ...parametres.stocks, [activeStockTab]: newList });
+    notify(`${newItemName.trim()} ajouté au stock`, 'success');
     setNewItemName('');
   };
 
@@ -257,16 +377,16 @@ function FoodjiSystem() {
       const newList = [...parametres.stocks[listName]];
       newList[index].available = false;
       await updateDoc(doc(db, "parametres", "stocks"), { ...parametres.stocks, [listName]: newList });
-      alert(`✅ [${nomItem}] mis en rupture de stock.`);
+      notify(`${nomItem} mis en rupture de stock`, 'error');
     }
     e.target.value = "";
   };
 
   const savePromotion = async () => {
-    if (!formPromo.titre || !formPromo.prix) return alert("Remplis le titre et le prix.");
+    if (!formPromo.titre || !formPromo.prix) return notify("Veuillez renseigner le titre et le prix du deal", "error");
     await addDoc(collection(db, "promotions"), { titre: formPromo.titre.trim(), description: formPromo.description.trim(), prix: Number(formPromo.prix), status: formPromo.status, date: new Date() });
     setFormPromo({ titre: '', description: '', prix: '', status: true });
-    alert("Deal ajouté avec succès !");
+    notify("Offre promotionnelle publiée", "success");
   };
 
   const togglePromoStatus = async (id, currentStatus) => await updateDoc(doc(db, "promotions", id), { status: !currentStatus });
@@ -285,18 +405,38 @@ function FoodjiSystem() {
     }
   };
 
-  const changerStatus = async (cmd, st) => {
-    if (st === 'Annulé' && cmd.total > 100) {
-      if (!window.confirm(`⚠️ ALERTE SÉCURITÉ\n\nÊtes-vous sûr de vouloir ANNULER cette commande de ${cmd.total} DH ?`)) return;
-    }
+  const executerChangementStatus = async (cmd, st) => {
     await updateDoc(doc(db, "commandes", cmd.id), { status: st });
     if (st === 'Terminé') await crediterPointsFidelite(cmd.tel, cmd.client || "Client Web");
+    notify(`Commande #${(cmd.id || '').substring(0, 4).toUpperCase()} : ${st}`, st === 'Annulé' ? 'error' : 'success');
   };
 
-  const encaisserRetourLivreur = async (cmd) => {
-    if (!window.confirm(`✅ Confirmer l'encaissement de ${cmd.total} DH apportés par le livreur ?`)) return;
-    await updateDoc(doc(db, "commandes", cmd.id), { status: 'Terminé', methodePaiement: 'Espèces' });
-    await crediterPointsFidelite(cmd.tel, cmd.client || "Client Livraison");
+  const changerStatus = (cmd, st) => {
+    if (st === 'Annulé' && cmd.total > 100) {
+      requestConfirm(
+        "Annulation de commande importante",
+        `Confirmez-vous l'annulation de cette commande de ${cmd.total} DH (${cmd.client || 'Client'}) ?`,
+        () => executerChangementStatus(cmd, st),
+        true,
+        "Annuler la commande"
+      );
+      return;
+    }
+    executerChangementStatus(cmd, st);
+  };
+
+  const encaisserRetourLivreur = (cmd) => {
+    requestConfirm(
+      "Encaissement retour livreur",
+      `Confirmer la réception de ${cmd.total} DH en espèces pour la commande de ${cmd.client} ?`,
+      async () => {
+        await updateDoc(doc(db, "commandes", cmd.id), { status: 'Terminé', methodePaiement: 'Espèces' });
+        await crediterPointsFidelite(cmd.tel, cmd.client || "Client Livraison");
+        notify(`${cmd.total} DH encaissés en caisse`, 'success');
+      },
+      false,
+      "Valider l'encaissement"
+    );
   };
 
   const handleCategoryChange = (e) => {
@@ -308,7 +448,7 @@ function FoodjiSystem() {
   };
 
   const saveProduit = async () => {
-    if (!formProd.nom.trim()) return;
+    if (!formProd.nom.trim()) return notify("Veuillez donner un nom au produit", "error");
     setLoading(true);
     const data = {
       nom: formProd.nom.trim(),
@@ -323,11 +463,11 @@ function FoodjiSystem() {
     if (formProd.image) data.image = formProd.image;
     if (editId) {
       await updateDoc(doc(db, "produits", editId), data);
-      alert("Produit modifié !");
+      notify("Produit mis à jour", "success");
       setEditId(null);
     } else {
       await addDoc(collection(db, "produits"), data);
-      alert("Produit ajouté !");
+      notify("Produit ajouté à la carte", "success");
     }
     setFormProd({ nom: '', description: '', image: '', categorie: 'Panuozzo', prixBase: '', variantes: [], excludeVIP: false });
     setLoading(false);
@@ -335,21 +475,21 @@ function FoodjiSystem() {
 
   const ajouterClientManuel = async () => {
     const telClean = newClientPhone.replace(/\s+/g, '');
-    if (telClean.length < 9) return alert("Numéro de téléphone invalide (au moins 9 chiffres).");
+    if (telClean.length < 9) return notify("Numéro invalide (9 chiffres minimum)", "error");
     const exist = clientsDB.find(c => (c.tel || '').replace(/\s+/g, '') === telClean);
-    if (exist) return alert("❌ Ce numéro existe déjà. Modifie sa fiche dans le tableau.");
+    if (exist) return notify("Ce numéro existe déjà dans la base CRM", "error");
     setLoading(true);
     try {
       await addDoc(collection(db, "clients"), {
         tel: telClean,
-        nom: newClientName.trim() || "Inconnu",
+        nom: newClientName.trim() || "Client",
         totalCommandes: Number(newClientOrders) || 0,
         remiseAuto: Math.min(100, Math.max(0, Number(newClientRemise) || 0)),
         lastOrder: new Date()
       });
       setNewClientPhone(''); setNewClientName(''); setNewClientOrders(''); setNewClientRemise('');
-      alert("✅ Client ajouté !");
-    } catch (e) { alert("Erreur lors de l'ajout."); }
+      notify("Client enregistré dans le CRM", "success");
+    } catch (e) { notify("Erreur lors de l'ajout du client", "error"); }
     setLoading(false);
   };
 
@@ -387,6 +527,7 @@ function FoodjiSystem() {
     await updateDoc(doc(db, "parametres", "service_global"), { ...serviceGlobal, fondsInitial: fInitial, fondsDeclare: true });
     await updateDoc(doc(db, "parametres", "session_caisse"), { isActive: true, caissiere: showFondsCaissePrompt.caissiere, startTime: new Date() });
     setShowFondsCaissePrompt({ active: false, caissiere: '' });
+    notify(`Service ouvert par ${showFondsCaissePrompt.caissiere}`, 'success');
   };
 
   const calculerVentilationComptable = (listeCommandes, fondsInitial) => {
@@ -425,21 +566,28 @@ function FoodjiSystem() {
     return { startT, ...calculerVentilationComptable(cmdsSession, serviceGlobal.fondsInitial) };
   };
 
-  const cloturerShift = async () => {
+  const cloturerShift = () => {
     const bilan = genererBilanShift();
     if (!bilan) return;
-    if (bilan.totalEnLivraison > 0) {
-      if (!window.confirm(`⚠️ ATTENTION : Il reste ${bilan.totalEnLivraison} DH en cours chez les livreurs non encaissés.\nVoulez-vous quand même clôturer le shift de ${sessionCaisse.caissiere} ?`)) return;
-    } else {
-      if (!window.confirm(`⚠️ Clôturer le shift de ${sessionCaisse.caissiere} ?`)) return;
-    }
-    const xData = { isX: true, caissiere: sessionCaisse.caissiere, date: new Date(), ...bilan };
-    setOrderToPrint(xData);
-    setTimeout(async () => {
-      window.print();
-      await updateDoc(doc(db, "parametres", "session_caisse"), { isActive: false, caissiere: '', startTime: null });
-      setTimeout(() => setOrderToPrint(null), 1000);
-    }, 500);
+    const msg = bilan.totalEnLivraison > 0
+      ? `Attention : ${bilan.totalEnLivraison} DH sont encore en cours chez les livreurs. Voulez-vous quand même clôturer le shift de ${sessionCaisse.caissiere} ?`
+      : `Confirmer la clôture du shift et l'impression du ticket X pour ${sessionCaisse.caissiere} ?`;
+
+    requestConfirm(
+      "Clôture de Shift (X)",
+      msg,
+      () => {
+        const xData = { isX: true, caissiere: sessionCaisse.caissiere, date: new Date(), ...bilan };
+        setOrderToPrint(xData);
+        setTimeout(async () => {
+          window.print();
+          await updateDoc(doc(db, "parametres", "session_caisse"), { isActive: false, caissiere: '', startTime: null });
+          setTimeout(() => setOrderToPrint(null), 1000);
+        }, 500);
+      },
+      bilan.totalEnLivraison > 0,
+      "Imprimer X et fermer"
+    );
   };
 
   const genererBilanGlobalZ = () => {
@@ -458,39 +606,47 @@ function FoodjiSystem() {
     return { startT, ...calculerVentilationComptable(cmdsZ, serviceGlobal.fondsInitial) };
   };
 
-  const cloturerZDefinitif = async () => {
+  const cloturerZDefinitif = () => {
     const bilan = genererBilanGlobalZ();
     if (!bilan) return;
     if (bilan.totalEnLivraison > 0) {
-      alert(`🚫 IMPOSSIBLE DE CLÔTURER LE Z : Il reste ${bilan.totalEnLivraison} DH dehors chez les livreurs. Encaissez d'abord les retours livreurs en haut de la page Admin.`);
+      notify(`Impossible de clôturer le Z : ${bilan.totalEnLivraison} DH sont encore chez les livreurs`, 'error');
       return;
     }
-    if (!window.confirm("⚠️ ATTENTION : Cela va imprimer le bilan final Z, L'ARCHIVER, et REMETTRE TOUS LES COMPTEURS À ZÉRO. Confirmer ?")) return;
-    const now = new Date();
-    const zData = { isZ: true, date: now, ...bilan };
-    setOrderToPrint(zData);
 
-    try {
-      await addDoc(collection(db, "historique_z"), {
-        dateCloture: now,
-        startT: bilan.startT,
-        fondsInitial: bilan.fondsInitial,
-        totalEspeces: bilan.totalEspeces,
-        totalDépenses: bilan.totalDépenses,
-        totalLivrApp: bilan.totalLivrApp,
-        totalGeneral: bilan.totalGeneral,
-        netEnCaisse: bilan.netEnCaisse,
-        nbCommandes: bilan.nbCommandes
-      });
-    } catch (e) { console.error("Erreur lors de l'archivage du Z :", e); }
+    requestConfirm(
+      "Clôture générale de journée (Z)",
+      "Cette action va imprimer le bilan final Z, l'archiver et remettre tous les compteurs de caisse à zéro.",
+      async () => {
+        const now = new Date();
+        const zData = { isZ: true, date: now, ...bilan };
+        setOrderToPrint(zData);
 
-    setTimeout(async () => {
-      window.print();
-      await updateDoc(doc(db, "parametres", "service_global"), { lastZDate: now, fondsInitial: 0, fondsDeclare: false });
-      if (sessionCaisse.isActive) await updateDoc(doc(db, "parametres", "session_caisse"), { isActive: false, caissiere: '', startTime: null });
-      setShowBilanGlobal(false);
-      setTimeout(() => setOrderToPrint(null), 1000);
-    }, 500);
+        try {
+          await addDoc(collection(db, "historique_z"), {
+            dateCloture: now,
+            startT: bilan.startT,
+            fondsInitial: bilan.fondsInitial,
+            totalEspeces: bilan.totalEspeces,
+            totalDépenses: bilan.totalDépenses,
+            totalLivrApp: bilan.totalLivrApp,
+            totalGeneral: bilan.totalGeneral,
+            netEnCaisse: bilan.netEnCaisse,
+            nbCommandes: bilan.nbCommandes
+          });
+        } catch (e) { console.error("Erreur lors de l'archivage du Z :", e); }
+
+        setTimeout(async () => {
+          window.print();
+          await updateDoc(doc(db, "parametres", "service_global"), { lastZDate: now, fondsInitial: 0, fondsDeclare: false });
+          if (sessionCaisse.isActive) await updateDoc(doc(db, "parametres", "session_caisse"), { isActive: false, caissiere: '', startTime: null });
+          setShowBilanGlobal(false);
+          setTimeout(() => setOrderToPrint(null), 1000);
+        }, 500);
+      },
+      true,
+      "Archiver et remettre à zéro"
+    );
   };
 
   const handlePhoneInput = (val) => {
@@ -518,7 +674,7 @@ function FoodjiSystem() {
     });
   };
 
-  // Helpers pour le configurateur Pack Promo 2 Tacos
+  // Configurateur Pack Promo 2 Tacos
   const openPromoTacosBuilder = (taille) => {
     setPromoTacosModal({
       active: true,
@@ -548,7 +704,7 @@ function FoodjiSystem() {
   const validerPackPromoTacos = () => {
     const maxV = promoTacosModal.taille === 'XL' ? 3 : 2;
     if (promoTacosModal.tacos1Viandes.length === 0 || promoTacosModal.tacos2Viandes.length === 0) {
-      return alert(`Sélectionne au moins 1 viande (max ${maxV}) pour chacun des 2 Tacos.`);
+      return notify(`Sélectionnez au moins 1 viande (max ${maxV}) pour chaque Tacos`, 'error');
     }
 
     let extraPrice = 0;
@@ -556,9 +712,9 @@ function FoodjiSystem() {
 
     if (promoTacosModal.avecFritesBoisson) {
       extraPrice += 15;
-      details.push("🍟🥤 + MENU FRITES & BOISSON 1L (+15DH)");
+      details.push("[OPTION +15DH] Avec Frites + Boisson 1L");
     } else {
-      details.push("🚫 LES 2 SANS FRITES (Offre Promo)");
+      details.push("[SANS FRITES] Offre Promo 2 Tacos");
     }
 
     const t1Sauces = promoTacosModal.tacos1Sauces.length > 0 ? ` | Sauces: ${promoTacosModal.tacos1Sauces.join(', ')}` : '';
@@ -602,12 +758,12 @@ function FoodjiSystem() {
       id: 'supplement_promo_tacos_menu',
       categorie: 'Suppléments',
       varianteNom: null,
-      nom: '🍟🥤 Option Promo : Frites + Boisson 1L',
+      nom: 'Option Promo : Frites + Boisson 1L',
       extraPrice: 15,
       prixFinal: 15,
       isPrixModifie: false,
       isPromoPack: true,
-      detailsTxt: ['🍟🥤 Avec Frites + Boisson 1L pour Promo Tacos'],
+      detailsTxt: ['[OPTION +15DH] Avec Frites + Boisson 1L pour Promo Tacos'],
       excludeVIP: true,
       qte: 1,
       idCart: Date.now() + Math.random()
@@ -618,10 +774,10 @@ function FoodjiSystem() {
     const prod = customizeItem.produit; const vari = customizeItem.variante;
     if (prod.categorie === 'Tacos' && prod.nom.toLowerCase().includes('mixte')) {
       const maxViandes = vari?.nom === 'XXL' ? 4 : vari?.nom === 'XL' ? 3 : 2;
-      if (customOptions.viandes.length !== maxViandes) return alert(`Tu dois sélectionner EXACTEMENT ${maxViandes} viandes.`);
+      if (customOptions.viandes.length !== maxViandes) return notify(`Sélectionnez exactement ${maxViandes} viandes`, 'error');
     }
-    if (prod.categorie === 'Pâtes' && !customOptions.typePate) return alert("Choisis un type de pâtes.");
-    if (prod.categorie === 'Plats' && customOptions.accompagnements.length !== 2) return alert("Choisis EXACTEMENT 2 accompagnements.");
+    if (prod.categorie === 'Pâtes' && !customOptions.typePate) return notify("Choisissez un type de pâtes", "error");
+    if (prod.categorie === 'Plats' && customOptions.accompagnements.length !== 2) return notify("Choisissez exactement 2 accompagnements", "error");
     addToCartFinal(prod, vari, customOptions);
   };
 
@@ -632,7 +788,7 @@ function FoodjiSystem() {
 
     if (produit.categorie === 'Pâtes') details.push(`Type: ${options.typePate}`);
     if (produit.categorie === 'Plats') details.push(`Accompagnements: ${options.accompagnements.join(' et ')}`);
-    if (produit.categorie === 'Burgers' && options.exclusions?.length > 0) options.exclusions.forEach(exc => details.push(`🚫 ${exc}`));
+    if (produit.categorie === 'Burgers' && options.exclusions?.length > 0) options.exclusions.forEach(exc => details.push(`[SANS] ${exc}`));
 
     if (produit.categorie === 'Pizzas') {
       if (options.garnitures?.length > 0) details.push(`Garnitures: ${options.garnitures.join(', ')}`);
@@ -694,12 +850,12 @@ function FoodjiSystem() {
   let promoDuoDiscount = 0;
   let promoTacosDiscount = 0;
 
-  // 1. MOTEUR PROMO DIMANCHE (2 Pizzas M achetées = 3ème offerte, inclut désormais 2 saisons et 4 saisons)
+  // 1. MOTEUR PROMO DIMANCHE (2 Pizzas M achetées = 3ème offerte, inclut 2 saisons et 4 saisons)
   if (parametres.promoDimancheActive) {
     let pizzasDimanchePrices = [];
     posCart.forEach(item => {
       const vNom = (item.varianteNom || '').trim().toUpperCase();
-      const isMoyenne = vNom !== 'L'; // Accepte 'M', 'Standard' ou pizza sans taille L
+      const isMoyenne = vNom !== 'L';
       const isExcluded = PIZZAS_EXCLUES_PROMO.some(ex => item.nom.toLowerCase().includes(ex));
       if (item.categorie === 'Pizzas' && isMoyenne && !isExcluded && !item.isPrixModifie) {
         const basePizzaPrice = Math.max(0, Number(item.prixFinal) - (Number(item.extraPrice) || 0));
@@ -713,7 +869,7 @@ function FoodjiSystem() {
     }
   }
 
-  // 2. MOTEUR PROMO TACOS AUTOMATIQUE (Si la caissière saisit 2 Tacos L ou 2 Tacos XL séparément)
+  // 2. MOTEUR PROMO TACOS AUTOMATIQUE (2 Tacos L = 55 DH / 2 Tacos XL = 89 DH)
   if (parametres.promoTacosActive) {
     let tacosLBasePrices = [];
     let tacosXLBasePrices = [];
@@ -767,7 +923,7 @@ function FoodjiSystem() {
   const totalRemises = montantRemiseGlobale + remiseCRM + promoDuoDiscount + promoDimancheDiscount + promoTacosDiscount;
   const totalCart = Math.max(0, sousTotalCart + fraisLivraison - totalRemises);
 
-  const openNumpad = (mode, label, targetId = null) => setNumpad({ active: true, mode, label, targetId, value: '' });
+  const openNumpad = (mode, label, targetId = null) => setNumpad({ active: true, mode, label, targetId, value: '', motif: '' });
   const handleNumpadKey = (val) => {
     if (val === 'DEL') setNumpad({ ...numpad, value: numpad.value.slice(0, -1) });
     else if (val === 'OK') applyNumpadValue();
@@ -777,26 +933,25 @@ function FoodjiSystem() {
   const applyNumpadValue = async () => {
     const valNum = Number(numpad.value) || 0;
     if (numpad.mode === 'remise_globale') {
-      if (valNum > 100) return alert("La remise ne peut pas dépasser 100%");
+      if (valNum > 100) return notify("La remise ne peut pas dépasser 100%", "error");
       setRemiseGlobale(valNum);
     } else if (numpad.mode === 'prix_article') {
       setPosCart(posCart.map(it => it.idCart === numpad.targetId ? { ...it, prixFinal: valNum, isPrixModifie: true } : it));
     } else if (numpad.mode === 'encaissement_especes') {
-      if (valNum < totalCart) return alert("Le montant donné est inférieur au total.");
-      setNumpad({ active: false, mode: '', targetId: null, label: '', value: '' });
+      if (valNum < totalCart) return notify("Le montant reçu est inférieur au total à payer", "error");
+      setNumpad({ active: false, mode: '', targetId: null, label: '', value: '', motif: '' });
       setShowRenduMonnaie({ active: true, aRendre: valNum - totalCart, received: valNum });
       return;
     } else if (numpad.mode === 'depense') {
-      if (valNum <= 0) return alert("Montant invalide");
-      const motif = window.prompt("Motif de la dépense (ex: Eau, Fournitures...) :");
-      if (!motif || !motif.trim()) return;
+      if (valNum <= 0) return notify("Veuillez saisir un montant supérieur à 0 DH", "error");
+      if (!numpad.motif || !numpad.motif.trim()) return notify("Veuillez saisir le motif du décaissement", "error");
       setLoading(true);
       const newDepense = {
         client: "DÉCAISSEMENT",
         caissiere: sessionCaisse.caissiere || "Manager",
         type: "depense",
-        commentaire: motif.trim(),
-        items: [{ nom: `Dépense: ${motif.trim()}`, prixFinal: -valNum, qte: 1 }],
+        commentaire: numpad.motif.trim(),
+        items: [{ nom: `Dépense: ${numpad.motif.trim()}`, prixFinal: -valNum, qte: 1 }],
         total: -valNum,
         status: "Terminé",
         methodePaiement: "Espèces",
@@ -807,25 +962,20 @@ function FoodjiSystem() {
       newDepense.isDepense = true;
       setOrderToPrint(newDepense);
       setTimeout(() => { window.print(); setTimeout(() => setOrderToPrint(null), 1000); }, 500);
+      notify(`Décaissement de ${valNum} DH enregistré`, 'info');
       setLoading(false);
     }
-    setNumpad({ active: false, mode: '', targetId: null, label: '', value: '' });
+    setNumpad({ active: false, mode: '', targetId: null, label: '', value: '', motif: '' });
   };
 
-  const validerCommandePOS = async (methodePaiement, especeRecue = null, forceStatus = "Terminé") => {
-    if (posCart.length === 0) return alert("Panier vide !");
-    if (posOrderType === 'livraison' && !posAddress.trim()) {
-      if (!window.confirm("⚠️ Aucune adresse de livraison n'est renseignée. Continuer quand même ?")) return;
-    }
-
+  const executerValidationCommandePOS = async (methodePaiement, especeRecue = null, forceStatus = "Terminé") => {
     setLoading(true);
     const finalClientName = posClientName.trim() ? posClientName.trim() : "Non spécifié";
 
-    // Si promoTacosDiscount est appliquée automatiquement sur des Tacos individuels sans pack frites+boisson, on le signale clairement à la cuisine
     const hasOptionFritesBoisson = posCart.some(it => it.id === 'supplement_promo_tacos_menu');
     const itemsFinal = posCart.map(it => {
       if (promoTacosDiscount > 0 && it.categorie === 'Tacos' && (it.varianteNom === 'L' || it.varianteNom === 'XL') && !it.isPromoPack) {
-        const mentionFrites = hasOptionFritesBoisson ? '🍟🥤 AVEC FRITES + BOISSON 1L (Promo)' : '🚫 SANS FRITES (Promo Tacos)';
+        const mentionFrites = hasOptionFritesBoisson ? '[OPTION +15DH] Avec Frites + Boisson 1L' : '[SANS FRITES] Offre Promo Tacos';
         const existingDetails = it.detailsTxt || [];
         if (!existingDetails.includes(mentionFrites)) {
           return { ...it, detailsTxt: [mentionFrites, ...existingDetails] };
@@ -869,8 +1019,24 @@ function FoodjiSystem() {
       setTimeout(() => { window.print(); setTimeout(() => setOrderToPrint(null), 1000); }, 500);
 
       setPosCart([]); setPosPhone(''); setPosNote(''); setPosClientName(''); setPosAddress(''); setPosBipeur(''); setPosOrderType('sur_place'); setRemiseGlobale(0); setClientActif(null); setShowRenduMonnaie({ active: false, aRendre: 0, received: 0 });
-    } catch (e) { alert("Erreur lors de la création de la commande."); }
+      notify("Commande validée et envoyée à l'impression", "success");
+    } catch (e) { notify("Erreur lors de l'enregistrement de la commande", "error"); }
     setLoading(false);
+  };
+
+  const validerCommandePOS = (methodePaiement, especeRecue = null, forceStatus = "Terminé") => {
+    if (posCart.length === 0) return notify("Le panier est vide", "error");
+    if (posOrderType === 'livraison' && !posAddress.trim()) {
+      requestConfirm(
+        "Adresse de livraison manquante",
+        "Aucune adresse de livraison n'est renseignée. Voulez-vous valider la commande quand même ?",
+        () => executerValidationCommandePOS(methodePaiement, especeRecue, forceStatus),
+        false,
+        "Continuer sans adresse"
+      );
+      return;
+    }
+    executerValidationCommandePOS(methodePaiement, especeRecue, forceStatus);
   };
 
   const imprimerCommandeExistante = (cmd) => {
@@ -882,30 +1048,77 @@ function FoodjiSystem() {
     if (it.detailsTxt && it.detailsTxt.length > 0) return it.detailsTxt;
     let d = [];
     if (it.choixPates) d.push(`Type: ${it.choixPates}`);
-    if (it.isCheesyCrust) d.push(`★ CHEESY CRUST`);
+    if (it.isCheesyCrust) d.push(`* CHEESY CRUST`);
     if (it.optionsChoisies?.length > 0) d.push(`Options: ${it.optionsChoisies.join(', ')}`);
     if (it.sauces?.length > 0) d.push(`Sauces: ${it.sauces.join(', ')}`);
     if (it.extras?.length > 0) { const extrasText = it.extras.map(e => e.nom ? e.nom : e).join(', '); d.push(`Extras: ${extrasText}`); }
-    if (it.sans?.length > 0) it.sans.forEach(exc => d.push(`🚫 ${exc}`));
+    if (it.sans?.length > 0) it.sans.forEach(exc => d.push(`[SANS] ${exc}`));
     return d;
   };
 
   const commandesWebEnAttente = commandes.filter(c => c.status === 'En attente' || c.status === 'En cours de validation').length;
   const commandesEnLivraison = commandes.filter(c => c.status === 'En Livraison');
 
+  // RENDU DES TOASTS FLOTTANTS ET DE LA MODALE DE CONFIRMATION
+  const renderSystemOverlays = () => (
+    <>
+      <div className="no-print" style={{ position: 'fixed', top: '16px', right: '16px', zIndex: 9999, display: 'flex', flexDirection: 'column', gap: '8px', pointerEvents: 'none' }}>
+        {toasts.map(t => (
+          <div key={t.id} className="modal-box" style={{
+            background: COLORS.secondary,
+            color: '#FAFAFA',
+            padding: '12px 16px',
+            borderRadius: '12px',
+            border: `1px solid ${t.type === 'error' ? COLORS.danger : t.type === 'success' ? COLORS.success : COLORS.darkBorder}`,
+            boxShadow: '0 10px 25px -5px rgba(0,0,0,0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            fontSize: '0.9rem',
+            fontWeight: '600',
+            pointerEvents: 'auto'
+          }}>
+            <StatusDot active={true} colorActive={t.type === 'error' ? COLORS.danger : t.type === 'success' ? COLORS.success : COLORS.blue} />
+            <span>{t.message}</span>
+          </div>
+        ))}
+      </div>
+
+      {confirmModal.active && (
+        <div className="no-print" style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(9, 9, 11, 0.72)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9500 }}>
+          <div className="modal-box" style={{ background: 'white', padding: '28px', borderRadius: '16px', width: '90%', maxWidth: '420px', border: `1px solid ${COLORS.border}`, boxShadow: '0 20px 40px -15px rgba(0,0,0,0.3)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+              <Icon name="alert" size={20} color={confirmModal.danger ? COLORS.danger : COLORS.textMain} />
+              <h3 style={{ margin: 0, fontSize: '1.15rem', letterSpacing: '-0.02em', color: COLORS.textMain }}>{confirmModal.title}</h3>
+            </div>
+            <p style={{ margin: '0 0 24px 0', color: COLORS.textMuted, fontSize: '0.95rem', lineHeight: 1.5 }}>{confirmModal.message}</p>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button className="pos-btn" onClick={() => setConfirmModal({ ...confirmModal, active: false })} style={{ padding: '10px 18px', borderRadius: '8px', border: `1px solid ${COLORS.border}`, background: 'white', color: COLORS.textMain, fontWeight: '600', cursor: 'pointer' }}>Annuler</button>
+              <button className="pos-btn" onClick={() => { const fn = confirmModal.onConfirm; setConfirmModal({ ...confirmModal, active: false }); if (fn) fn(); }} style={{ padding: '10px 18px', borderRadius: '8px', border: 'none', background: confirmModal.danger ? COLORS.danger : COLORS.secondary, color: 'white', fontWeight: '600', cursor: 'pointer' }}>{confirmModal.confirmLabel}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+
   if (authState === "LOADING") return (
     <div style={{ background: COLORS.secondary, height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
-      <h3 style={{ letterSpacing: '-0.02em' }}>Chargement du système Foodji...</h3>
+      <h3 style={{ letterSpacing: '-0.02em', fontWeight: '600' }}>Initialisation Foodji System...</h3>
     </div>
   );
 
   if (authState === null) return (
     <div style={{ background: COLORS.bg, height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <form onSubmit={handleLogin} className="modal-box" style={{ background: 'white', padding: '40px', borderRadius: '16px', width: '360px', textAlign: 'center', border: `1px solid ${COLORS.border}`, boxShadow: '0 10px 25px -5px rgba(0,0,0,0.05)' }}>
-        <h2 style={{ marginTop: 0, letterSpacing: '-0.03em', color: COLORS.textMain }}>⚙️ Foodji Système</h2>
-        <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} style={{ width: '100%', padding: '12px', margin: '15px 0', border: `1px solid ${COLORS.border}`, borderRadius: '10px', boxSizing: 'border-box', fontSize: '1rem' }} />
-        <input type="password" placeholder="Mot de passe" value={password} onChange={e => setPassword(e.target.value)} style={{ width: '100%', padding: '12px', marginBottom: '20px', border: `1px solid ${COLORS.border}`, borderRadius: '10px', boxSizing: 'border-box', fontSize: '1rem' }} />
-        <button type="submit" className="pos-btn" style={{ width: '100%', padding: '14px', background: COLORS.primary, color: 'white', border: 'none', borderRadius: '10px', fontWeight: 'bold', fontSize: '1rem', cursor: 'pointer' }}>{loading ? 'Connexion...' : 'Se connecter'}</button>
+      {renderSystemOverlays()}
+      <form onSubmit={handleLogin} className="modal-box" style={{ background: 'white', padding: '36px', borderRadius: '16px', width: '360px', border: `1px solid ${COLORS.border}`, boxShadow: '0 10px 25px -5px rgba(0,0,0,0.05)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+          <Icon name="store" size={22} color={COLORS.primary} />
+          <h2 style={{ margin: 0, letterSpacing: '-0.03em', color: COLORS.textMain, fontSize: '1.4rem' }}>Foodji System</h2>
+        </div>
+        <input type="email" placeholder="Adresse email" value={email} onChange={e => setEmail(e.target.value)} style={{ width: '100%', padding: '12px', marginBottom: '12px', border: `1px solid ${COLORS.border}`, borderRadius: '8px', boxSizing: 'border-box', fontSize: '0.95rem' }} />
+        <input type="password" placeholder="Mot de passe" value={password} onChange={e => setPassword(e.target.value)} style={{ width: '100%', padding: '12px', marginBottom: '20px', border: `1px solid ${COLORS.border}`, borderRadius: '8px', boxSizing: 'border-box', fontSize: '0.95rem' }} />
+        <button type="submit" className="pos-btn" style={{ width: '100%', padding: '13px', background: COLORS.secondary, color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600', fontSize: '0.95rem', cursor: 'pointer' }}>{loading ? 'Authentification...' : 'Se connecter'}</button>
       </form>
     </div>
   );
@@ -999,7 +1212,7 @@ function FoodjiSystem() {
                   <div>{it.qte > 1 ? `${it.qte}x ` : ''}{it.nom}</div>
                   {details.length > 0 && (
                     <div style={{ fontSize: '14px', marginLeft: '10px', fontWeight: 'normal' }}>
-                      {details.map((dt, j) => <div key={j} style={{ fontWeight: (dt.includes('🚫') || dt.includes('🍟🥤')) ? 'bold' : 'normal' }}>• {dt}</div>)}
+                      {details.map((dt, j) => <div key={j} style={{ fontWeight: (dt.includes('[SANS') || dt.includes('[OPTION')) ? 'bold' : 'normal' }}>• {dt}</div>)}
                     </div>
                   )}
                 </li>
@@ -1073,19 +1286,19 @@ function FoodjiSystem() {
 
           {orderToPrint.remisePromoDimanche > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '5px', fontWeight: 'bold' }}>
-              <span>🎁 PROMO DIMANCHE (3ème Gratuite)</span><span>- {orderToPrint.remisePromoDimanche} DH</span>
+              <span>PROMO DIMANCHE (3ème Offert)</span><span>- {orderToPrint.remisePromoDimanche} DH</span>
             </div>
           )}
 
           {orderToPrint.remisePromoTacos > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '5px', fontWeight: 'bold' }}>
-              <span>🌮 PROMO TACOS (2L=55 / 2XL=89)</span><span>- {orderToPrint.remisePromoTacos} DH</span>
+              <span>PROMO TACOS (2L=55 / 2XL=89)</span><span>- {orderToPrint.remisePromoTacos} DH</span>
             </div>
           )}
 
           {orderToPrint.remisePromoDuo > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '5px', fontWeight: 'bold' }}>
-              <span>🎁 PROMO DUO (-50%)</span><span>- {orderToPrint.remisePromoDuo} DH</span>
+              <span>PROMO DUO (-50%)</span><span>- {orderToPrint.remisePromoDuo} DH</span>
             </div>
           )}
 
@@ -1114,26 +1327,33 @@ function FoodjiSystem() {
     if (!sessionCaisse.isActive || !sessionCaisse.startTime || !serviceGlobal.fondsDeclare) {
       return (
         <div style={{ display: 'flex', height: '100vh', background: COLORS.secondary, alignItems: 'center', justifyContent: 'center', color: 'white', flexDirection: 'column' }}>
-          <h1 style={{ fontSize: '2.8rem', marginBottom: '32px', letterSpacing: '-0.04em' }}>CAISSE FERMÉE</h1>
+          {renderSystemOverlays()}
+          <div style={{ fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: '#A1A1AA', marginBottom: '8px' }}>Terminal Point de Vente</div>
+          <h1 style={{ fontSize: '2.4rem', margin: '0 0 32px 0', letterSpacing: '-0.04em' }}>Caisse Fermée</h1>
 
           {!showFondsCaissePrompt.active ? (
-            <div className="modal-box" style={{ background: 'white', color: COLORS.textMain, padding: '36px', borderRadius: '20px', width: '400px', textAlign: 'center', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.4)' }}>
-              <h2 style={{ marginTop: 0, letterSpacing: '-0.02em' }}>Ouvrir le service</h2>
-              <p style={{ color: COLORS.textLight }}>Sélectionnez l'opérateur de caisse :</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '20px' }}>
+            <div className="modal-box" style={{ background: 'white', color: COLORS.textMain, padding: '32px', borderRadius: '16px', width: '380px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.4)' }}>
+              <h2 style={{ marginTop: 0, letterSpacing: '-0.02em', fontSize: '1.3rem' }}>Ouvrir un service</h2>
+              <p style={{ color: COLORS.textLight, fontSize: '0.95rem', marginBottom: '20px' }}>Sélectionnez l'opérateur responsable du tiroir :</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {CAISSIERES.map(nom => (
-                  <button key={nom} className="pos-btn" onClick={() => demanderOuvertureCaisse(nom)} style={{ padding: '18px', fontSize: '1.35rem', fontWeight: 'bold', borderRadius: '12px', border: `1px solid ${COLORS.border}`, background: COLORS.bg, cursor: 'pointer', color: COLORS.textMain }}>{nom}</button>
+                  <button key={nom} className="pos-btn" onClick={() => demanderOuvertureCaisse(nom)} style={{ padding: '15px 18px', fontSize: '1.05rem', fontWeight: '600', borderRadius: '8px', border: `1px solid ${COLORS.border}`, background: COLORS.bg, cursor: 'pointer', color: COLORS.textMain, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span>{nom}</span>
+                    <Icon name="user" size={16} color={COLORS.textLight} />
+                  </button>
                 ))}
               </div>
-              <button className="pos-btn" onClick={() => setAppMode('ADMIN')} style={{ marginTop: '28px', padding: '10px', border: 'none', background: 'transparent', color: COLORS.textLight, textDecoration: 'underline', cursor: 'pointer', fontWeight: '500' }}>⚙️ Retour Administration</button>
+              <button className="pos-btn" onClick={() => setAppMode('ADMIN')} style={{ width: '100%', marginTop: '24px', padding: '10px', border: 'none', background: 'transparent', color: COLORS.textLight, cursor: 'pointer', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                <Icon name="settings" size={15} /> Retour Administration
+              </button>
             </div>
           ) : (
-            <div className="modal-box" style={{ background: 'white', color: COLORS.textMain, padding: '36px', borderRadius: '20px', width: '400px', textAlign: 'center', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.4)' }}>
-              <h2 style={{ marginTop: 0, letterSpacing: '-0.02em' }}>Fonds de Caisse</h2>
-              <p style={{ fontSize: '1.05rem', color: COLORS.textLight }}>Déclarer le fond de tiroir pour <strong style={{ color: COLORS.textMain }}>{showFondsCaissePrompt.caissiere}</strong> :</p>
-              <input type="number" className="num-tabular" placeholder="Ex: 300" value={fondsInitialInput} onChange={e => setFondsInitialInput(e.target.value)} style={{ width: '100%', padding: '15px', fontSize: '2rem', textAlign: 'center', border: `2px solid ${COLORS.border}`, borderRadius: '12px', marginBottom: '20px', boxSizing: 'border-box', fontWeight: 'bold' }} />
-              <button className="pos-btn" onClick={validerOuvertureCaisse} style={{ width: '100%', padding: '16px', background: COLORS.success, color: 'white', fontWeight: 'bold', fontSize: '1.15rem', borderRadius: '12px', border: 'none', cursor: 'pointer' }}>✅ Valider l'ouverture</button>
-              <button className="pos-btn" onClick={() => setShowFondsCaissePrompt({ active: false, caissiere: '' })} style={{ marginTop: '15px', padding: '10px', border: 'none', background: 'transparent', color: COLORS.textLight, textDecoration: 'underline', cursor: 'pointer' }}>Annuler</button>
+            <div className="modal-box" style={{ background: 'white', color: COLORS.textMain, padding: '32px', borderRadius: '16px', width: '380px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.4)' }}>
+              <h2 style={{ marginTop: 0, letterSpacing: '-0.02em', fontSize: '1.3rem' }}>Fonds de Caisse Initial</h2>
+              <p style={{ fontSize: '0.95rem', color: COLORS.textLight }}>Montant en espèces présent dans le tiroir pour <strong style={{ color: COLORS.textMain }}>{showFondsCaissePrompt.caissiere}</strong> :</p>
+              <input type="number" className="num-tabular" placeholder="0 DH" value={fondsInitialInput} onChange={e => setFondsInitialInput(e.target.value)} style={{ width: '100%', padding: '14px', fontSize: '1.8rem', textAlign: 'center', border: `1px solid ${COLORS.borderStrong}`, borderRadius: '8px', marginBottom: '18px', boxSizing: 'border-box', fontWeight: 'bold' }} />
+              <button className="pos-btn" onClick={validerOuvertureCaisse} style={{ width: '100%', padding: '14px', background: COLORS.secondary, color: 'white', fontWeight: '600', fontSize: '1rem', borderRadius: '8px', border: 'none', cursor: 'pointer' }}>Valider l'ouverture</button>
+              <button className="pos-btn" onClick={() => setShowFondsCaissePrompt({ active: false, caissiere: '' })} style={{ width: '100%', marginTop: '12px', padding: '10px', border: 'none', background: 'transparent', color: COLORS.textLight, cursor: 'pointer', fontWeight: '500' }}>Annuler</button>
             </div>
           )}
         </div>
@@ -1143,115 +1363,123 @@ function FoodjiSystem() {
     return (
       <>
         {renderTickets()}
+        {renderSystemOverlays()}
 
         {/* MODALE CONFIGURATEUR PACK PROMO 2 TACOS (L = 55 DH / XL = 89 DH) */}
         {promoTacosModal.active && (
-          <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(9, 9, 11, 0.8)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2500 }}>
-            <div className="modal-box" style={{ background: 'white', width: '92%', maxWidth: '880px', borderRadius: '20px', padding: '24px', display: 'flex', flexDirection: 'column', maxHeight: '92vh' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${COLORS.border}`, paddingBottom: '14px' }}>
+          <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(9, 9, 11, 0.78)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2500 }}>
+            <div className="modal-box" style={{ background: 'white', width: '92%', maxWidth: '880px', borderRadius: '16px', padding: '24px', display: 'flex', flexDirection: 'column', maxHeight: '92vh', border: `1px solid ${COLORS.border}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${COLORS.border}`, paddingBottom: '16px' }}>
                 <div>
-                  <h2 style={{ margin: 0, color: COLORS.primary, letterSpacing: '-0.02em' }}>
-                    🌮 Pack Promo : 2 Tacos {promoTacosModal.taille} ({promoTacosModal.prixPack} DH)
-                  </h2>
-                  <div style={{ fontSize: '0.9rem', color: COLORS.textLight, marginTop: '4px' }}>
-                    Par défaut : <strong style={{ color: COLORS.danger }}>🚫 Les deux sans frites</strong> • Option Menu Frites + Boisson 1L à +15 DH
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ background: COLORS.secondary, color: 'white', fontSize: '0.75rem', fontWeight: '700', padding: '3px 8px', borderRadius: '6px', letterSpacing: '0.04em' }}>OFFRE PACK</span>
+                    <h2 style={{ margin: 0, color: COLORS.textMain, letterSpacing: '-0.02em', fontSize: '1.35rem' }}>
+                      2 Tacos {promoTacosModal.taille} — {promoTacosModal.prixPack} DH
+                    </h2>
+                  </div>
+                  <div style={{ fontSize: '0.85rem', color: COLORS.textLight, marginTop: '4px' }}>
+                    Inclus par défaut : <strong style={{ color: COLORS.textMain }}>Les 2 Tacos sans frites</strong> • Supplément Menu Frites + Boisson 1L à +15 DH
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button className="pos-btn num-tabular" onClick={() => setPromoTacosModal(p => ({ ...p, taille: 'L', prixPack: 55, tacos1Viandes: [], tacos2Viandes: [] }))} style={{ padding: '10px 16px', borderRadius: '10px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: promoTacosModal.taille === 'L' ? COLORS.primary : COLORS.bg, color: promoTacosModal.taille === 'L' ? 'white' : COLORS.textMain }}>2x L (55 DH)</button>
-                  <button className="pos-btn num-tabular" onClick={() => setPromoTacosModal(p => ({ ...p, taille: 'XL', prixPack: 89, tacos1Viandes: [], tacos2Viandes: [] }))} style={{ padding: '10px 16px', borderRadius: '10px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: promoTacosModal.taille === 'XL' ? COLORS.primary : COLORS.bg, color: promoTacosModal.taille === 'XL' ? 'white' : COLORS.textMain }}>2x XL (89 DH)</button>
+                <div style={{ display: 'flex', gap: '6px', background: COLORS.bg, padding: '4px', borderRadius: '8px', border: `1px solid ${COLORS.border}` }}>
+                  <button className="pos-btn num-tabular" onClick={() => setPromoTacosModal(p => ({ ...p, taille: 'L', prixPack: 55, tacos1Viandes: [], tacos2Viandes: [] }))} style={{ padding: '8px 14px', borderRadius: '6px', border: 'none', fontWeight: '600', cursor: 'pointer', background: promoTacosModal.taille === 'L' ? COLORS.secondary : 'transparent', color: promoTacosModal.taille === 'L' ? 'white' : COLORS.textMuted }}>2x L (55 DH)</button>
+                  <button className="pos-btn num-tabular" onClick={() => setPromoTacosModal(p => ({ ...p, taille: 'XL', prixPack: 89, tacos1Viandes: [], tacos2Viandes: [] }))} style={{ padding: '8px 14px', borderRadius: '6px', border: 'none', fontWeight: '600', cursor: 'pointer', background: promoTacosModal.taille === 'XL' ? COLORS.secondary : 'transparent', color: promoTacosModal.taille === 'XL' ? 'white' : COLORS.textMuted }}>2x XL (89 DH)</button>
                 </div>
               </div>
 
-              <div style={{ flex: 1, overflowY: 'auto', padding: '14px 0' }}>
-                {/* OPTION +15 DH FRITES & BOISSON 1L */}
+              <div style={{ flex: 1, overflowY: 'auto', padding: '16px 0' }}>
                 <button
                   className="pos-btn num-tabular"
                   onClick={() => setPromoTacosModal(p => ({ ...p, avecFritesBoisson: !p.avecFritesBoisson }))}
                   style={{
                     width: '100%',
-                    padding: '16px 20px',
-                    borderRadius: '14px',
-                    border: promoTacosModal.avecFritesBoisson ? `2px solid ${COLORS.success}` : `2px dashed ${COLORS.promo}`,
-                    background: promoTacosModal.avecFritesBoisson ? '#ECFDF5' : '#FFFBEB',
-                    color: promoTacosModal.avecFritesBoisson ? '#065F46' : '#92400E',
+                    padding: '14px 18px',
+                    borderRadius: '12px',
+                    border: `1px solid ${promoTacosModal.avecFritesBoisson ? COLORS.success : COLORS.borderStrong}`,
+                    background: promoTacosModal.avecFritesBoisson ? '#ECFDF5' : COLORS.bg,
+                    color: COLORS.textMain,
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    fontWeight: 'bold',
-                    fontSize: '1.1rem',
+                    fontWeight: '600',
+                    fontSize: '1rem',
                     cursor: 'pointer',
                     marginBottom: '18px'
                   }}
                 >
-                  <span>{promoTacosModal.avecFritesBoisson ? '✅ MENU ACTIVÉ : Avec Frites + Boisson 1L' : '🍟🥤 Rajouter Frites + Boisson 1L (Sinon : 🚫 Sans Frites)'}</span>
-                  <span style={{ background: promoTacosModal.avecFritesBoisson ? COLORS.success : COLORS.promo, color: 'white', padding: '6px 12px', borderRadius: '8px' }}>+ 15 DH</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <StatusDot active={promoTacosModal.avecFritesBoisson} />
+                    <span>{promoTacosModal.avecFritesBoisson ? 'Option activée : Avec Frites + Boisson 1L' : 'Ajouter Option Frites + Boisson 1L (Sinon : Sans Frites)'}</span>
+                  </div>
+                  <span style={{ background: promoTacosModal.avecFritesBoisson ? COLORS.success : COLORS.secondary, color: 'white', padding: '5px 10px', borderRadius: '6px', fontSize: '0.9rem' }}>+ 15 DH</span>
                 </button>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '16px' }}>
                   {/* TACOS #1 */}
-                  <div style={{ background: COLORS.bg, padding: '16px', borderRadius: '14px', border: `1px solid ${COLORS.border}` }}>
-                    <h3 style={{ marginTop: 0, color: COLORS.secondary, fontSize: '1.1rem' }}>
-                      🌮 Tacos #1 ({promoTacosModal.taille}) — Viandes ({promoTacosModal.tacos1Viandes.length}/{promoTacosModal.taille === 'XL' ? 3 : 2})
-                    </h3>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '14px' }}>
+                  <div style={{ background: COLORS.bg, padding: '16px', borderRadius: '12px', border: `1px solid ${COLORS.border}` }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                      <h3 style={{ margin: 0, color: COLORS.textMain, fontSize: '1rem' }}>Tacos #1 ({promoTacosModal.taille})</h3>
+                      <span className="num-tabular" style={{ fontSize: '0.8rem', fontWeight: '600', color: COLORS.textLight }}>{promoTacosModal.tacos1Viandes.length} / {promoTacosModal.taille === 'XL' ? 3 : 2} viandes</span>
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '14px' }}>
                       {(parametres.stocks.viandes || []).filter(v => v.available).map((v, idx) => {
                         const sel = promoTacosModal.tacos1Viandes.includes(v.nom);
                         const maxV = promoTacosModal.taille === 'XL' ? 3 : 2;
                         return (
-                          <button key={idx} className="pos-btn" onClick={() => togglePromoTacosOption('tacos1Viandes', v.nom, maxV)} style={{ padding: '8px 14px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', background: sel ? COLORS.primary : 'white', color: sel ? 'white' : COLORS.textMain, border: `1px solid ${sel ? COLORS.primary : COLORS.border}` }}>{v.nom}</button>
+                          <button key={idx} className="pos-btn" onClick={() => togglePromoTacosOption('tacos1Viandes', v.nom, maxV)} style={{ padding: '8px 12px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', background: sel ? COLORS.primary : 'white', color: sel ? 'white' : COLORS.textMain, border: `1px solid ${sel ? COLORS.primary : COLORS.border}`, fontSize: '0.9rem' }}>{v.nom}</button>
                         );
                       })}
                     </div>
-                    <h4 style={{ margin: '0 0 8px 0', fontSize: '0.95rem', color: COLORS.textLight }}>🥣 Sauces Tacos #1</h4>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '14px' }}>
+                    <div style={{ fontSize: '0.8rem', fontWeight: '600', color: COLORS.textLight, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Sauces Tacos #1</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '14px' }}>
                       {(parametres.stocks.sauces || []).filter(s => s.available).map((s, idx) => {
                         const sel = promoTacosModal.tacos1Sauces.includes(s.nom);
                         return (
-                          <button key={idx} className="pos-btn" onClick={() => togglePromoTacosOption('tacos1Sauces', s.nom)} style={{ padding: '7px 12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', background: sel ? COLORS.secondary : 'white', color: sel ? 'white' : COLORS.textMain, border: `1px solid ${COLORS.border}`, fontSize: '0.9rem' }}>{s.nom}</button>
+                          <button key={idx} className="pos-btn" onClick={() => togglePromoTacosOption('tacos1Sauces', s.nom)} style={{ padding: '7px 11px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', background: sel ? COLORS.secondary : 'white', color: sel ? 'white' : COLORS.textMain, border: `1px solid ${COLORS.border}`, fontSize: '0.85rem' }}>{s.nom}</button>
                         );
                       })}
                     </div>
-                    <h4 style={{ margin: '0 0 8px 0', fontSize: '0.95rem', color: COLORS.textLight }}>➕ Extras Tacos #1</h4>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    <div style={{ fontSize: '0.8rem', fontWeight: '600', color: COLORS.textLight, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Suppléments Tacos #1</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                       {Object.keys(TACOS_EXTRAS).map(ext => {
                         const sel = promoTacosModal.tacos1Extras.includes(ext);
                         return (
-                          <button key={ext} className="pos-btn num-tabular" onClick={() => togglePromoTacosOption('tacos1Extras', ext)} style={{ padding: '7px 12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', background: sel ? COLORS.success : 'white', color: sel ? 'white' : COLORS.textMain, border: `1px solid ${COLORS.border}`, fontSize: '0.85rem' }}>{ext} (+{TACOS_EXTRAS[ext]}DH)</button>
+                          <button key={ext} className="pos-btn num-tabular" onClick={() => togglePromoTacosOption('tacos1Extras', ext)} style={{ padding: '7px 11px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', background: sel ? COLORS.success : 'white', color: sel ? 'white' : COLORS.textMain, border: `1px solid ${sel ? COLORS.success : COLORS.border}`, fontSize: '0.85rem' }}>{ext} (+{TACOS_EXTRAS[ext]}DH)</button>
                         );
                       })}
                     </div>
                   </div>
 
                   {/* TACOS #2 */}
-                  <div style={{ background: COLORS.bg, padding: '16px', borderRadius: '14px', border: `1px solid ${COLORS.border}` }}>
-                    <h3 style={{ marginTop: 0, color: COLORS.secondary, fontSize: '1.1rem' }}>
-                      🌮 Tacos #2 ({promoTacosModal.taille}) — Viandes ({promoTacosModal.tacos2Viandes.length}/{promoTacosModal.taille === 'XL' ? 3 : 2})
-                    </h3>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '14px' }}>
+                  <div style={{ background: COLORS.bg, padding: '16px', borderRadius: '12px', border: `1px solid ${COLORS.border}` }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                      <h3 style={{ margin: 0, color: COLORS.textMain, fontSize: '1rem' }}>Tacos #2 ({promoTacosModal.taille})</h3>
+                      <span className="num-tabular" style={{ fontSize: '0.8rem', fontWeight: '600', color: COLORS.textLight }}>{promoTacosModal.tacos2Viandes.length} / {promoTacosModal.taille === 'XL' ? 3 : 2} viandes</span>
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '14px' }}>
                       {(parametres.stocks.viandes || []).filter(v => v.available).map((v, idx) => {
                         const sel = promoTacosModal.tacos2Viandes.includes(v.nom);
                         const maxV = promoTacosModal.taille === 'XL' ? 3 : 2;
                         return (
-                          <button key={idx} className="pos-btn" onClick={() => togglePromoTacosOption('tacos2Viandes', v.nom, maxV)} style={{ padding: '8px 14px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', background: sel ? COLORS.primary : 'white', color: sel ? 'white' : COLORS.textMain, border: `1px solid ${sel ? COLORS.primary : COLORS.border}` }}>{v.nom}</button>
+                          <button key={idx} className="pos-btn" onClick={() => togglePromoTacosOption('tacos2Viandes', v.nom, maxV)} style={{ padding: '8px 12px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', background: sel ? COLORS.primary : 'white', color: sel ? 'white' : COLORS.textMain, border: `1px solid ${sel ? COLORS.primary : COLORS.border}`, fontSize: '0.9rem' }}>{v.nom}</button>
                         );
                       })}
                     </div>
-                    <h4 style={{ margin: '0 0 8px 0', fontSize: '0.95rem', color: COLORS.textLight }}>🥣 Sauces Tacos #2</h4>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '14px' }}>
+                    <div style={{ fontSize: '0.8rem', fontWeight: '600', color: COLORS.textLight, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Sauces Tacos #2</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '14px' }}>
                       {(parametres.stocks.sauces || []).filter(s => s.available).map((s, idx) => {
                         const sel = promoTacosModal.tacos2Sauces.includes(s.nom);
                         return (
-                          <button key={idx} className="pos-btn" onClick={() => togglePromoTacosOption('tacos2Sauces', s.nom)} style={{ padding: '7px 12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', background: sel ? COLORS.secondary : 'white', color: sel ? 'white' : COLORS.textMain, border: `1px solid ${COLORS.border}`, fontSize: '0.9rem' }}>{s.nom}</button>
+                          <button key={idx} className="pos-btn" onClick={() => togglePromoTacosOption('tacos2Sauces', s.nom)} style={{ padding: '7px 11px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', background: sel ? COLORS.secondary : 'white', color: sel ? 'white' : COLORS.textMain, border: `1px solid ${COLORS.border}`, fontSize: '0.85rem' }}>{s.nom}</button>
                         );
                       })}
                     </div>
-                    <h4 style={{ margin: '0 0 8px 0', fontSize: '0.95rem', color: COLORS.textLight }}>➕ Extras Tacos #2</h4>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    <div style={{ fontSize: '0.8rem', fontWeight: '600', color: COLORS.textLight, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Suppléments Tacos #2</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                       {Object.keys(TACOS_EXTRAS).map(ext => {
                         const sel = promoTacosModal.tacos2Extras.includes(ext);
                         return (
-                          <button key={ext} className="pos-btn num-tabular" onClick={() => togglePromoTacosOption('tacos2Extras', ext)} style={{ padding: '7px 12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', background: sel ? COLORS.success : 'white', color: sel ? 'white' : COLORS.textMain, border: `1px solid ${COLORS.border}`, fontSize: '0.85rem' }}>{ext} (+{TACOS_EXTRAS[ext]}DH)</button>
+                          <button key={ext} className="pos-btn num-tabular" onClick={() => togglePromoTacosOption('tacos2Extras', ext)} style={{ padding: '7px 11px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', background: sel ? COLORS.success : 'white', color: sel ? 'white' : COLORS.textMain, border: `1px solid ${sel ? COLORS.success : COLORS.border}`, fontSize: '0.85rem' }}>{ext} (+{TACOS_EXTRAS[ext]}DH)</button>
                         );
                       })}
                     </div>
@@ -1259,10 +1487,10 @@ function FoodjiSystem() {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '12px', marginTop: '14px', borderTop: `1px solid ${COLORS.border}`, paddingTop: '14px' }}>
-                <button className="pos-btn" onClick={() => setPromoTacosModal(p => ({ ...p, active: false }))} style={{ flex: 1, padding: '15px', background: COLORS.bg, color: COLORS.textLight, borderRadius: '12px', border: 'none', fontSize: '1.05rem', fontWeight: 'bold', cursor: 'pointer' }}>Annuler</button>
-                <button className="pos-btn num-tabular" onClick={validerPackPromoTacos} style={{ flex: 2, padding: '15px', background: COLORS.success, color: 'white', borderRadius: '12px', border: 'none', fontSize: '1.15rem', fontWeight: 'bold', cursor: 'pointer' }}>
-                  ✅ Ajouter Pack Promo ({promoTacosModal.prixPack + (promoTacosModal.avecFritesBoisson ? 15 : 0)} DH + extras)
+              <div style={{ display: 'flex', gap: '12px', marginTop: '14px', borderTop: `1px solid ${COLORS.border}`, paddingTop: '16px' }}>
+                <button className="pos-btn" onClick={() => setPromoTacosModal(p => ({ ...p, active: false }))} style={{ flex: 1, padding: '14px', background: COLORS.bg, color: COLORS.textMuted, borderRadius: '8px', border: `1px solid ${COLORS.border}`, fontSize: '0.95rem', fontWeight: '600', cursor: 'pointer' }}>Annuler</button>
+                <button className="pos-btn num-tabular" onClick={validerPackPromoTacos} style={{ flex: 2, padding: '14px', background: COLORS.secondary, color: 'white', borderRadius: '8px', border: 'none', fontSize: '1rem', fontWeight: '600', cursor: 'pointer' }}>
+                  Ajouter le Pack au panier • {promoTacosModal.prixPack + (promoTacosModal.avecFritesBoisson ? 15 : 0)} DH
                 </button>
               </div>
             </div>
@@ -1271,90 +1499,106 @@ function FoodjiSystem() {
 
         {showDiviserAddition && (
           <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(9, 9, 11, 0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 4000 }}>
-            <div className="modal-box" style={{ background: 'white', padding: '30px', borderRadius: '20px', width: '360px', textAlign: 'center' }}>
-              <h2 style={{ marginTop: 0, letterSpacing: '-0.02em' }}>Diviser l'addition</h2>
-              <p style={{ fontSize: '1.15rem', color: COLORS.textLight, marginBottom: '20px' }}>Total à diviser : <strong className="num-tabular" style={{ color: COLORS.textMain }}>{totalCart} DH</strong></p>
+            <div className="modal-box" style={{ background: 'white', padding: '28px', borderRadius: '16px', width: '360px', textAlign: 'center', border: `1px solid ${COLORS.border}` }}>
+              <h2 style={{ marginTop: 0, letterSpacing: '-0.02em', fontSize: '1.3rem' }}>Diviser l'addition</h2>
+              <p style={{ fontSize: '1rem', color: COLORS.textLight, marginBottom: '20px' }}>Total : <strong className="num-tabular" style={{ color: COLORS.textMain }}>{totalCart} DH</strong></p>
 
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', marginBottom: '20px' }}>
-                <button className="pos-btn" onClick={() => setDiviserPar(Math.max(2, diviserPar - 1))} style={{ width: '56px', height: '56px', fontSize: '1.8rem', borderRadius: '12px', border: `1px solid ${COLORS.border}`, background: COLORS.bg, cursor: 'pointer', fontWeight: 'bold' }}>-</button>
-                <span className="num-tabular" style={{ fontSize: '2.5rem', fontWeight: 'bold' }}>{diviserPar}</span>
-                <button className="pos-btn" onClick={() => setDiviserPar(diviserPar + 1)} style={{ width: '56px', height: '56px', fontSize: '1.8rem', borderRadius: '12px', border: `1px solid ${COLORS.border}`, background: COLORS.bg, cursor: 'pointer', fontWeight: 'bold' }}>+</button>
+                <button className="pos-btn" onClick={() => setDiviserPar(Math.max(2, diviserPar - 1))} style={{ width: '48px', height: '48px', borderRadius: '8px', border: `1px solid ${COLORS.border}`, background: COLORS.bg, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon name="minus" size={18} /></button>
+                <span className="num-tabular" style={{ fontSize: '2.2rem', fontWeight: 'bold' }}>{diviserPar}</span>
+                <button className="pos-btn" onClick={() => setDiviserPar(diviserPar + 1)} style={{ width: '48px', height: '48px', borderRadius: '8px', border: `1px solid ${COLORS.border}`, background: COLORS.bg, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon name="plus" size={18} /></button>
               </div>
 
-              <div className="num-tabular" style={{ background: COLORS.bg, padding: '20px', borderRadius: '12px', fontSize: '2rem', fontWeight: 'bold', color: COLORS.primary, marginBottom: '20px' }}>
-                {(totalCart / diviserPar).toFixed(2)} DH <span style={{ fontSize: '1rem', color: COLORS.textLight }}>/ pers.</span>
+              <div className="num-tabular" style={{ background: COLORS.bg, padding: '18px', borderRadius: '12px', fontSize: '1.8rem', fontWeight: 'bold', color: COLORS.primary, marginBottom: '20px', border: `1px solid ${COLORS.border}` }}>
+                {(totalCart / diviserPar).toFixed(2)} DH <span style={{ fontSize: '0.9rem', color: COLORS.textLight }}>/ pers.</span>
               </div>
 
-              <button className="pos-btn" onClick={() => { setShowDiviserAddition(false); validerCommandePOS('Espèces', totalCart); }} style={{ width: '100%', padding: '16px', background: COLORS.success, color: 'white', border: 'none', borderRadius: '12px', fontSize: '1.15rem', fontWeight: 'bold', cursor: 'pointer' }}>✅ Encaisser (Espèces)</button>
-              <button className="pos-btn" onClick={() => setShowDiviserAddition(false)} style={{ width: '100%', padding: '14px', background: 'transparent', color: COLORS.textLight, border: 'none', marginTop: '8px', cursor: 'pointer', fontSize: '1.05rem', fontWeight: '500' }}>Annuler</button>
+              <button className="pos-btn" onClick={() => { setShowDiviserAddition(false); validerCommandePOS('Espèces', totalCart); }} style={{ width: '100%', padding: '14px', background: COLORS.success, color: 'white', border: 'none', borderRadius: '8px', fontSize: '1rem', fontWeight: '600', cursor: 'pointer' }}>Confirmer l'encaissement</button>
+              <button className="pos-btn" onClick={() => setShowDiviserAddition(false)} style={{ width: '100%', padding: '12px', background: 'transparent', color: COLORS.textLight, border: 'none', marginTop: '8px', cursor: 'pointer', fontSize: '0.95rem', fontWeight: '500' }}>Fermer</button>
             </div>
           </div>
         )}
 
         {showCashOptions && (
           <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(9, 9, 11, 0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 4000 }}>
-            <div className="modal-box" style={{ background: 'white', padding: '30px', borderRadius: '20px', width: '360px', textAlign: 'center' }}>
-              <h2 style={{ marginTop: 0, letterSpacing: '-0.02em' }}>Encaissement Espèces</h2>
-              <p className="num-tabular" style={{ fontSize: '2rem', fontWeight: 'bold', color: COLORS.primary, margin: '10px 0 20px 0' }}>{totalCart} DH</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <button className="pos-btn" onClick={() => { setShowCashOptions(false); validerCommandePOS('Espèces', totalCart); }} style={{ padding: '16px', background: COLORS.success, color: 'white', border: 'none', borderRadius: '12px', fontSize: '1.15rem', fontWeight: 'bold', cursor: 'pointer' }}>✅ Montant Exact</button>
-                <button className="pos-btn" onClick={() => { setShowCashOptions(false); openNumpad('encaissement_especes', 'SOMME REÇUE (Rendre monnaie)'); }} style={{ padding: '16px', background: COLORS.secondary, color: 'white', border: 'none', borderRadius: '12px', fontSize: '1.15rem', fontWeight: 'bold', cursor: 'pointer' }}>🧮 Rendre la monnaie</button>
-                <button className="pos-btn" onClick={() => { setShowCashOptions(false); setShowDiviserAddition(true); }} style={{ padding: '16px', background: COLORS.blue, color: 'white', border: 'none', borderRadius: '12px', fontSize: '1.15rem', fontWeight: 'bold', cursor: 'pointer' }}>➗ Diviser l'addition</button>
-                <button className="pos-btn" onClick={() => setShowCashOptions(false)} style={{ padding: '14px', background: COLORS.bg, color: COLORS.textMain, border: 'none', borderRadius: '12px', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer' }}>Annuler</button>
+            <div className="modal-box" style={{ background: 'white', padding: '28px', borderRadius: '16px', width: '360px', textAlign: 'center', border: `1px solid ${COLORS.border}` }}>
+              <h2 style={{ marginTop: 0, letterSpacing: '-0.02em', fontSize: '1.3rem' }}>Règlement Espèces</h2>
+              <p className="num-tabular" style={{ fontSize: '2rem', fontWeight: 'bold', color: COLORS.primary, margin: '8px 0 20px 0' }}>{totalCart} DH</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <button className="pos-btn" onClick={() => { setShowCashOptions(false); validerCommandePOS('Espèces', totalCart); }} style={{ padding: '14px', background: COLORS.success, color: 'white', border: 'none', borderRadius: '8px', fontSize: '1.05rem', fontWeight: '600', cursor: 'pointer' }}>Montant exact reçu</button>
+                <button className="pos-btn" onClick={() => { setShowCashOptions(false); openNumpad('encaissement_especes', 'Somme reçue du client'); }} style={{ padding: '14px', background: COLORS.secondary, color: 'white', border: 'none', borderRadius: '8px', fontSize: '1rem', fontWeight: '600', cursor: 'pointer' }}>Calculer le rendu monnaie</button>
+                <button className="pos-btn" onClick={() => { setShowCashOptions(false); setShowDiviserAddition(true); }} style={{ padding: '14px', background: COLORS.bg, color: COLORS.textMain, border: `1px solid ${COLORS.border}`, borderRadius: '8px', fontSize: '1rem', fontWeight: '600', cursor: 'pointer' }}>Diviser la note</button>
+                <button className="pos-btn" onClick={() => setShowCashOptions(false)} style={{ padding: '12px', background: 'transparent', color: COLORS.textLight, border: 'none', fontSize: '0.95rem', fontWeight: '500', cursor: 'pointer' }}>Annuler</button>
               </div>
             </div>
           </div>
         )}
 
+        {/* PAVÉ NUMÉRIQUE AVEC CHAMP MOTIF INTÉGRÉ POUR LES DÉCAISSEMENTS */}
         {numpad.active && (
           <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(9, 9, 11, 0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3000 }}>
-            <div className="modal-box" style={{ background: 'white', width: '360px', borderRadius: '24px', padding: '24px', display: 'flex', flexDirection: 'column' }}>
-              <h3 style={{ marginTop: 0, textAlign: 'center', letterSpacing: '-0.02em', color: COLORS.textLight }}>{numpad.label}</h3>
-              <div className="num-tabular" style={{ background: COLORS.bg, padding: '18px', fontSize: '2.4rem', textAlign: 'right', borderRadius: '14px', marginBottom: '18px', fontWeight: 'bold', minHeight: '42px', border: `1px solid ${COLORS.border}` }}>
+            <div className="modal-box" style={{ background: 'white', width: '360px', borderRadius: '16px', padding: '24px', display: 'flex', flexDirection: 'column', border: `1px solid ${COLORS.border}` }}>
+              <h3 style={{ marginTop: 0, textAlign: 'center', letterSpacing: '-0.02em', color: COLORS.textMain, fontSize: '1.1rem' }}>{numpad.label}</h3>
+
+              {numpad.mode === 'depense' && (
+                <input
+                  type="text"
+                  placeholder="Motif (ex: Eau, Glace, Fournitures...)"
+                  value={numpad.motif}
+                  onChange={e => setNumpad({ ...numpad, motif: e.target.value })}
+                  autoFocus
+                  style={{ width: '100%', padding: '12px', borderRadius: '8px', border: `1px solid ${COLORS.borderStrong}`, marginBottom: '12px', fontSize: '0.95rem', boxSizing: 'border-box' }}
+                />
+              )}
+
+              <div className="num-tabular" style={{ background: COLORS.bg, padding: '16px', fontSize: '2.2rem', textAlign: 'right', borderRadius: '12px', marginBottom: '16px', fontWeight: 'bold', minHeight: '40px', border: `1px solid ${COLORS.border}` }}>
                 {numpad.value || '0'} {numpad.mode === 'remise_globale' ? '%' : 'DH'}
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
                 {['7', '8', '9', '4', '5', '6', '1', '2', '3', '0', 'DEL'].map(btn => (
-                  <button key={btn} className="pos-btn num-tabular" onClick={() => handleNumpadKey(btn)} style={{ padding: '18px', fontSize: '1.6rem', fontWeight: 'bold', borderRadius: '14px', border: `1px solid ${COLORS.border}`, background: btn === 'DEL' ? '#FEE2E2' : 'white', color: btn === 'DEL' ? COLORS.danger : COLORS.textMain, cursor: 'pointer' }}>{btn}</button>
+                  <button key={btn} className="pos-btn num-tabular" onClick={() => handleNumpadKey(btn)} style={{ padding: '16px', fontSize: '1.4rem', fontWeight: '600', borderRadius: '8px', border: `1px solid ${COLORS.border}`, background: btn === 'DEL' ? '#FEF2F2' : 'white', color: btn === 'DEL' ? COLORS.danger : COLORS.textMain, cursor: 'pointer' }}>{btn}</button>
                 ))}
-                <button className="pos-btn" onClick={() => handleNumpadKey('OK')} style={{ padding: '18px', fontSize: '1.4rem', fontWeight: 'bold', borderRadius: '14px', border: 'none', background: COLORS.success, color: 'white', cursor: 'pointer' }}>OK</button>
+                <button className="pos-btn" onClick={() => handleNumpadKey('OK')} style={{ padding: '16px', fontSize: '1.2rem', fontWeight: '600', borderRadius: '8px', border: 'none', background: COLORS.secondary, color: 'white', cursor: 'pointer' }}>Valider</button>
               </div>
-              <button className="pos-btn" onClick={() => setNumpad({ active: false, mode: '', targetId: null, label: '', value: '' })} style={{ marginTop: '16px', padding: '14px', background: COLORS.bg, color: COLORS.textLight, border: 'none', borderRadius: '12px', fontSize: '1.05rem', fontWeight: 'bold', cursor: 'pointer' }}>Annuler</button>
+              <button className="pos-btn" onClick={() => setNumpad({ active: false, mode: '', targetId: null, label: '', value: '', motif: '' })} style={{ marginTop: '14px', padding: '12px', background: COLORS.bg, color: COLORS.textMuted, border: 'none', borderRadius: '8px', fontSize: '0.95rem', fontWeight: '600', cursor: 'pointer' }}>Fermer</button>
             </div>
           </div>
         )}
 
         {showRenduMonnaie.active && (
           <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(9, 9, 11, 0.85)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 4000 }}>
-            <div className="modal-box" style={{ background: 'white', padding: '40px', borderRadius: '24px', width: '90%', maxWidth: '480px', textAlign: 'center' }}>
-              <h2 style={{ fontSize: '1.8rem', margin: '0 0 20px 0', letterSpacing: '-0.03em' }}>💵 RENDU MONNAIE</h2>
-              <div className="num-tabular" style={{ fontSize: '1.35rem', color: COLORS.textLight, marginBottom: '8px' }}>Total commande : <strong style={{ color: COLORS.textMain }}>{totalCart} DH</strong></div>
-              <div className="num-tabular" style={{ fontSize: '1.35rem', color: COLORS.textLight, marginBottom: '20px' }}>Somme reçue : <strong style={{ color: COLORS.textMain }}>{showRenduMonnaie.received} DH</strong></div>
-              <div className="num-tabular" style={{ background: COLORS.primary, color: 'white', padding: '28px', borderRadius: '16px', fontSize: '2.6rem', fontWeight: 'bold', margin: '20px 0' }}>
-                À RENDRE : {showRenduMonnaie.aRendre} DH
+            <div className="modal-box" style={{ background: 'white', padding: '36px', borderRadius: '16px', width: '90%', maxWidth: '440px', textAlign: 'center', border: `1px solid ${COLORS.border}` }}>
+              <h2 style={{ fontSize: '1.5rem', margin: '0 0 18px 0', letterSpacing: '-0.03em' }}>Rendu Monnaie</h2>
+              <div className="num-tabular" style={{ fontSize: '1.15rem', color: COLORS.textLight, marginBottom: '6px' }}>Total à encaisser : <strong style={{ color: COLORS.textMain }}>{totalCart} DH</strong></div>
+              <div className="num-tabular" style={{ fontSize: '1.15rem', color: COLORS.textLight, marginBottom: '18px' }}>Espèces reçues : <strong style={{ color: COLORS.textMain }}>{showRenduMonnaie.received} DH</strong></div>
+              <div className="num-tabular" style={{ background: COLORS.secondary, color: 'white', padding: '24px', borderRadius: '12px', fontSize: '2.2rem', fontWeight: 'bold', margin: '18px 0' }}>
+                À rendre : {showRenduMonnaie.aRendre} DH
               </div>
-              <button className="pos-btn" onClick={() => validerCommandePOS('Espèces', showRenduMonnaie.received)} style={{ width: '100%', padding: '20px', background: COLORS.success, color: 'white', border: 'none', borderRadius: '14px', fontSize: '1.35rem', fontWeight: 'bold', cursor: 'pointer' }}>✅ VALIDER L'ENCAISSEMENT</button>
-              <button className="pos-btn" onClick={() => setShowRenduMonnaie({ active: false, aRendre: 0, received: 0 })} style={{ width: '100%', padding: '14px', background: 'transparent', color: COLORS.textLight, border: 'none', marginTop: '10px', cursor: 'pointer', fontSize: '1.1rem', textDecoration: 'underline' }}>Annuler (Retour caisse)</button>
+              <button className="pos-btn" onClick={() => validerCommandePOS('Espèces', showRenduMonnaie.received)} style={{ width: '100%', padding: '16px', background: COLORS.success, color: 'white', border: 'none', borderRadius: '8px', fontSize: '1.15rem', fontWeight: '600', cursor: 'pointer' }}>Confirmer et imprimer</button>
+              <button className="pos-btn" onClick={() => setShowRenduMonnaie({ active: false, aRendre: 0, received: 0 })} style={{ width: '100%', padding: '12px', background: 'transparent', color: COLORS.textLight, border: 'none', marginTop: '10px', cursor: 'pointer', fontSize: '0.95rem' }}>Retour</button>
             </div>
           </div>
         )}
 
         {customizeItem && (
           <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(9, 9, 11, 0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }}>
-            <div className="modal-box" style={{ background: 'white', width: '90%', maxWidth: '800px', borderRadius: '20px', padding: '24px', display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}>
-              <h2 style={{ marginTop: 0, borderBottom: `1px solid ${COLORS.border}`, paddingBottom: '14px', color: COLORS.primary, letterSpacing: '-0.02em' }}>
-                Préparation : {customizeItem.produit.nom} {customizeItem.variante?.nom ? `(Taille ${customizeItem.variante.nom})` : ''}
-              </h2>
+            <div className="modal-box" style={{ background: 'white', width: '90%', maxWidth: '780px', borderRadius: '16px', padding: '24px', display: 'flex', flexDirection: 'column', maxHeight: '90vh', border: `1px solid ${COLORS.border}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${COLORS.border}`, paddingBottom: '14px' }}>
+                <h2 style={{ margin: 0, color: COLORS.textMain, letterSpacing: '-0.02em', fontSize: '1.3rem' }}>
+                  {customizeItem.produit.nom} {customizeItem.variante?.nom ? `— Taille ${customizeItem.variante.nom}` : ''}
+                </h2>
+                <span style={{ fontSize: '0.85rem', color: COLORS.textLight, fontWeight: '600' }}>{customizeItem.produit.categorie}</span>
+              </div>
 
-              <div style={{ flex: 1, overflowY: 'auto', padding: '10px 0' }}>
+              <div style={{ flex: 1, overflowY: 'auto', padding: '14px 0' }}>
                 {customizeItem.produit.categorie === 'Burgers' && (
                   <div style={{ marginBottom: '20px' }}>
-                    <h3 style={{ fontSize: '1.05rem', marginBottom: '10px', color: COLORS.danger }}>🚫 Exclusions (Sans...)</h3>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+                    <div style={{ fontSize: '0.85rem', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '10px', color: COLORS.danger }}>Exclusions cuisine</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                       {EXCLUSIONS_BURGER.map((exc, idx) => {
                         const isSelected = customOptions.exclusions.includes(exc);
                         return (
-                          <button key={idx} className="pos-btn" onClick={() => toggleArrOption('exclusions', exc)} style={{ padding: '10px 16px', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', background: isSelected ? COLORS.danger : '#FEF2F2', color: isSelected ? 'white' : COLORS.danger, border: isSelected ? 'none' : `1px solid ${COLORS.danger}` }}>{exc}</button>
+                          <button key={idx} className="pos-btn" onClick={() => toggleArrOption('exclusions', exc)} style={{ padding: '10px 14px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', background: isSelected ? COLORS.danger : COLORS.bg, color: isSelected ? 'white' : COLORS.textMain, border: `1px solid ${isSelected ? COLORS.danger : COLORS.border}` }}>{exc}</button>
                         );
                       })}
                     </div>
@@ -1362,14 +1606,14 @@ function FoodjiSystem() {
                 )}
 
                 {customizeItem.produit.categorie === 'Plats' && (
-                  <div style={{ marginBottom: '20px', background: '#EEF2FF', padding: '16px', borderRadius: '12px' }}>
-                    <h3 style={{ fontSize: '1.05rem', margin: '0 0 10px 0', color: '#3730A3' }}>🥗 Accompagnements ({customOptions.accompagnements.length} / 2 obligatoires)</h3>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+                  <div style={{ marginBottom: '20px', background: COLORS.bg, padding: '16px', borderRadius: '12px', border: `1px solid ${COLORS.border}` }}>
+                    <div style={{ fontSize: '0.9rem', fontWeight: '600', marginBottom: '10px', color: COLORS.textMain }}>Accompagnements ({customOptions.accompagnements.length} / 2 obligatoires)</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                       {ACCOMPAGNEMENTS_PLATS.map((acc, idx) => {
                         const isSelected = customOptions.accompagnements.includes(acc);
                         const isDisabled = !isSelected && customOptions.accompagnements.length >= 2;
                         return (
-                          <button key={idx} className="pos-btn" disabled={isDisabled} onClick={() => toggleArrOption('accompagnements', acc)} style={{ padding: '12px 18px', borderRadius: '10px', fontWeight: 'bold', cursor: isDisabled ? 'not-allowed' : 'pointer', background: isSelected ? '#3730A3' : '#fff', color: isSelected ? 'white' : 'black', border: '1px solid #3730A3', opacity: isDisabled ? 0.5 : 1 }}>{acc}</button>
+                          <button key={idx} className="pos-btn" disabled={isDisabled} onClick={() => toggleArrOption('accompagnements', acc)} style={{ padding: '10px 16px', borderRadius: '8px', fontWeight: '600', cursor: isDisabled ? 'not-allowed' : 'pointer', background: isSelected ? COLORS.secondary : 'white', color: isSelected ? 'white' : COLORS.textMain, border: `1px solid ${COLORS.border}`, opacity: isDisabled ? 0.5 : 1 }}>{acc}</button>
                         );
                       })}
                     </div>
@@ -1378,10 +1622,10 @@ function FoodjiSystem() {
 
                 {customizeItem.produit.categorie === 'Pâtes' && (
                   <div style={{ marginBottom: '20px' }}>
-                    <h3 style={{ fontSize: '1.05rem', marginBottom: '10px' }}>🍝 Type de Pâtes (Obligatoire)</h3>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+                    <div style={{ fontSize: '0.85rem', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '10px', color: COLORS.textLight }}>Choix de pâtes (Obligatoire)</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                       {(parametres.stocks.pates || []).filter(p => p.available).map((pate, idx) => (
-                        <button key={idx} className="pos-btn" onClick={() => setCustomOptions(prev => ({ ...prev, typePate: pate.nom }))} style={{ padding: '14px 24px', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', background: customOptions.typePate === pate.nom ? COLORS.primary : COLORS.bg, color: customOptions.typePate === pate.nom ? 'white' : COLORS.textMain, border: 'none', fontSize: '1.05rem' }}>{pate.nom}</button>
+                        <button key={idx} className="pos-btn" onClick={() => setCustomOptions(prev => ({ ...prev, typePate: pate.nom }))} style={{ padding: '12px 20px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', background: customOptions.typePate === pate.nom ? COLORS.secondary : COLORS.bg, color: customOptions.typePate === pate.nom ? 'white' : COLORS.textMain, border: `1px solid ${COLORS.border}`, fontSize: '1rem' }}>{pate.nom}</button>
                       ))}
                     </div>
                   </div>
@@ -1391,18 +1635,18 @@ function FoodjiSystem() {
                   <>
                     {(customizeItem.produit.nom.toLowerCase().includes('saison') || customizeItem.produit.nom.toLowerCase().includes('moitié')) && (
                       <div style={{ marginBottom: '20px' }}>
-                        <h3 style={{ fontSize: '1.05rem', marginBottom: '10px' }}>🍕 Choix des garnitures</h3>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+                        <div style={{ fontSize: '0.85rem', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '10px', color: COLORS.textLight }}>Garnitures au choix</div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                           {(parametres.stocks.garnitures || []).filter(opt => opt.available).map((opt, idx) => (
-                            <button key={idx} className="pos-btn" onClick={() => toggleArrOption('garnitures', opt.nom)} style={{ padding: '10px 16px', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', background: customOptions.garnitures.includes(opt.nom) ? COLORS.primary : COLORS.bg, color: customOptions.garnitures.includes(opt.nom) ? 'white' : COLORS.textMain, border: 'none' }}>{opt.nom}</button>
+                            <button key={idx} className="pos-btn" onClick={() => toggleArrOption('garnitures', opt.nom)} style={{ padding: '10px 14px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', background: customOptions.garnitures.includes(opt.nom) ? COLORS.primary : COLORS.bg, color: customOptions.garnitures.includes(opt.nom) ? 'white' : COLORS.textMain, border: `1px solid ${COLORS.border}` }}>{opt.nom}</button>
                           ))}
                         </div>
                       </div>
                     )}
                     <div style={{ marginBottom: '20px' }}>
-                      <h3 style={{ fontSize: '1.05rem', marginBottom: '10px' }}>🧀 Bords Fourrés</h3>
-                      <button className="pos-btn num-tabular" onClick={() => setCustomOptions(p => ({ ...p, cheesyCrust: !p.cheesyCrust }))} style={{ width: '100%', padding: '16px', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1.1rem', display: 'flex', justifyContent: 'space-between', background: customOptions.cheesyCrust ? COLORS.promo : COLORS.bg, color: customOptions.cheesyCrust ? 'white' : COLORS.textMain, border: 'none' }}>
-                        <span>Cheesy Crust</span>
+                      <div style={{ fontSize: '0.85rem', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '10px', color: COLORS.textLight }}>Croûte</div>
+                      <button className="pos-btn num-tabular" onClick={() => setCustomOptions(p => ({ ...p, cheesyCrust: !p.cheesyCrust }))} style={{ width: '100%', padding: '14px 16px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', fontSize: '1rem', display: 'flex', justifyContent: 'space-between', background: customOptions.cheesyCrust ? COLORS.secondary : COLORS.bg, color: customOptions.cheesyCrust ? 'white' : COLORS.textMain, border: `1px solid ${COLORS.border}` }}>
+                        <span>Option Cheesy Crust (Bords fourrés au fromage)</span>
                         <span>+ {customizeItem.variante?.nom === 'L' ? 25 : 15} DH</span>
                       </button>
                     </div>
@@ -1411,13 +1655,14 @@ function FoodjiSystem() {
 
                 {['Pizzas', 'Pâtes', 'Plats'].includes(customizeItem.produit.categorie) && (
                   <div style={{ marginBottom: '20px' }}>
-                    <h3 style={{ fontSize: '1.05rem', marginBottom: '10px' }}>➕ Extras (Payants)</h3>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px' }}>
+                    <div style={{ fontSize: '0.85rem', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '10px', color: COLORS.textLight }}>Suppléments</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: '8px' }}>
                       {Object.keys(EXTRAS_BASE).map(ext => {
                         const isPizzaL = (customizeItem.produit.categorie === 'Pizzas' && customizeItem.variante?.nom === 'L');
                         const price = isPizzaL ? Math.round(EXTRAS_BASE[ext] * 1.7) : EXTRAS_BASE[ext];
+                        const sel = customOptions.extras.includes(ext);
                         return (
-                          <button key={ext} className="pos-btn num-tabular" onClick={() => toggleArrOption('extras', ext)} style={{ padding: '14px', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', background: customOptions.extras.includes(ext) ? COLORS.success : COLORS.bg, color: customOptions.extras.includes(ext) ? 'white' : COLORS.textMain, border: 'none' }}>
+                          <button key={ext} className="pos-btn num-tabular" onClick={() => toggleArrOption('extras', ext)} style={{ padding: '12px 14px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', background: sel ? COLORS.secondary : COLORS.bg, color: sel ? 'white' : COLORS.textMain, border: `1px solid ${COLORS.border}` }}>
                             <span>{ext}</span><span>+ {price} DH</span>
                           </button>
                         );
@@ -1431,14 +1676,14 @@ function FoodjiSystem() {
                     {customizeItem.produit.nom.toLowerCase().includes('mixte') && (() => {
                       const maxV = customizeItem.variante?.nom === 'XXL' ? 4 : customizeItem.variante?.nom === 'XL' ? 3 : 2;
                       return (
-                        <div style={{ marginBottom: '20px', background: '#FEF3C7', padding: '16px', borderRadius: '12px' }}>
-                          <h3 style={{ fontSize: '1.05rem', margin: '0 0 10px 0', color: '#92400E' }}>🥩 Choix des Viandes ({customOptions.viandes.length} / {maxV} obligatoires)</h3>
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+                        <div style={{ marginBottom: '20px', background: COLORS.bg, padding: '16px', borderRadius: '12px', border: `1px solid ${COLORS.border}` }}>
+                          <div style={{ fontSize: '0.9rem', fontWeight: '600', marginBottom: '10px', color: COLORS.textMain }}>Viandes au choix ({customOptions.viandes.length} / {maxV} obligatoires)</div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                             {(parametres.stocks.viandes || []).filter(opt => opt.available).map((opt, idx) => {
                               const isSelected = customOptions.viandes.includes(opt.nom);
                               const isDisabled = !isSelected && customOptions.viandes.length >= maxV;
                               return (
-                                <button key={idx} className="pos-btn" disabled={isDisabled} onClick={() => toggleArrOption('viandes', opt.nom)} style={{ padding: '10px 16px', borderRadius: '10px', fontWeight: 'bold', cursor: isDisabled ? 'not-allowed' : 'pointer', background: isSelected ? '#92400E' : '#fff', color: isSelected ? 'white' : 'black', border: '1px solid #D97706', opacity: isDisabled ? 0.5 : 1 }}>{opt.nom}</button>
+                                <button key={idx} className="pos-btn" disabled={isDisabled} onClick={() => toggleArrOption('viandes', opt.nom)} style={{ padding: '10px 14px', borderRadius: '8px', fontWeight: '600', cursor: isDisabled ? 'not-allowed' : 'pointer', background: isSelected ? COLORS.primary : 'white', color: isSelected ? 'white' : COLORS.textMain, border: `1px solid ${isSelected ? COLORS.primary : COLORS.border}`, opacity: isDisabled ? 0.5 : 1 }}>{opt.nom}</button>
                               );
                             })}
                           </div>
@@ -1446,58 +1691,65 @@ function FoodjiSystem() {
                       );
                     })()}
                     <div style={{ marginBottom: '20px' }}>
-                      <h3 style={{ fontSize: '1.05rem', marginBottom: '10px' }}>🥣 Sauces (Incluses)</h3>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+                      <div style={{ fontSize: '0.85rem', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '10px', color: COLORS.textLight }}>Sauces incluses</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                         {(parametres.stocks.sauces || []).filter(opt => opt.available).map((opt, idx) => (
-                          <button key={idx} className="pos-btn" onClick={() => toggleArrOption('sauces', opt.nom)} style={{ padding: '10px 16px', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', background: customOptions.sauces.includes(opt.nom) ? COLORS.secondary : COLORS.bg, color: customOptions.sauces.includes(opt.nom) ? 'white' : COLORS.textMain, border: 'none' }}>{opt.nom}</button>
+                          <button key={idx} className="pos-btn" onClick={() => toggleArrOption('sauces', opt.nom)} style={{ padding: '10px 14px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', background: customOptions.sauces.includes(opt.nom) ? COLORS.secondary : COLORS.bg, color: customOptions.sauces.includes(opt.nom) ? 'white' : COLORS.textMain, border: `1px solid ${COLORS.border}` }}>{opt.nom}</button>
                         ))}
                       </div>
                     </div>
                     <div style={{ marginBottom: '20px' }}>
-                      <h3 style={{ fontSize: '1.05rem', marginBottom: '10px' }}>➕ Extras & Gratinage</h3>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px' }}>
-                        {Object.keys(TACOS_EXTRAS).map(ext => (
-                          <button key={ext} className="pos-btn num-tabular" onClick={() => toggleArrOption('extras', ext)} style={{ padding: '14px', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', background: customOptions.extras.includes(ext) ? COLORS.success : COLORS.bg, color: customOptions.extras.includes(ext) ? 'white' : COLORS.textMain, border: 'none' }}>
-                            <span>{ext}</span><span>+ {TACOS_EXTRAS[ext]} DH</span>
-                          </button>
-                        ))}
+                      <div style={{ fontSize: '0.85rem', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '10px', color: COLORS.textLight }}>Suppléments Fromagers</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: '8px' }}>
+                        {Object.keys(TACOS_EXTRAS).map(ext => {
+                          const sel = customOptions.extras.includes(ext);
+                          return (
+                            <button key={ext} className="pos-btn num-tabular" onClick={() => toggleArrOption('extras', ext)} style={{ padding: '12px 14px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', background: sel ? COLORS.secondary : COLORS.bg, color: sel ? 'white' : COLORS.textMain, border: `1px solid ${COLORS.border}` }}>
+                              <span>{ext}</span><span>+ {TACOS_EXTRAS[ext]} DH</span>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   </>
                 )}
               </div>
 
-              <div style={{ display: 'flex', gap: '12px', marginTop: '16px', borderTop: `1px solid ${COLORS.border}`, paddingTop: '16px' }}>
-                <button className="pos-btn" onClick={() => setCustomizeItem(null)} style={{ flex: 1, padding: '15px', background: COLORS.bg, color: COLORS.textLight, borderRadius: '12px', border: 'none', fontSize: '1.1rem', fontWeight: 'bold', cursor: 'pointer' }}>Annuler</button>
-                <button className="pos-btn" onClick={validerEtAjouter} style={{ flex: 2, padding: '15px', background: COLORS.success, color: 'white', borderRadius: '12px', border: 'none', fontSize: '1.15rem', fontWeight: 'bold', cursor: 'pointer' }}>✅ Ajouter au panier</button>
+              <div style={{ display: 'flex', gap: '10px', marginTop: '14px', borderTop: `1px solid ${COLORS.border}`, paddingTop: '16px' }}>
+                <button className="pos-btn" onClick={() => setCustomizeItem(null)} style={{ flex: 1, padding: '14px', background: COLORS.bg, color: COLORS.textMuted, borderRadius: '8px', border: `1px solid ${COLORS.border}`, fontSize: '0.95rem', fontWeight: '600', cursor: 'pointer' }}>Annuler</button>
+                <button className="pos-btn" onClick={validerEtAjouter} style={{ flex: 2, padding: '14px', background: COLORS.secondary, color: 'white', borderRadius: '8px', border: 'none', fontSize: '1rem', fontWeight: '600', cursor: 'pointer' }}>Ajouter à la commande</button>
               </div>
             </div>
           </div>
         )}
 
         <div className="no-print" style={{ display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', background: COLORS.bg }}>
-          {/* COLONNE GAUCHE : CATALOGUE & ACTIONS POS */}
+          {/* COLONNE GAUCHE : CATALOGUE POS (90% NEUTRAL / 10% ACCENT) */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '12px', height: '100%', overflowY: 'auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'white', padding: '14px 18px', borderRadius: '14px', marginBottom: '12px', flexShrink: 0, border: `1px solid ${COLORS.border}` }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'white', padding: '12px 16px', borderRadius: '12px', marginBottom: '12px', flexShrink: 0, border: `1px solid ${COLORS.border}` }}>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                <h2 style={{ margin: 0, color: COLORS.primary, letterSpacing: '-0.03em' }}>🍔 Foodji POS</h2>
-                <span style={{ background: '#EEF2FF', color: '#3730A3', padding: '6px 12px', borderRadius: '999px', fontWeight: 'bold', fontSize: '0.85rem' }}>👤 {sessionCaisse.caissiere}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <h2 style={{ margin: 0, color: COLORS.textMain, letterSpacing: '-0.03em', fontSize: '1.25rem' }}>Foodji POS</h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: COLORS.bg, color: COLORS.textMain, padding: '5px 10px', borderRadius: '8px', fontWeight: '600', fontSize: '0.85rem', border: `1px solid ${COLORS.border}` }}>
+                  <StatusDot active={true} />
+                  <span>{sessionCaisse.caissiere}</span>
+                </div>
 
                 {commandesWebEnAttente > 0 && (
-                  <button onClick={() => setAppMode('ADMIN')} className="blink-alert pos-btn" style={{ background: COLORS.danger, color: 'white', border: 'none', borderRadius: '10px', padding: '8px 14px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 12px rgba(239,68,68,0.35)' }}>
-                    🔴 {commandesWebEnAttente} WEB EN ATTENTE
+                  <button onClick={() => setAppMode('ADMIN')} className="blink-alert pos-btn" style={{ background: COLORS.danger, color: 'white', border: 'none', borderRadius: '8px', padding: '7px 12px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <StatusDot active={true} colorActive="#FFFFFF" />
+                    <span>{commandesWebEnAttente} Commande{commandesWebEnAttente > 1 ? 's' : ''} Web</span>
                   </button>
                 )}
               </div>
 
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                <button className="pos-btn num-tabular" onClick={() => openPromoTacosBuilder('L')} style={{ padding: '10px 14px', background: COLORS.promo, color: 'white', borderRadius: '10px', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>
-                  🌮 Promo Tacos (55 / 89 DH)
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                <button className="pos-btn num-tabular" onClick={() => openPromoTacosBuilder('L')} style={{ padding: '8px 12px', background: COLORS.bg, color: COLORS.textMain, borderRadius: '8px', border: `1px solid ${COLORS.borderStrong}`, cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Icon name="tag" size={14} color={COLORS.primary} /> Pack Tacos 55/89
                 </button>
 
-                <select onChange={handleRuptureRapide} value="" style={{ padding: '10px 14px', background: '#FEF2F2', color: COLORS.danger, borderRadius: '10px', border: `1px solid ${COLORS.danger}`, cursor: 'pointer', fontWeight: 'bold', outline: 'none' }}>
-                  <option value="" disabled>🔴 Rupture Rapide...</option>
+                <select onChange={handleRuptureRapide} value="" style={{ padding: '8px 12px', background: 'white', color: COLORS.textMuted, borderRadius: '8px', border: `1px solid ${COLORS.border}`, cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem', outline: 'none' }}>
+                  <option value="" disabled>Rupture rapide...</option>
                   {STOCK_TABS.map(tab => (
                     <optgroup key={tab.id} label={tab.label}>
                       {(parametres.stocks[tab.id] || []).filter(i => i.available).map(item => (
@@ -1507,57 +1759,66 @@ function FoodjiSystem() {
                   ))}
                 </select>
 
-                <button className="pos-btn" onClick={() => openNumpad('depense', 'Montant du décaissement')} style={{ padding: '10px 14px', background: '#FEF3C7', color: '#92400E', borderRadius: '10px', border: '1px solid #F59E0B', cursor: 'pointer', fontWeight: 'bold' }}>💸 Sortie</button>
-                <button className="pos-btn" onClick={cloturerShift} style={{ padding: '10px 14px', background: COLORS.warning, color: 'white', borderRadius: '10px', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>🛑 Fin Shift</button>
-                <button className="pos-btn" onClick={() => setAppMode('ADMIN')} style={{ padding: '10px 14px', background: COLORS.secondary, color: 'white', borderRadius: '10px', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>⚙️ BACK-OFFICE</button>
+                <button className="pos-btn" onClick={() => openNumpad('depense', 'Enregistrer un décaissement')} style={{ padding: '8px 12px', background: 'white', color: COLORS.textMain, borderRadius: '8px', border: `1px solid ${COLORS.border}`, cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Icon name="wallet" size={14} color={COLORS.textLight} /> Sortie
+                </button>
+                <button className="pos-btn" onClick={cloturerShift} style={{ padding: '8px 12px', background: 'white', color: COLORS.textMain, borderRadius: '8px', border: `1px solid ${COLORS.border}`, cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Icon name="power" size={14} color={COLORS.textLight} /> Fin Shift
+                </button>
+                <button className="pos-btn" onClick={() => setAppMode('ADMIN')} style={{ padding: '8px 12px', background: COLORS.secondary, color: 'white', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Icon name="settings" size={14} /> Admin
+                </button>
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '8px', marginBottom: '10px', flexShrink: 0, scrollbarWidth: 'none' }}>
+            {/* BARRE DES CATÉGORIES */}
+            <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '8px', marginBottom: '8px', flexShrink: 0, scrollbarWidth: 'none' }}>
               {TOUTES_CATEGORIES.map(c => (
-                <button key={c} className="pos-btn" onClick={() => setPosCategory(c)} style={{ padding: '12px 22px', fontSize: '1.05rem', fontWeight: 'bold', borderRadius: '12px', border: posCategory === c ? 'none' : `1px solid ${COLORS.border}`, background: posCategory === c ? COLORS.primary : 'white', color: posCategory === c ? 'white' : COLORS.textMain, cursor: 'pointer', flexShrink: 0 }}>{c}</button>
+                <button key={c} className="pos-btn" onClick={() => setPosCategory(c)} style={{ padding: '10px 18px', fontSize: '0.95rem', fontWeight: '600', borderRadius: '8px', border: posCategory === c ? 'none' : `1px solid ${COLORS.border}`, background: posCategory === c ? COLORS.secondary : 'white', color: posCategory === c ? 'white' : COLORS.textMain, cursor: 'pointer', flexShrink: 0 }}>{c}</button>
               ))}
             </div>
 
-            {/* BANNIÈRE D'ACCÈS RAPIDE PROMO TACOS DANS L'ONGLET TACOS */}
+            {/* BANNIÈRE BENTO PROMO TACOS (SOBRE, HAUT CONTRASTE) */}
             {posCategory === 'Tacos' && (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '10px', marginBottom: '12px', flexShrink: 0 }}>
-                <button className="pos-btn num-tabular" onClick={() => openPromoTacosBuilder('L')} style={{ padding: '14px 18px', borderRadius: '14px', border: `2px solid ${COLORS.promo}`, background: '#FFFBEB', color: '#92400E', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', textAlign: 'left' }}>
+                <button className="pos-btn num-tabular" onClick={() => openPromoTacosBuilder('L')} style={{ padding: '14px 16px', borderRadius: '12px', border: `1px solid ${COLORS.darkBorder}`, background: COLORS.secondary, color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', textAlign: 'left' }}>
                   <div>
-                    <div style={{ fontWeight: 'bold', fontSize: '1.05rem' }}>🔥 PACK 2 TACOS L (Sans Frites)</div>
-                    <div style={{ fontSize: '0.8rem', opacity: 0.85 }}>Option +15 DH : Frites + Boisson 1L</div>
+                    <div style={{ fontWeight: '600', fontSize: '1rem', letterSpacing: '-0.01em' }}>Pack 2 Tacos L (Sans Frites)</div>
+                    <div style={{ fontSize: '0.8rem', color: '#A1A1AA', marginTop: '2px' }}>Option +15 DH : Frites + Boisson 1L</div>
                   </div>
-                  <span style={{ background: COLORS.promo, color: 'white', padding: '6px 12px', borderRadius: '10px', fontWeight: 'bold', fontSize: '1.15rem' }}>55 DH</span>
+                  <span style={{ background: COLORS.primary, color: 'white', padding: '6px 10px', borderRadius: '8px', fontWeight: '700', fontSize: '1.05rem' }}>55 DH</span>
                 </button>
 
-                <button className="pos-btn num-tabular" onClick={() => openPromoTacosBuilder('XL')} style={{ padding: '14px 18px', borderRadius: '14px', border: `2px solid ${COLORS.primary}`, background: '#FEF2F2', color: '#991B1B', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', textAlign: 'left' }}>
+                <button className="pos-btn num-tabular" onClick={() => openPromoTacosBuilder('XL')} style={{ padding: '14px 16px', borderRadius: '12px', border: `1px solid ${COLORS.darkBorder}`, background: COLORS.secondary, color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', textAlign: 'left' }}>
                   <div>
-                    <div style={{ fontWeight: 'bold', fontSize: '1.05rem' }}>🔥 PACK 2 TACOS XL (Sans Frites)</div>
-                    <div style={{ fontSize: '0.8rem', opacity: 0.85 }}>Option +15 DH : Frites + Boisson 1L</div>
+                    <div style={{ fontWeight: '600', fontSize: '1rem', letterSpacing: '-0.01em' }}>Pack 2 Tacos XL (Sans Frites)</div>
+                    <div style={{ fontSize: '0.8rem', color: '#A1A1AA', marginTop: '2px' }}>Option +15 DH : Frites + Boisson 1L</div>
                   </div>
-                  <span style={{ background: COLORS.primary, color: 'white', padding: '6px 12px', borderRadius: '10px', fontWeight: 'bold', fontSize: '1.15rem' }}>89 DH</span>
+                  <span style={{ background: COLORS.primary, color: 'white', padding: '6px 10px', borderRadius: '8px', fontWeight: '700', fontSize: '1.05rem' }}>89 DH</span>
                 </button>
               </div>
             )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(165px, 1fr))', gap: '10px' }}>
+            {/* GRILLE DES PRODUITS : ALIGNEMENT À GAUCHE + GRILLE 2x2 POUR LES TAILLES */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(185px, 1fr))', gap: '10px' }}>
               {menu.filter(p => p.categorie === posCategory && p.available !== false).map(p => (
-                <div key={p.id} className="pos-card" style={{ background: 'white', borderRadius: '14px', overflow: 'hidden', border: `1px solid ${COLORS.border}` }}>
+                <div key={p.id} className="pos-card" style={{ background: 'white', borderRadius: '12px', overflow: 'hidden', border: `1px solid ${COLORS.border}`, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                   {p.variantes?.length > 0 ? (
                     <div style={{ padding: '12px' }}>
-                      <div style={{ fontWeight: 'bold', textAlign: 'center', marginBottom: '10px', fontSize: '1.05rem', letterSpacing: '-0.01em' }}>{p.nom}</div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <div style={{ fontWeight: '600', textAlign: 'left', marginBottom: '10px', fontSize: '0.98rem', letterSpacing: '-0.01em', color: COLORS.textMain, lineHeight: 1.25 }}>{p.nom}</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px' }}>
                         {p.variantes.filter(v => v.available !== false).map((v, i) => (
-                          <button key={i} className="pos-btn num-tabular" onClick={(e) => { e.stopPropagation(); triggerAddToCart(p, v); }} style={{ padding: '10px 12px', background: COLORS.bg, border: `1px solid ${COLORS.border}`, borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', color: COLORS.textMain }}>
-                            <span>{v.nom}</span> <span style={{ color: COLORS.primary }}>{v.prix} DH</span>
+                          <button key={i} className="pos-btn num-tabular" onClick={(e) => { e.stopPropagation(); triggerAddToCart(p, v); }} style={{ padding: '8px 10px', background: COLORS.bg, border: `1px solid ${COLORS.border}`, borderRadius: '8px', fontWeight: '600', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: COLORS.textMain, fontSize: '0.85rem' }}>
+                            <span>{v.nom}</span>
+                            <span style={{ color: COLORS.primary, fontWeight: '700' }}>{v.prix}</span>
                           </button>
                         ))}
                       </div>
                     </div>
                   ) : (
-                    <div className="pos-btn" onClick={() => triggerAddToCart(p)} style={{ padding: '22px 12px', textAlign: 'center', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', cursor: 'pointer', boxSizing: 'border-box' }}>
-                      <div style={{ fontWeight: 'bold', fontSize: '1.05rem', letterSpacing: '-0.01em' }}>{p.nom}</div>
-                      <div className="num-tabular" style={{ color: COLORS.primary, fontWeight: 'bold', marginTop: '6px', fontSize: '1.2rem' }}>{p.prix} DH</div>
+                    <div className="pos-btn" onClick={() => triggerAddToCart(p)} style={{ padding: '16px 14px', textAlign: 'left', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', cursor: 'pointer', boxSizing: 'border-box', minHeight: '92px' }}>
+                      <div style={{ fontWeight: '600', fontSize: '0.98rem', letterSpacing: '-0.01em', color: COLORS.textMain, lineHeight: 1.25 }}>{p.nom}</div>
+                      <div className="num-tabular" style={{ color: COLORS.textMuted, fontWeight: '700', marginTop: '10px', fontSize: '1.05rem' }}>{p.prix} DH</div>
                     </div>
                   )}
                 </div>
@@ -1567,51 +1828,50 @@ function FoodjiSystem() {
 
           {/* COLONNE DROITE : PANIER DE COMMANDE EN DARK UI (ZINC 950 / 900) */}
           <div style={{ width: '420px', flexShrink: 0, background: COLORS.darkBg, color: '#FAFAFA', display: 'flex', flexDirection: 'column', height: '100%', borderLeft: `1px solid ${COLORS.darkBorder}` }}>
-            {/* EN-TÊTE CLIENT & TYPE DE COMMANDE */}
             <div style={{ padding: '14px', background: COLORS.darkCard, color: 'white', flexShrink: 0, borderBottom: `1px solid ${COLORS.darkBorder}` }}>
-              <div style={{ display: 'flex', gap: '4px', marginBottom: '12px', background: '#09090B', padding: '4px', borderRadius: '10px', border: `1px solid ${COLORS.darkBorder}` }}>
-                <button className="pos-btn" onClick={() => setPosOrderType('sur_place')} style={{ flex: 1, padding: '8px', borderRadius: '7px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: posOrderType === 'sur_place' ? COLORS.success : 'transparent', color: posOrderType === 'sur_place' ? 'white' : '#A1A1AA' }}>Sur Place</button>
-                <button className="pos-btn" onClick={() => setPosOrderType('emporter')} style={{ flex: 1, padding: '8px', borderRadius: '7px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: posOrderType === 'emporter' ? COLORS.promo : 'transparent', color: posOrderType === 'emporter' ? 'white' : '#A1A1AA' }}>Emporter</button>
-                <button className="pos-btn" onClick={() => setPosOrderType('livraison')} style={{ flex: 1, padding: '8px', borderRadius: '7px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: posOrderType === 'livraison' ? COLORS.blue : 'transparent', color: posOrderType === 'livraison' ? 'white' : '#A1A1AA' }}>Livraison</button>
+              <div style={{ display: 'flex', gap: '4px', marginBottom: '12px', background: '#09090B', padding: '4px', borderRadius: '8px', border: `1px solid ${COLORS.darkBorder}` }}>
+                <button className="pos-btn" onClick={() => setPosOrderType('sur_place')} style={{ flex: 1, padding: '8px', borderRadius: '6px', border: 'none', fontWeight: '600', fontSize: '0.88rem', cursor: 'pointer', background: posOrderType === 'sur_place' ? '#27272A' : 'transparent', color: posOrderType === 'sur_place' ? 'white' : '#71717A' }}>Sur Place</button>
+                <button className="pos-btn" onClick={() => setPosOrderType('emporter')} style={{ flex: 1, padding: '8px', borderRadius: '6px', border: 'none', fontWeight: '600', fontSize: '0.88rem', cursor: 'pointer', background: posOrderType === 'emporter' ? '#27272A' : 'transparent', color: posOrderType === 'emporter' ? 'white' : '#71717A' }}>À Emporter</button>
+                <button className="pos-btn" onClick={() => setPosOrderType('livraison')} style={{ flex: 1, padding: '8px', borderRadius: '6px', border: 'none', fontWeight: '600', fontSize: '0.88rem', cursor: 'pointer', background: posOrderType === 'livraison' ? COLORS.blue : 'transparent', color: posOrderType === 'livraison' ? 'white' : '#71717A' }}>Livraison</button>
               </div>
 
               <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
                 <div style={{ position: 'relative', flex: 1 }}>
-                  <input type="tel" className="num-tabular" placeholder="Tél (06...)" value={posPhone} onChange={e => handlePhoneInput(e.target.value)} style={{ width: '100%', padding: '11px', borderRadius: '8px', border: `2px solid ${COLORS.blue}`, background: '#09090B', color: '#FAFAFA', fontSize: '1.05rem', boxSizing: 'border-box', fontWeight: 'bold' }} />
+                  <input type="tel" className="num-tabular" placeholder="Téléphone (06...)" value={posPhone} onChange={e => handlePhoneInput(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${COLORS.darkBorder}`, background: '#09090B', color: '#FAFAFA', fontSize: '0.95rem', boxSizing: 'border-box', fontWeight: '600' }} />
                   {clientActif && clientActif.totalCommandes >= 10 && (
-                    <span style={{ position: 'absolute', right: '8px', top: '10px', background: COLORS.promo, color: 'white', padding: '2px 8px', borderRadius: '6px', fontWeight: 'bold', fontSize: '0.75rem' }}>⭐ VIP</span>
+                    <span style={{ position: 'absolute', right: '8px', top: '9px', background: COLORS.promo, color: 'white', padding: '2px 7px', borderRadius: '6px', fontWeight: '700', fontSize: '0.7rem' }}>VIP</span>
                   )}
                 </div>
-                <select value={posBipeur} onChange={e => setPosBipeur(e.target.value)} style={{ width: '96px', padding: '11px', borderRadius: '8px', border: `1px solid ${COLORS.darkBorder}`, background: '#27272A', color: '#FAFAFA', fontSize: '0.95rem', fontWeight: 'bold', cursor: 'pointer' }}>
+                <select value={posBipeur} onChange={e => setPosBipeur(e.target.value)} style={{ width: '96px', padding: '10px', borderRadius: '8px', border: `1px solid ${COLORS.darkBorder}`, background: '#09090B', color: '#FAFAFA', fontSize: '0.9rem', fontWeight: '600', cursor: 'pointer' }}>
                   <option value="">Bipeur</option>
                   {Array.from({ length: 20 }, (_, i) => <option key={i + 1} value={i + 1}>N° {i + 1}</option>)}
                 </select>
               </div>
 
-              <input type="text" placeholder="Nom Client (Auto si fidèle)" value={posClientName} onChange={e => setPosClientName(e.target.value)} style={{ width: '100%', padding: '11px', borderRadius: '8px', border: `1px solid ${COLORS.darkBorder}`, background: '#27272A', color: '#FAFAFA', marginBottom: posOrderType === 'livraison' ? '8px' : '0', fontSize: '0.95rem', boxSizing: 'border-box' }} />
+              <input type="text" placeholder="Nom du client" value={posClientName} onChange={e => setPosClientName(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${COLORS.darkBorder}`, background: '#09090B', color: '#FAFAFA', marginBottom: posOrderType === 'livraison' ? '8px' : '0', fontSize: '0.9rem', boxSizing: 'border-box' }} />
 
               {posOrderType === 'livraison' && (
-                <input type="text" placeholder="Adresse complète de livraison" value={posAddress} onChange={e => setPosAddress(e.target.value)} style={{ width: '100%', padding: '11px', borderRadius: '8px', border: `1px solid ${COLORS.darkBorder}`, background: '#27272A', color: '#FAFAFA', fontSize: '0.95rem', boxSizing: 'border-box' }} />
+                <input type="text" placeholder="Adresse complète de livraison" value={posAddress} onChange={e => setPosAddress(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${COLORS.darkBorder}`, background: '#09090B', color: '#FAFAFA', fontSize: '0.9rem', boxSizing: 'border-box' }} />
               )}
             </div>
 
-            {/* LISTE DES ARTICLES CHOISIS (FOND SOMBRE #09090B & CARTES #18181B) */}
+            {/* LISTE DES ARTICLES CHOISIS (DARK UI) */}
             <div style={{ flex: 1, overflowY: 'auto', padding: '12px', background: COLORS.darkBg }}>
               {posCart.length === 0 ? (
-                <div style={{ textAlign: 'center', color: '#71717A', marginTop: '60px', fontSize: '1.05rem', padding: '24px', border: `1px dashed ${COLORS.darkBorder}`, borderRadius: '12px' }}>
-                  Aucun article dans le panier
+                <div style={{ textAlign: 'center', color: '#52525B', marginTop: '60px', fontSize: '0.95rem', padding: '24px' }}>
+                  Sélectionnez un produit pour démarrer
                 </div>
               ) : null}
 
               {posCart.map(item => (
-                <div key={item.idCart} style={{ padding: '12px', border: `1px solid ${COLORS.darkBorder}`, background: COLORS.darkCard, borderRadius: '12px', marginBottom: '10px', boxShadow: '0 4px 12px rgba(0,0,0,0.25)' }}>
+                <div key={item.idCart} style={{ padding: '12px', border: `1px solid ${COLORS.darkBorder}`, background: COLORS.darkCard, borderRadius: '12px', marginBottom: '8px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: '8px' }}>
                     <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => openNumpad('prix_article', `Modifier prix unitaire : ${item.nom}`, item.idCart)}>
-                      <div style={{ fontWeight: 'bold', fontSize: '1rem', color: item.isPrixModifie ? '#FBBF24' : '#FAFAFA' }}>{item.nom}</div>
+                      <div style={{ fontWeight: '600', fontSize: '0.95rem', color: item.isPrixModifie ? '#FBBF24' : '#FAFAFA' }}>{item.nom}</div>
                       {item.detailsTxt?.length > 0 && (
-                        <div style={{ fontSize: '0.85rem', color: '#A1A1AA', marginTop: '6px', paddingLeft: '6px' }}>
+                        <div style={{ fontSize: '0.82rem', color: '#A1A1AA', marginTop: '6px', paddingLeft: '4px' }}>
                           {item.detailsTxt.map((txt, j) => (
-                            <div key={j} style={{ color: txt.includes('🚫') ? '#F87171' : txt.includes('🍟🥤') ? '#34D399' : '#A1A1AA', fontWeight: (txt.includes('🚫') || txt.includes('🍟🥤')) ? 'bold' : 'normal', marginBottom: '2px' }}>
+                            <div key={j} style={{ color: txt.includes('[SANS') ? '#F87171' : txt.includes('[OPTION') ? '#34D399' : '#A1A1AA', fontWeight: (txt.includes('[SANS') || txt.includes('[OPTION')) ? '600' : 'normal', marginBottom: '2px' }}>
                               • {txt}
                             </div>
                           ))}
@@ -1619,22 +1879,23 @@ function FoodjiSystem() {
                       )}
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <span className="num-tabular" style={{ fontWeight: 'bold', fontSize: '1.1rem', color: '#FB923C', cursor: 'pointer', display: 'block' }} onClick={() => openNumpad('prix_article', `Modifier prix : ${item.nom}`, item.idCart)}>{item.prixFinal * item.qte} DH</span>
+                      <span className="num-tabular" style={{ fontWeight: '700', fontSize: '1rem', color: '#FAFAFA', cursor: 'pointer', display: 'block' }} onClick={() => openNumpad('prix_article', `Modifier prix : ${item.nom}`, item.idCart)}>{item.prixFinal * item.qte} DH</span>
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '10px', marginTop: '10px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', background: '#27272A', border: '1px solid #3F3F46', borderRadius: '8px', overflow: 'hidden' }}>
-                      <button className="pos-btn" onClick={() => modifierQuantite(item.idCart, -1)} style={{ padding: '4px 14px', fontSize: '1.1rem', fontWeight: 'bold', border: 'none', background: 'transparent', color: '#FAFAFA', cursor: 'pointer' }}>-</button>
-                      <span className="num-tabular" style={{ padding: '0 10px', fontWeight: 'bold', fontSize: '1rem', color: '#FAFAFA' }}>{item.qte}</span>
-                      <button className="pos-btn" onClick={() => modifierQuantite(item.idCart, 1)} style={{ padding: '4px 14px', fontSize: '1.1rem', fontWeight: 'bold', border: 'none', background: 'transparent', color: '#FAFAFA', cursor: 'pointer' }}>+</button>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px', marginTop: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', background: '#09090B', border: `1px solid ${COLORS.darkBorder}`, borderRadius: '8px', overflow: 'hidden' }}>
+                      <button className="pos-btn" onClick={() => modifierQuantite(item.idCart, -1)} style={{ padding: '5px 12px', border: 'none', background: 'transparent', color: '#A1A1AA', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><Icon name="minus" size={14} /></button>
+                      <span className="num-tabular" style={{ padding: '0 8px', fontWeight: '600', fontSize: '0.9rem', color: '#FAFAFA' }}>{item.qte}</span>
+                      <button className="pos-btn" onClick={() => modifierQuantite(item.idCart, 1)} style={{ padding: '5px 12px', border: 'none', background: 'transparent', color: '#FAFAFA', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><Icon name="plus" size={14} /></button>
                     </div>
-                    <button className="pos-btn" onClick={() => removeFromCart(item.idCart)} style={{ background: 'rgba(239, 68, 68, 0.18)', color: '#F87171', border: '1px solid rgba(239, 68, 68, 0.35)', padding: '6px 10px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>🗑️</button>
+                    <button className="pos-btn" onClick={() => removeFromCart(item.idCart)} style={{ background: 'transparent', color: '#71717A', border: `1px solid ${COLORS.darkBorder}`, padding: '6px 8px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                      <Icon name="trash" size={14} color="#F87171" />
+                    </button>
                   </div>
                 </div>
               ))}
 
-              {/* BOUTON RAPIDE +15 DH FRITES & BOISSON 1L SI PROMO TACOS DÉTECTÉE DANS LE PANIER */}
               {promoTacosDiscount > 0 && (
                 <button
                   className="pos-btn num-tabular"
@@ -1642,80 +1903,99 @@ function FoodjiSystem() {
                   style={{
                     width: '100%',
                     padding: '10px 12px',
-                    borderRadius: '10px',
-                    border: '1px dashed #F59E0B',
-                    background: 'rgba(245, 158, 11, 0.15)',
+                    borderRadius: '8px',
+                    border: `1px solid ${COLORS.darkBorder}`,
+                    background: COLORS.darkCard,
                     color: '#FBBF24',
-                    fontWeight: 'bold',
-                    fontSize: '0.9rem',
+                    fontWeight: '600',
+                    fontSize: '0.85rem',
                     cursor: 'pointer',
-                    marginTop: '4px'
+                    marginTop: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
                   }}
                 >
-                  🍟🥤 + Rajouter Frites & Boisson 1L (+15 DH)
+                  <span>+ Ajouter Frites & Boisson 1L (Promo Tacos)</span>
+                  <span>+15 DH</span>
                 </button>
               )}
             </div>
 
             {/* PIED DE CAISSE SOMBRE */}
-            <div style={{ padding: '16px', borderTop: `1px solid ${COLORS.darkBorder}`, background: COLORS.darkCard, flexShrink: 0 }}>
-              <textarea placeholder="Note cuisine / client..." value={posNote} onChange={e => setPosNote(e.target.value)} rows={2} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: `1px solid ${COLORS.darkBorder}`, background: '#27272A', color: '#FAFAFA', marginBottom: '12px', resize: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+            <div style={{ padding: '14px', borderTop: `1px solid ${COLORS.darkBorder}`, background: COLORS.darkCard, flexShrink: 0 }}>
+              <textarea placeholder="Note cuisine / instructions..." value={posNote} onChange={e => setPosNote(e.target.value)} rows={2} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: `1px solid ${COLORS.darkBorder}`, background: '#09090B', color: '#FAFAFA', marginBottom: '10px', resize: 'none', boxSizing: 'border-box', fontFamily: 'inherit', fontSize: '0.88rem' }} />
 
-              <div className="num-tabular" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', fontSize: '0.95rem', color: '#A1A1AA' }}>
+              <div className="num-tabular" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', fontSize: '0.88rem', color: '#A1A1AA' }}>
                 <span>Sous-total</span><span>{sousTotalCart} DH</span>
               </div>
 
               {fraisLivraison > 0 && (
-                <div className="num-tabular" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', fontSize: '0.95rem', color: '#60A5FA', fontWeight: 'bold' }}>
+                <div className="num-tabular" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', fontSize: '0.88rem', color: '#60A5FA', fontWeight: '600' }}>
                   <span>Frais de livraison</span><span>+ {fraisLivraison} DH</span>
                 </div>
               )}
 
               {promoDimancheDiscount > 0 && (
-                <div className="num-tabular" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', fontSize: '0.95rem', color: '#34D399', fontWeight: 'bold' }}>
-                  <span>🎁 Promo Dimanche (3ème Pizza)</span><span>- {promoDimancheDiscount} DH</span>
+                <div className="num-tabular" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', fontSize: '0.88rem', color: '#34D399', fontWeight: '600' }}>
+                  <span>Promo Dimanche (3ème Pizza)</span><span>- {promoDimancheDiscount} DH</span>
                 </div>
               )}
 
               {promoTacosDiscount > 0 && (
-                <div className="num-tabular" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', fontSize: '0.95rem', color: '#FBBF24', fontWeight: 'bold' }}>
-                  <span>🌮 Promo Tacos (Sans frites)</span><span>- {promoTacosDiscount} DH</span>
+                <div className="num-tabular" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', fontSize: '0.88rem', color: '#FBBF24', fontWeight: '600' }}>
+                  <span>Promo Tacos (Sans frites)</span><span>- {promoTacosDiscount} DH</span>
                 </div>
               )}
 
               {promoDuoDiscount > 0 && (
-                <div className="num-tabular" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', fontSize: '0.95rem', color: '#34D399', fontWeight: 'bold' }}>
-                  <span>🎁 Promo Duo (-50%)</span><span>- {promoDuoDiscount} DH</span>
+                <div className="num-tabular" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', fontSize: '0.88rem', color: '#34D399', fontWeight: '600' }}>
+                  <span>Promo Duo (-50%)</span><span>- {promoDuoDiscount} DH</span>
                 </div>
               )}
 
               {montantRemiseGlobale > 0 && (
-                <div className="num-tabular" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', fontSize: '0.95rem', color: '#F87171', fontWeight: 'bold' }}>
+                <div className="num-tabular" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', fontSize: '0.88rem', color: '#F87171', fontWeight: '600' }}>
                   <span>Remise manuelle ({remiseGlobale}%)</span><span>- {montantRemiseGlobale} DH</span>
                 </div>
               )}
 
               {remiseCRM > 0 && (
-                <div className="num-tabular" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', fontSize: '0.95rem', color: '#34D399', fontWeight: 'bold' }}>
+                <div className="num-tabular" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', fontSize: '0.88rem', color: '#34D399', fontWeight: '600' }}>
                   <span>Remise Fidélité ({clientActif.remiseAuto}%)</span><span>- {remiseCRM} DH</span>
                 </div>
               )}
 
-              <div className="num-tabular" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '10px 0 14px 0', fontSize: '1.75rem', fontWeight: 'bold', letterSpacing: '-0.02em', color: '#FAFAFA' }}>
-                <span>TOTAL</span>
-                <span style={{ color: '#FB923C' }}>{totalCart} DH</span>
+              <div className="num-tabular" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '8px 0 12px 0', fontSize: '1.6rem', fontWeight: 'bold', letterSpacing: '-0.02em', color: '#FAFAFA' }}>
+                <span>Total</span>
+                <span>{totalCart} DH</span>
               </div>
 
               <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
                 {posOrderType === 'livraison' ? (
-                  <button className="pos-btn" onClick={() => validerCommandePOS('En attente', null, 'En Livraison')} disabled={loading || posCart.length === 0} style={{ flex: 2, padding: '16px 10px', background: COLORS.blue, color: 'white', border: 'none', borderRadius: '12px', fontSize: '1.05rem', fontWeight: 'bold', cursor: 'pointer', opacity: posCart.length === 0 ? 0.5 : 1 }}>🛵 DÉPART LIVREUR</button>
+                  <button className="pos-btn" onClick={() => validerCommandePOS('En attente', null, 'En Livraison')} disabled={loading || posCart.length === 0} style={{ flex: 2, padding: '14px 10px', background: COLORS.blue, color: 'white', border: 'none', borderRadius: '8px', fontSize: '0.98rem', fontWeight: '600', cursor: 'pointer', opacity: posCart.length === 0 ? 0.5 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                    <Icon name="truck" size={16} /> Départ Livreur
+                  </button>
                 ) : (
-                  <button className="pos-btn" onClick={() => setShowCashOptions(true)} disabled={loading || posCart.length === 0} style={{ flex: 2, padding: '16px 10px', background: COLORS.success, color: 'white', border: 'none', borderRadius: '12px', fontSize: '1.05rem', fontWeight: 'bold', cursor: 'pointer', opacity: posCart.length === 0 ? 0.5 : 1 }}>💵 ENCAISSER</button>
+                  <button className="pos-btn" onClick={() => setShowCashOptions(true)} disabled={loading || posCart.length === 0} style={{ flex: 2, padding: '14px 10px', background: COLORS.success, color: 'white', border: 'none', borderRadius: '8px', fontSize: '0.98rem', fontWeight: '600', cursor: 'pointer', opacity: posCart.length === 0 ? 0.5 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                    <Icon name="check" size={16} /> Encaisser
+                  </button>
                 )}
-                <button className="pos-btn" onClick={() => openNumpad('remise_globale', 'Remise globale (%)')} disabled={loading || posCart.length === 0} style={{ flex: 1, padding: '16px 10px', background: '#27272A', color: '#FBBF24', border: '1px solid #3F3F46', borderRadius: '12px', fontSize: '0.95rem', fontWeight: 'bold', cursor: 'pointer', opacity: posCart.length === 0 ? 0.5 : 1 }}>🎁 REMISE %</button>
+                <button className="pos-btn" onClick={() => openNumpad('remise_globale', 'Remise globale (%)')} disabled={loading || posCart.length === 0} style={{ flex: 1, padding: '14px 10px', background: '#27272A', color: '#FAFAFA', border: `1px solid ${COLORS.darkBorder}`, borderRadius: '8px', fontSize: '0.9rem', fontWeight: '600', cursor: 'pointer', opacity: posCart.length === 0 ? 0.5 : 1 }}>Remise %</button>
               </div>
 
-              <button className="pos-btn" onClick={() => { if (window.confirm("Vider entièrement le panier ?")) { setPosCart([]); setRemiseGlobale(0); setClientActif(null); setPosBipeur(''); } }} style={{ width: '100%', padding: '12px', background: 'rgba(239, 68, 68, 0.15)', color: '#F87171', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.95rem' }}>🗑️ Vider le panier</button>
+              <button
+                className="pos-btn"
+                onClick={() => {
+                  if (posCart.length === 0) return;
+                  requestConfirm("Vider le panier", "Voulez-vous retirer tous les articles du panier actuel ?", () => {
+                    setPosCart([]); setRemiseGlobale(0); setClientActif(null); setPosBipeur('');
+                  }, true, "Vider");
+                }}
+                style={{ width: '100%', padding: '10px', background: 'transparent', color: '#71717A', border: `1px solid ${COLORS.darkBorder}`, borderRadius: '8px', fontWeight: '600', cursor: 'pointer', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+              >
+                <Icon name="trash" size={14} /> Vider le panier
+              </button>
             </div>
           </div>
         </div>
@@ -1726,37 +2006,54 @@ function FoodjiSystem() {
   return (
     <>
       {renderTickets()}
+      {renderSystemOverlays()}
       <div className="no-print" style={{ background: COLORS.bg, minHeight: '100vh', paddingBottom: '100px', color: COLORS.textMain }}>
         <div style={{ padding: '24px', maxWidth: '1240px', margin: '0 auto' }}>
 
+          {/* BARRE SUPÉRIEURE ADMIN (HIÉRARCHIE MONOCHROME 90/10) */}
           <div style={{ marginBottom: '24px', display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center', justifyContent: 'space-between' }}>
-            <h2 style={{ margin: 0, letterSpacing: '-0.03em', fontSize: '1.75rem' }}>⚙️ Administration Foodji</h2>
-            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-              <button className="pos-btn" onClick={() => setShowPromoManager(!showPromoManager)} style={{ padding: '10px 14px', borderRadius: '10px', border: 'none', background: COLORS.promo, color: 'white', fontWeight: 'bold', cursor: 'pointer' }}>🎁 GESTION PROMOS</button>
-              <button className="pos-btn" onClick={() => setShowHistory(!showHistory)} style={{ padding: '10px 14px', borderRadius: '10px', border: `1px solid ${COLORS.secondary}`, background: showHistory ? COLORS.secondary : 'white', color: showHistory ? 'white' : COLORS.secondary, fontWeight: 'bold', cursor: 'pointer' }}>🕒 Historique</button>
-              <button className="pos-btn" onClick={() => setShowBilanGlobal(true)} style={{ padding: '10px 14px', borderRadius: '10px', border: 'none', background: COLORS.blue, color: 'white', fontWeight: 'bold', cursor: 'pointer' }}>📊 Bilan (Z)</button>
-              <button className="pos-btn" onClick={() => setAppMode('POS')} style={{ padding: '10px 16px', borderRadius: '10px', border: 'none', background: COLORS.primary, color: 'white', fontWeight: 'bold', cursor: 'pointer' }}>🍔 OUVRIR LA CAISSE</button>
-              <button className="pos-btn" onClick={() => auth.signOut()} style={{ padding: '10px 14px', borderRadius: '10px', border: `1px solid ${COLORS.border}`, background: 'white', cursor: 'pointer', fontWeight: '500' }}>Déconnexion</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <h2 style={{ margin: 0, letterSpacing: '-0.03em', fontSize: '1.6rem' }}>Administration Foodji</h2>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <button className="pos-btn" onClick={() => setShowPromoManager(!showPromoManager)} style={{ padding: '10px 14px', borderRadius: '8px', border: `1px solid ${COLORS.border}`, background: showPromoManager ? COLORS.secondary : 'white', color: showPromoManager ? 'white' : COLORS.textMain, fontWeight: '600', fontSize: '0.9rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Icon name="tag" size={15} /> Offres & Deals
+              </button>
+              <button className="pos-btn" onClick={() => setShowHistory(!showHistory)} style={{ padding: '10px 14px', borderRadius: '8px', border: `1px solid ${COLORS.border}`, background: showHistory ? COLORS.secondary : 'white', color: showHistory ? 'white' : COLORS.textMain, fontWeight: '600', fontSize: '0.9rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Icon name="clock" size={15} /> Historique
+              </button>
+              <button className="pos-btn" onClick={() => setShowBilanGlobal(true)} style={{ padding: '10px 14px', borderRadius: '8px', border: `1px solid ${COLORS.border}`, background: 'white', color: COLORS.textMain, fontWeight: '600', fontSize: '0.9rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Icon name="chart" size={15} /> Bilan (Z)
+              </button>
+              <button className="pos-btn" onClick={() => setAppMode('POS')} style={{ padding: '10px 16px', borderRadius: '8px', border: 'none', background: COLORS.primary, color: 'white', fontWeight: '600', fontSize: '0.9rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Icon name="store" size={15} /> Ouvrir la Caisse
+              </button>
+              <button className="pos-btn" onClick={() => auth.signOut()} style={{ padding: '10px 12px', borderRadius: '8px', border: `1px solid ${COLORS.border}`, background: 'white', color: COLORS.textLight, cursor: 'pointer', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Icon name="logOut" size={15} />
+              </button>
             </div>
           </div>
 
           {commandesEnLivraison.length > 0 && (
-            <div style={{ background: '#FEF2F2', padding: '20px', borderRadius: '16px', marginBottom: '32px', border: `2px solid ${COLORS.danger}` }}>
-              <h3 style={{ marginTop: 0, color: COLORS.danger, fontSize: '1.2rem', letterSpacing: '-0.02em' }}>🛵 RETOURS LIVREURS EN ATTENTE D'ENCAISSEMENT ({commandesEnLivraison.length})</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '14px' }}>
+            <div style={{ background: 'white', padding: '20px', borderRadius: '12px', marginBottom: '28px', border: `1px solid ${COLORS.borderStrong}`, borderLeft: `4px solid ${COLORS.blue}` }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+                <Icon name="truck" size={18} color={COLORS.blue} />
+                <h3 style={{ margin: 0, color: COLORS.textMain, fontSize: '1.1rem', letterSpacing: '-0.02em' }}>Retours livreurs en attente d'encaissement ({commandesEnLivraison.length})</h3>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '12px' }}>
                 {commandesEnLivraison.map(cmd => (
-                  <div key={cmd.id} style={{ background: 'white', borderRadius: '12px', padding: '16px', borderLeft: `5px solid ${COLORS.blue}`, boxShadow: '0 2px 6px rgba(0,0,0,0.04)' }}>
+                  <div key={cmd.id} style={{ background: COLORS.bg, borderRadius: '8px', padding: '14px', border: `1px solid ${COLORS.border}` }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                       <div>
-                        <strong style={{ fontSize: '1.1rem' }}>{cmd.client}</strong>
-                        <div style={{ color: COLORS.textLight, fontSize: '0.9rem' }}>{cmd.adresse || 'Adresse non spécifiée'}</div>
+                        <strong style={{ fontSize: '1rem' }}>{cmd.client}</strong>
+                        <div style={{ color: COLORS.textLight, fontSize: '0.85rem' }}>{cmd.adresse || 'Adresse non spécifiée'}</div>
                       </div>
-                      <div className="num-tabular" style={{ textAlign: 'right', fontSize: '1.4rem', fontWeight: 'bold', color: COLORS.primary }}>
+                      <div className="num-tabular" style={{ textAlign: 'right', fontSize: '1.25rem', fontWeight: 'bold', color: COLORS.textMain }}>
                         {cmd.total} DH
                       </div>
                     </div>
-                    <button className="pos-btn" onClick={() => encaisserRetourLivreur(cmd)} style={{ width: '100%', padding: '12px', background: COLORS.success, color: 'white', border: 'none', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1.05rem' }}>
-                      ✅ ENCAISSER LES ESPÈCES
+                    <button className="pos-btn" onClick={() => encaisserRetourLivreur(cmd)} style={{ width: '100%', padding: '10px', background: COLORS.secondary, color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                      <Icon name="check" size={15} /> Encaisser les espèces
                     </button>
                   </div>
                 ))}
@@ -1765,128 +2062,136 @@ function FoodjiSystem() {
           )}
 
           {showPromoManager && (
-            <div style={{ background: 'white', padding: '24px', borderRadius: '16px', marginBottom: '28px', border: `2px solid ${COLORS.promo}` }}>
-              <h3 style={{ marginTop: 0, color: COLORS.promo }}>🎁 Module Deals & Offres Spéciales</h3>
+            <div style={{ background: 'white', padding: '24px', borderRadius: '12px', marginBottom: '24px', border: `1px solid ${COLORS.border}` }}>
+              <h3 style={{ marginTop: 0, color: COLORS.textMain, fontSize: '1.15rem', letterSpacing: '-0.02em' }}>Catalogue des Deals Web</h3>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px', marginBottom: '16px' }}>
-                <div style={{ background: '#FFFBEB', padding: '16px', borderRadius: '12px', border: '1px solid #FEF3C7' }}>
-                  <h4 style={{ marginTop: 0 }}>➕ Créer un nouveau Deal</h4>
+                <div style={{ background: COLORS.bg, padding: '16px', borderRadius: '8px', border: `1px solid ${COLORS.border}` }}>
+                  <h4 style={{ marginTop: 0, fontSize: '0.95rem' }}>Créer une nouvelle offre</h4>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    <input placeholder="Nom du Deal (ex: Offre Tacos)" value={formPromo.titre} onChange={e => setFormPromo({ ...formPromo, titre: e.target.value })} style={{ padding: '10px', borderRadius: '8px', border: `1px solid ${COLORS.border}` }} />
+                    <input placeholder="Titre de l'offre" value={formPromo.titre} onChange={e => setFormPromo({ ...formPromo, titre: e.target.value })} style={{ padding: '10px', borderRadius: '8px', border: `1px solid ${COLORS.border}` }} />
                     <input placeholder="Description (ex: 2 Tacos L 55 DH / 2 XL 89 DH sans frites)" value={formPromo.description} onChange={e => setFormPromo({ ...formPromo, description: e.target.value })} style={{ padding: '10px', borderRadius: '8px', border: `1px solid ${COLORS.border}` }} />
-                    <input type="number" placeholder="Prix du Pack complet (DH)" value={formPromo.prix} onChange={e => setFormPromo({ ...formPromo, prix: e.target.value })} style={{ padding: '10px', borderRadius: '8px', border: `1px solid ${COLORS.border}` }} />
-                    <button className="pos-btn" onClick={savePromotion} style={{ padding: '12px', background: COLORS.promo, color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Mettre en ligne l'offre</button>
+                    <input type="number" placeholder="Prix en DH" value={formPromo.prix} onChange={e => setFormPromo({ ...formPromo, prix: e.target.value })} style={{ padding: '10px', borderRadius: '8px', border: `1px solid ${COLORS.border}` }} />
+                    <button className="pos-btn" onClick={savePromotion} style={{ padding: '11px', background: COLORS.secondary, color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}>Publier l'offre</button>
                   </div>
                 </div>
 
                 <div>
-                  <h4 style={{ marginTop: 0 }}>📋 Statut des Promos Actuelles</h4>
-                  <div style={{ maxHeight: '220px', overflowY: 'auto', border: `1px solid ${COLORS.border}`, borderRadius: '12px', padding: '10px' }}>
+                  <h4 style={{ marginTop: 0, fontSize: '0.95rem' }}>Offres enregistrées</h4>
+                  <div style={{ maxHeight: '220px', overflowY: 'auto', border: `1px solid ${COLORS.border}`, borderRadius: '8px', padding: '8px' }}>
                     {promotions.map(promo => (
-                      <div key={promo.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', background: promo.status ? '#F0FDF4' : '#FEF2F2', borderRadius: '8px', marginBottom: '6px' }}>
+                      <div key={promo.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', background: COLORS.bg, borderRadius: '8px', marginBottom: '6px', border: `1px solid ${COLORS.border}` }}>
                         <div>
-                          <strong>{promo.titre}</strong>
+                          <strong style={{ fontSize: '0.95rem' }}>{promo.titre}</strong>
                           <div className="num-tabular" style={{ fontSize: '0.85rem', color: COLORS.textLight }}>{promo.prix} DH</div>
                         </div>
-                        <button className="pos-btn" onClick={() => togglePromoStatus(promo.id, promo.status)} style={{ padding: '8px 12px', border: 'none', borderRadius: '8px', background: promo.status ? COLORS.success : COLORS.danger, color: 'white', fontWeight: 'bold', cursor: 'pointer' }}>
-                          {promo.status ? '🟢 ACTIF' : '🔴 COUPÉ'}
+                        <button className="pos-btn" onClick={() => togglePromoStatus(promo.id, promo.status)} style={{ padding: '6px 12px', border: `1px solid ${COLORS.border}`, borderRadius: '8px', background: 'white', color: COLORS.textMain, fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <StatusDot active={promo.status} />
+                          <span>{promo.status ? 'Actif' : 'Désactivé'}</span>
                         </button>
                       </div>
                     ))}
                   </div>
                 </div>
               </div>
-              <button className="pos-btn" onClick={() => setShowPromoManager(false)} style={{ background: COLORS.bg, border: 'none', padding: '8px 14px', borderRadius: '8px', cursor: 'pointer', fontWeight: '500' }}>Fermer le module</button>
             </div>
           )}
 
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', marginBottom: '24px', background: 'white', padding: '16px 20px', borderRadius: '14px', alignItems: 'center', border: `1px solid ${COLORS.border}` }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <strong style={{ color: COLORS.textLight }}>Service :</strong>
-              <button className="pos-btn" onClick={() => updateDoc(doc(db, "parametres", "horaires"), { isOuvert: true })} style={{ padding: '8px 14px', borderRadius: '8px', background: parametres.isOuvert ? COLORS.success : COLORS.bg, color: parametres.isOuvert ? 'white' : COLORS.textMain, border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>🟢 OUVERT</button>
-              <button className="pos-btn" onClick={() => updateDoc(doc(db, "parametres", "horaires"), { isOuvert: false })} style={{ padding: '8px 14px', borderRadius: '8px', background: !parametres.isOuvert ? COLORS.danger : COLORS.bg, color: !parametres.isOuvert ? 'white' : COLORS.textMain, border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>🔴 FERMÉ</button>
+          {/* BARRE DE CONTRÔLE OPÉRATIONNELLE (AVEC PASTILLES GÉOMÉTRIQUES) */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', marginBottom: '24px', background: 'white', padding: '14px 20px', borderRadius: '12px', alignItems: 'center', border: `1px solid ${COLORS.border}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ color: COLORS.textLight, fontSize: '0.9rem', fontWeight: '600' }}>Restaurant :</span>
+              <button className="pos-btn" onClick={() => updateDoc(doc(db, "parametres", "horaires"), { isOuvert: !parametres.isOuvert })} style={{ padding: '7px 12px', borderRadius: '8px', background: COLORS.bg, color: COLORS.textMain, border: `1px solid ${COLORS.border}`, cursor: 'pointer', fontWeight: '600', fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <StatusDot active={parametres.isOuvert} colorInactive={COLORS.danger} />
+                <span>{parametres.isOuvert ? 'Ouvert aux commandes' : 'Fermé'}</span>
+              </button>
             </div>
-            <div style={{ width: '1px', height: '28px', background: COLORS.border }}></div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <strong style={{ color: COLORS.textLight }}>Mode Cuisine :</strong>
-              <select value={parametres.rushMode} onChange={(e) => updateDoc(doc(db, "parametres", "status"), { mode: e.target.value })} style={{ padding: '8px 12px', borderRadius: '8px', border: `1px solid ${COLORS.border}`, fontWeight: 'bold', outline: 'none', cursor: 'pointer' }}>
-                <option value="standard">✅ Standard</option>
-                <option value="rush">⚠️ Rush (30min+)</option>
-                <option value="gros_rush">🔥 Gros Rush (1h+)</option>
+            <div style={{ width: '1px', height: '24px', background: COLORS.border }}></div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ color: COLORS.textLight, fontSize: '0.9rem', fontWeight: '600' }}>Cadence Cuisine :</span>
+              <select value={parametres.rushMode} onChange={(e) => updateDoc(doc(db, "parametres", "status"), { mode: e.target.value })} style={{ padding: '7px 12px', borderRadius: '8px', border: `1px solid ${COLORS.border}`, background: COLORS.bg, fontWeight: '600', fontSize: '0.88rem', outline: 'none', cursor: 'pointer' }}>
+                <option value="standard">Flux Standard</option>
+                <option value="rush">Flux Rush (30 min+)</option>
+                <option value="gros_rush">Fort Rush (1h+)</option>
               </select>
             </div>
-            <div style={{ width: '1px', height: '28px', background: COLORS.border }}></div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-              <strong style={{ color: COLORS.textLight }}>Promotions POS :</strong>
-              <button className="pos-btn" onClick={togglePromoTacosAdmin} style={{ padding: '8px 14px', borderRadius: '8px', background: parametres.promoTacosActive ? COLORS.success : COLORS.bg, color: parametres.promoTacosActive ? 'white' : COLORS.textMain, border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>
-                {parametres.promoTacosActive ? '🟢 TACOS (2L=55 / 2XL=89)' : '🔴 TACOS (2L=55 / 2XL=89)'}
+            <div style={{ width: '1px', height: '24px', background: COLORS.border }}></div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <span style={{ color: COLORS.textLight, fontSize: '0.9rem', fontWeight: '600' }}>Moteurs Promos :</span>
+              <button className="pos-btn" onClick={togglePromoTacosAdmin} style={{ padding: '7px 12px', borderRadius: '8px', background: COLORS.bg, color: COLORS.textMain, border: `1px solid ${COLORS.border}`, cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '7px' }}>
+                <StatusDot active={parametres.promoTacosActive} />
+                <span>Tacos (2L=55 / 2XL=89)</span>
               </button>
-              <button className="pos-btn" onClick={togglePromoDuoAdmin} style={{ padding: '8px 14px', borderRadius: '8px', background: parametres.promoDuoActive ? COLORS.success : COLORS.bg, color: parametres.promoDuoActive ? 'white' : COLORS.textMain, border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>
-                {parametres.promoDuoActive ? '🟢 DUO (-50%)' : '🔴 DUO (-50%)'}
+              <button className="pos-btn" onClick={togglePromoDuoAdmin} style={{ padding: '7px 12px', borderRadius: '8px', background: COLORS.bg, color: COLORS.textMain, border: `1px solid ${COLORS.border}`, cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '7px' }}>
+                <StatusDot active={parametres.promoDuoActive} />
+                <span>Duo (-50%)</span>
               </button>
-              <button className="pos-btn" onClick={togglePromoDimancheAdmin} style={{ padding: '8px 14px', borderRadius: '8px', background: parametres.promoDimancheActive ? COLORS.success : COLORS.bg, color: parametres.promoDimancheActive ? 'white' : COLORS.textMain, border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>
-                {parametres.promoDimancheActive ? '🟢 DIMANCHE (3ème Offert)' : '🔴 DIMANCHE (3ème Offert)'}
+              <button className="pos-btn" onClick={togglePromoDimancheAdmin} style={{ padding: '7px 12px', borderRadius: '8px', background: COLORS.bg, color: COLORS.textMain, border: `1px solid ${COLORS.border}`, cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '7px' }}>
+                <StatusDot active={parametres.promoDimancheActive} />
+                <span>Dimanche (3ème Pizza)</span>
               </button>
             </div>
           </div>
 
           {showBilanGlobal && (
             <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(9, 9, 11, 0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 4000 }}>
-              <div className="modal-box" style={{ background: 'white', padding: '30px', borderRadius: '20px', width: '90%', maxWidth: '460px' }}>
-                <h2 style={{ marginTop: 0, textAlign: 'center', color: COLORS.danger, letterSpacing: '-0.02em' }}>📊 BILAN JOURNÉE (Z)</h2>
-                <p style={{ textAlign: 'center', color: COLORS.textLight, fontSize: '0.9rem' }}>
-                  Depuis {serviceGlobal.lastZDate ? toJSDate(serviceGlobal.lastZDate).toLocaleString() : 'le début de service (06:00)'}
+              <div className="modal-box" style={{ background: 'white', padding: '28px', borderRadius: '16px', width: '90%', maxWidth: '440px', border: `1px solid ${COLORS.border}` }}>
+                <h2 style={{ marginTop: 0, textAlign: 'left', color: COLORS.textMain, letterSpacing: '-0.02em', fontSize: '1.35rem' }}>Bilan Comptable (Z)</h2>
+                <p style={{ textAlign: 'left', color: COLORS.textLight, fontSize: '0.85rem', marginTop: '4px' }}>
+                  Période ouverte depuis {serviceGlobal.lastZDate ? toJSDate(serviceGlobal.lastZDate).toLocaleString() : '06:00'}
                 </p>
-                <hr style={{ border: 'none', borderTop: `1px solid ${COLORS.border}`, margin: '18px 0' }} />
+                <hr style={{ border: 'none', borderTop: `1px solid ${COLORS.border}`, margin: '16px 0' }} />
                 {(() => {
                   const bilan = genererBilanGlobalZ();
                   if (!bilan) return <p>Aucune donnée disponible.</p>;
                   return (
-                    <div className="num-tabular">
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', fontSize: '1.15rem' }}><span>Espèces encaissées :</span> <strong>{bilan.totalEspeces} DH</strong></div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', fontSize: '1.15rem', color: COLORS.textLight }}><span>Livr. Web / Autres :</span> <strong>{bilan.totalLivrApp} DH</strong></div>
+                    <div className="num-tabular" style={{ fontSize: '0.95rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}><span>Espèces encaissées</span> <strong>{bilan.totalEspeces} DH</strong></div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', color: COLORS.textLight }}><span>Livraisons Web / Autres</span> <strong>{bilan.totalLivrApp} DH</strong></div>
                       {bilan.totalEnLivraison > 0 && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', fontSize: '1.1rem', color: COLORS.warning, fontWeight: 'bold' }}><span>🛵 En cours chez livreurs :</span> <span>{bilan.totalEnLivraison} DH</span></div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', color: COLORS.warning, fontWeight: '600' }}><span>En cours chez livreurs</span> <span>{bilan.totalEnLivraison} DH</span></div>
                       )}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', fontSize: '1.15rem', color: COLORS.danger }}><span>Décaissements :</span> <strong>- {bilan.totalDépenses} DH</strong></div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', color: COLORS.danger }}><span>Décaissements enregistrés</span> <strong>- {bilan.totalDépenses} DH</strong></div>
                       <hr style={{ border: 'none', borderTop: `1px solid ${COLORS.border}`, margin: '12px 0' }} />
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', fontSize: '1rem', color: COLORS.textLight }}><span>Fonds de Caisse initial :</span> <strong>+ {bilan.fondsInitial} DH</strong></div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', color: COLORS.textLight }}><span>Fonds de caisse initial</span> <strong>+ {bilan.fondsInitial} DH</strong></div>
                       <hr style={{ border: 'none', borderTop: `1px solid ${COLORS.border}`, margin: '12px 0' }} />
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.5rem', color: COLORS.primary }}><span>TIROIR ATTENDU :</span> <strong>{bilan.netEnCaisse} DH</strong></div>
-                      <div style={{ textAlign: 'center', marginTop: '12px', color: COLORS.textLight, fontSize: '0.9rem' }}>Commandes clôturées : {bilan.nbCommandes}</div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.35rem', color: COLORS.textMain }}><span>Tiroir attendu</span> <strong>{bilan.netEnCaisse} DH</strong></div>
+                      <div style={{ marginTop: '12px', color: COLORS.textLight, fontSize: '0.85rem' }}>Commandes clôturées : {bilan.nbCommandes}</div>
                     </div>
                   );
                 })()}
-                <div style={{ marginTop: '24px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <button className="pos-btn" onClick={cloturerZDefinitif} style={{ width: '100%', padding: '16px', background: COLORS.danger, color: 'white', border: 'none', borderRadius: '12px', fontSize: '1.05rem', fontWeight: 'bold', cursor: 'pointer' }}>🖨️ IMPRIMER Z ET REMETTRE À ZÉRO</button>
-                  <button className="pos-btn" onClick={() => setShowBilanGlobal(false)} style={{ width: '100%', padding: '14px', background: COLORS.bg, color: COLORS.textMain, border: 'none', borderRadius: '12px', fontSize: '1.05rem', fontWeight: 'bold', cursor: 'pointer' }}>Fermer</button>
+                <div style={{ marginTop: '24px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <button className="pos-btn" onClick={cloturerZDefinitif} style={{ width: '100%', padding: '14px', background: COLORS.danger, color: 'white', border: 'none', borderRadius: '8px', fontSize: '0.95rem', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                    <Icon name="printer" size={16} /> Imprimer Z et remettre à zéro
+                  </button>
+                  <button className="pos-btn" onClick={() => setShowBilanGlobal(false)} style={{ width: '100%', padding: '12px', background: COLORS.bg, color: COLORS.textMain, border: 'none', borderRadius: '8px', fontSize: '0.95rem', fontWeight: '600', cursor: 'pointer' }}>Fermer</button>
                 </div>
               </div>
             </div>
           )}
 
           {showHistory ? (
-            <div style={{ background: 'white', padding: '24px', borderRadius: '16px', marginBottom: '40px', border: `1px solid ${COLORS.border}` }}>
-              <h3 style={{ marginTop: 0, color: COLORS.secondary }}>🕒 50 Dernières Commandes</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '16px' }}>
+            <div style={{ background: 'white', padding: '24px', borderRadius: '12px', marginBottom: '36px', border: `1px solid ${COLORS.border}` }}>
+              <h3 style={{ marginTop: 0, color: COLORS.textMain, letterSpacing: '-0.02em' }}>50 Dernières Commandes</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '14px' }}>
                 {commandes.filter(c => c.status === 'Terminé' || c.status === 'En Livraison' || c.status === 'Annulé').slice(0, 50).map(cmd => (
-                  <div key={cmd.id} style={{ border: `1px solid ${COLORS.border}`, borderRadius: '12px', padding: '16px', opacity: cmd.status === 'Annulé' ? 0.65 : 1, background: cmd.status === 'Annulé' ? '#FEF2F2' : COLORS.bg }}>
+                  <div key={cmd.id} style={{ border: `1px solid ${COLORS.border}`, borderRadius: '12px', padding: '16px', opacity: cmd.status === 'Annulé' ? 0.6 : 1, background: COLORS.bg }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `1px solid ${COLORS.border}`, paddingBottom: '10px', marginBottom: '10px' }}>
                       <div>
                         <strong>{cmd.client}</strong>
                         <div style={{ fontSize: '0.8rem', color: COLORS.textLight }}>{toJSDate(cmd.date).toLocaleString()}</div>
-                        {cmd.caissiere && <div style={{ fontSize: '0.8rem', color: COLORS.primary, fontWeight: '500' }}>Opérateur : {cmd.caissiere}</div>}
+                        {cmd.caissiere && <div style={{ fontSize: '0.8rem', color: COLORS.textMuted, fontWeight: '500' }}>Opérateur : {cmd.caissiere}</div>}
                       </div>
                       <div className="num-tabular" style={{ textAlign: 'right' }}>
-                        <strong style={{ color: COLORS.primary, fontSize: '1.1rem' }}>{cmd.total} DH</strong>
-                        <div style={{ fontSize: '0.8rem', fontWeight: 'bold', color: cmd.status === 'Annulé' ? COLORS.danger : COLORS.success }}>{cmd.status}</div>
+                        <strong style={{ color: COLORS.textMain, fontSize: '1.05rem' }}>{cmd.total} DH</strong>
+                        <div style={{ fontSize: '0.8rem', fontWeight: '600', color: cmd.status === 'Annulé' ? COLORS.danger : COLORS.success }}>{cmd.status}</div>
                       </div>
                     </div>
-                    <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: '0.9rem' }}>
+                    <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: '0.88rem' }}>
                       {cmd.items?.map((it, i) => {
                         const details = getDetaisImpression(it);
                         return (
-                          <li key={i} style={{ borderBottom: `1px dashed ${COLORS.border}`, padding: '5px 0' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <li key={i} style={{ borderBottom: `1px solid ${COLORS.border}`, padding: '5px 0' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: '500' }}>
                               <span>{it.qte > 1 ? `${it.qte}x ` : ''}{it.nom}</span>
                             </div>
                             {details.length > 0 && <div style={{ color: COLORS.textLight, fontSize: '0.8rem', marginTop: '2px' }}>{details.join(' / ')}</div>}
@@ -1894,8 +2199,10 @@ function FoodjiSystem() {
                         );
                       })}
                     </ul>
-                    <div style={{ marginTop: '14px' }}>
-                      <button className="pos-btn" onClick={() => imprimerCommandeExistante(cmd)} style={{ width: '100%', padding: '10px', background: COLORS.secondary, color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>🖨️ RÉ-IMPRIMER LE TICKET</button>
+                    <div style={{ marginTop: '12px' }}>
+                      <button className="pos-btn" onClick={() => imprimerCommandeExistante(cmd)} style={{ width: '100%', padding: '9px', background: 'white', color: COLORS.textMain, border: `1px solid ${COLORS.border}`, borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                        <Icon name="printer" size={14} /> Ré-imprimer le ticket
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -1903,29 +2210,32 @@ function FoodjiSystem() {
             </div>
           ) : (
             <>
-              <h3 style={{ marginBottom: '14px', letterSpacing: '-0.02em' }}>Commandes en Cuisine ({commandesWebEnAttente})</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '16px', marginBottom: '36px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+                <h3 style={{ margin: 0, letterSpacing: '-0.02em' }}>File d'attente Cuisine</h3>
+                <span className="num-tabular" style={{ background: COLORS.secondary, color: 'white', padding: '2px 8px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '600' }}>{commandesWebEnAttente}</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '14px', marginBottom: '36px' }}>
                 {commandes.filter(c => c.status === 'En attente' || c.status === 'En cours de validation').map(cmd => (
-                  <div key={cmd.id} style={{ background: 'white', borderRadius: '16px', padding: '16px', borderLeft: `5px solid ${COLORS.pending}`, border: `1px solid ${COLORS.border}` }}>
+                  <div key={cmd.id} style={{ background: 'white', borderRadius: '12px', padding: '16px', border: `1px solid ${COLORS.border}`, borderLeft: `4px solid ${COLORS.pending}` }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', borderBottom: `1px solid ${COLORS.border}`, paddingBottom: '10px', marginBottom: '10px' }}>
                       <div>
-                        <strong style={{ fontSize: '1.15rem' }}>{cmd.client || 'Client'}</strong>
-                        <div className="num-tabular" style={{ color: COLORS.textLight }}>📞 {cmd.tel || 'N/A'}</div>
-                        <div style={{ fontSize: '0.85rem', color: COLORS.textLight }}>{cmd.type === 'livraison' ? `🛵 Livraison : ${cmd.adresse}` : '🛍️ Emporter / Sur Place'}</div>
+                        <strong style={{ fontSize: '1.05rem' }}>{cmd.client || 'Client'}</strong>
+                        <div className="num-tabular" style={{ color: COLORS.textMuted, fontSize: '0.88rem', marginTop: '2px' }}>{cmd.tel || 'Sans téléphone'}</div>
+                        <div style={{ fontSize: '0.82rem', color: COLORS.textLight, marginTop: '2px' }}>{cmd.type === 'livraison' ? `Livraison : ${cmd.adresse}` : 'À emporter / Sur place'}</div>
                       </div>
                       <div className="num-tabular" style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: COLORS.primary }}>{cmd.total} DH</div>
-                        <div style={{ fontSize: '0.8rem', color: COLORS.textLight }}>{cmd.status}</div>
+                        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: COLORS.textMain }}>{cmd.total} DH</div>
+                        <div style={{ fontSize: '0.78rem', color: COLORS.textLight }}>{cmd.status}</div>
                       </div>
                     </div>
 
-                    {cmd.commentaire && <div style={{ background: COLORS.warning, color: 'white', padding: '8px 12px', borderRadius: '8px', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '10px' }}>📝 {cmd.commentaire}</div>}
+                    {cmd.commentaire && <div style={{ background: COLORS.bg, color: COLORS.textMain, padding: '8px 10px', borderRadius: '8px', fontSize: '0.85rem', fontWeight: '600', marginBottom: '10px', border: `1px solid ${COLORS.border}` }}>Note : {cmd.commentaire}</div>}
 
                     <ul style={{ listStyle: 'none', padding: 0, marginBottom: '14px' }}>
                       {cmd.items?.map((it, i) => {
                         const details = getDetaisImpression(it);
                         return (
-                          <li key={i} style={{ padding: '6px 0', borderBottom: `1px dashed ${COLORS.border}` }}>
+                          <li key={i} style={{ padding: '6px 0', borderBottom: `1px solid ${COLORS.border}`, fontSize: '0.9rem' }}>
                             <div className="num-tabular" style={{ display: 'flex', justifyContent: 'space-between' }}>
                               <strong><span style={{ color: COLORS.primary }}>{it.qte > 1 ? `${it.qte}x ` : ''}</span>{it.nom}</strong>
                               <span>{it.prixFinal * (it.qte || 1)} DH</span>
@@ -1937,11 +2247,13 @@ function FoodjiSystem() {
                     </ul>
 
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                      <button className="pos-btn" onClick={() => imprimerCommandeExistante(cmd)} style={{ width: '100%', padding: '10px', background: COLORS.secondary, color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>🖨️ IMPRIMER LE TICKET</button>
-                      <button className="pos-btn" onClick={() => changerStatus(cmd, cmd.type === 'livraison' ? 'En Livraison' : 'Terminé')} style={{ flex: 1, padding: '10px', background: COLORS.success, color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
-                        {cmd.type === 'livraison' ? '🛵 PARTI LIVRAISON' : '✅ SERVI'}
+                      <button className="pos-btn" onClick={() => imprimerCommandeExistante(cmd)} style={{ width: '100%', padding: '9px', background: COLORS.bg, color: COLORS.textMain, border: `1px solid ${COLORS.border}`, borderRadius: '8px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                        <Icon name="printer" size={14} /> Imprimer le bon
                       </button>
-                      <button className="pos-btn" onClick={() => changerStatus(cmd, 'Annulé')} style={{ flex: 1, padding: '10px', background: COLORS.danger, color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>❌ ANNULER</button>
+                      <button className="pos-btn" onClick={() => changerStatus(cmd, cmd.type === 'livraison' ? 'En Livraison' : 'Terminé')} style={{ flex: 2, padding: '9px', background: COLORS.secondary, color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer' }}>
+                        {cmd.type === 'livraison' ? 'Expédier en livraison' : 'Marquer comme servi'}
+                      </button>
+                      <button className="pos-btn" onClick={() => changerStatus(cmd, 'Annulé')} style={{ flex: 1, padding: '9px', background: 'white', color: COLORS.danger, border: `1px solid ${COLORS.border}`, borderRadius: '8px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer' }}>Annuler</button>
                     </div>
                   </div>
                 ))}
@@ -1949,140 +2261,147 @@ function FoodjiSystem() {
             </>
           )}
 
-          {/* GESTION DES STOCKS (SANS LE BOUTON RÉPARER PIZZAS) */}
-          <div style={{ background: 'white', padding: '24px', borderRadius: '16px', marginBottom: '36px', border: `1px solid ${COLORS.border}` }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
-              <h3 style={{ margin: 0, color: COLORS.primary, fontSize: '1.25rem', letterSpacing: '-0.02em' }}>🥕 GESTION DES STOCKS & INGRÉDIENTS</h3>
-            </div>
+          {/* GESTION DES STOCKS */}
+          <div style={{ background: 'white', padding: '24px', borderRadius: '12px', marginBottom: '32px', border: `1px solid ${COLORS.border}` }}>
+            <h3 style={{ margin: '0 0 16px 0', color: COLORS.textMain, fontSize: '1.15rem', letterSpacing: '-0.02em' }}>Disponibilité des Ingrédients & Stocks</h3>
 
-            <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '8px', display: 'flex', gap: '8px', marginBottom: '18px', scrollbarWidth: 'none' }}>
+            <div style={{ overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '8px', display: 'flex', gap: '6px', marginBottom: '16px', scrollbarWidth: 'none' }}>
               {STOCK_TABS.map(tab => (
-                <button key={tab.id} className="pos-btn" onClick={() => setActiveStockTab(tab.id)} style={{ padding: '10px 18px', borderRadius: '999px', background: activeStockTab === tab.id ? COLORS.secondary : COLORS.bg, color: activeStockTab === tab.id ? 'white' : COLORS.textMain, fontWeight: 'bold', border: 'none', cursor: 'pointer' }}>{tab.label}</button>
+                <button key={tab.id} className="pos-btn" onClick={() => setActiveStockTab(tab.id)} style={{ padding: '8px 16px', borderRadius: '8px', background: activeStockTab === tab.id ? COLORS.secondary : COLORS.bg, color: activeStockTab === tab.id ? 'white' : COLORS.textMain, fontWeight: '600', fontSize: '0.9rem', border: 'none', cursor: 'pointer' }}>{tab.label}</button>
               ))}
             </div>
 
-            <div style={{ display: 'flex', gap: '10px', marginBottom: '18px' }}>
-              <input type="text" placeholder={`Nouvel élément dans ${STOCK_TABS.find(t => t.id === activeStockTab)?.label}...`} value={newItemName} onChange={(e) => setNewItemName(e.target.value)} style={{ flex: 1, padding: '12px', borderRadius: '10px', border: `1px solid ${COLORS.border}`, fontSize: '1rem' }} />
-              <button className="pos-btn" onClick={addNewStockItem} style={{ padding: '12px 20px', background: COLORS.success, color: 'white', border: 'none', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer' }}>Ajouter</button>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+              <input type="text" placeholder={`Ajouter dans ${STOCK_TABS.find(t => t.id === activeStockTab)?.label}...`} value={newItemName} onChange={(e) => setNewItemName(e.target.value)} style={{ flex: 1, padding: '10px 12px', borderRadius: '8px', border: `1px solid ${COLORS.border}`, fontSize: '0.95rem' }} />
+              <button className="pos-btn" onClick={addNewStockItem} style={{ padding: '10px 18px', background: COLORS.secondary, color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}>Ajouter</button>
             </div>
 
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
               {(parametres.stocks[activeStockTab] || []).map((item, index) => (
-                <button key={index} className="pos-btn" onClick={() => toggleStockItem(activeStockTab, index)} style={{ padding: '10px 18px', borderRadius: '999px', cursor: 'pointer', fontWeight: 'bold', background: item.available ? COLORS.success : '#FEF2F2', color: item.available ? 'white' : COLORS.danger, border: item.available ? 'none' : `1px solid ${COLORS.danger}`, fontSize: '0.95rem' }}>
-                  {item.nom} {item.available ? '✅' : '❌'}
+                <button key={index} className="pos-btn" onClick={() => toggleStockItem(activeStockTab, index)} style={{ padding: '8px 14px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', background: item.available ? 'white' : '#FEF2F2', color: item.available ? COLORS.textMain : COLORS.danger, border: `1px solid ${item.available ? COLORS.border : COLORS.danger}`, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <StatusDot active={item.available} colorInactive={COLORS.danger} />
+                  <span>{item.nom}</span>
                 </button>
               ))}
             </div>
           </div>
 
-          <h3 style={{ marginBottom: '14px', letterSpacing: '-0.02em' }}>📦 Gestion de la Carte (Produits)</h3>
-          <div style={{ background: 'white', padding: '24px', borderRadius: '16px', marginBottom: '36px', border: `1px solid ${COLORS.border}` }}>
-            <div style={{ overflowX: 'auto', display: 'flex', gap: '8px', paddingBottom: '12px', marginBottom: '14px' }}>
+          {/* GESTION DE LA CARTE (PRODUITS) */}
+          <div style={{ background: 'white', padding: '24px', borderRadius: '12px', marginBottom: '32px', border: `1px solid ${COLORS.border}` }}>
+            <h3 style={{ margin: '0 0 16px 0', letterSpacing: '-0.02em', fontSize: '1.15rem' }}>Catalogue des Produits</h3>
+            <div style={{ overflowX: 'auto', display: 'flex', gap: '6px', paddingBottom: '12px', marginBottom: '12px' }}>
               {TOUTES_CATEGORIES.map(c => (
-                <button key={c} className="pos-btn" onClick={() => setAdminCategorie(c)} style={{ padding: '10px 18px', borderRadius: '999px', border: 'none', background: adminCategorie === c ? COLORS.secondary : COLORS.bg, color: adminCategorie === c ? 'white' : COLORS.textMain, cursor: 'pointer', fontWeight: 'bold', flexShrink: 0 }}>{c}</button>
+                <button key={c} className="pos-btn" onClick={() => setAdminCategorie(c)} style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: adminCategorie === c ? COLORS.secondary : COLORS.bg, color: adminCategorie === c ? 'white' : COLORS.textMain, cursor: 'pointer', fontWeight: '600', fontSize: '0.9rem', flexShrink: 0 }}>{c}</button>
               ))}
             </div>
 
             {menu.filter(p => p.categorie === adminCategorie).map(p => (
-              <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px', borderBottom: `1px solid ${COLORS.border}`, background: p.available === false ? '#FEF2F2' : 'white' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                  <button className="pos-btn" onClick={() => toggleAvailability(p)} style={{ padding: '8px 14px', border: 'none', borderRadius: '8px', background: p.available ? COLORS.success : COLORS.danger, color: 'white', fontWeight: 'bold', cursor: 'pointer' }}>{p.available ? 'EN LIGNE' : 'RUPTURE'}</button>
-                  <div className="num-tabular" style={{ fontWeight: 'bold', fontSize: '1.05rem', textDecoration: p.available === false ? 'line-through' : 'none' }}>
+              <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', borderBottom: `1px solid ${COLORS.border}`, background: p.available === false ? COLORS.bg : 'white' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <button className="pos-btn" onClick={() => toggleAvailability(p)} style={{ padding: '6px 12px', border: `1px solid ${COLORS.border}`, borderRadius: '8px', background: 'white', color: COLORS.textMain, fontWeight: '600', fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <StatusDot active={p.available !== false} colorInactive={COLORS.danger} />
+                    <span>{p.available !== false ? 'En ligne' : 'Rupture'}</span>
+                  </button>
+                  <div className="num-tabular" style={{ fontWeight: '600', fontSize: '0.98rem', textDecoration: p.available === false ? 'line-through' : 'none', color: p.available === false ? COLORS.textLight : COLORS.textMain }}>
                     {p.nom}
-                    {p.excludeVIP && <span style={{ fontSize: '0.8rem', color: COLORS.danger, marginLeft: '6px' }}>(VIP🚫)</span>}
-                    <span style={{ color: COLORS.textLight, fontWeight: 'normal', marginLeft: '6px' }}>— {p.variantes?.length > 0 ? 'Multi-tailles' : `${p.prix} DH`}</span>
+                    {p.excludeVIP && <span style={{ fontSize: '0.75rem', color: COLORS.danger, marginLeft: '8px', fontWeight: '600' }}>[Hors VIP]</span>}
+                    <span style={{ color: COLORS.textLight, fontWeight: 'normal', marginLeft: '8px' }}>— {p.variantes?.length > 0 ? 'Multi-tailles' : `${p.prix} DH`}</span>
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button className="pos-btn" onClick={() => { setEditId(p.id); setFormProd({ nom: p.nom, description: p.description || '', categorie: p.categorie, prixBase: p.prix || '', variantes: p.variantes || [], excludeVIP: p.excludeVIP || false }); window.scrollTo({ top: 0, behavior: 'smooth' }); }} style={{ border: `1px solid ${COLORS.border}`, background: COLORS.bg, padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontWeight: '500' }}>✏️ Modifier</button>
-                  <button className="pos-btn" onClick={() => supprimerProduit(p.id)} style={{ color: 'white', border: 'none', background: COLORS.danger, padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>✕</button>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button className="pos-btn" onClick={() => { setEditId(p.id); setFormProd({ nom: p.nom, description: p.description || '', categorie: p.categorie, prixBase: p.prix || '', variantes: p.variantes || [], excludeVIP: p.excludeVIP || false }); window.scrollTo({ top: 0, behavior: 'smooth' }); }} style={{ border: `1px solid ${COLORS.border}`, background: 'white', padding: '7px 12px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Icon name="edit" size={14} /> Modifier
+                  </button>
+                  <button className="pos-btn" onClick={() => supprimerProduit(p.id, p.nom)} style={{ color: COLORS.danger, border: `1px solid ${COLORS.border}`, background: 'white', padding: '7px 10px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                    <Icon name="trash" size={14} />
+                  </button>
                 </div>
               </div>
             ))}
 
-            <div style={{ marginTop: '28px', background: COLORS.bg, padding: '24px', borderRadius: '14px', border: `1px dashed ${COLORS.border}` }}>
-              <h4 style={{ marginTop: 0 }}>{editId ? '✏️ Mettre à jour le produit' : '➕ Ajouter un Produit'}</h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <input placeholder="Nom du produit" value={formProd.nom} onChange={e => setFormProd({ ...formProd, nom: e.target.value })} style={{ padding: '12px', borderRadius: '10px', border: `1px solid ${COLORS.border}`, fontSize: '1rem' }} />
+            <div style={{ marginTop: '24px', background: COLORS.bg, padding: '20px', borderRadius: '12px', border: `1px solid ${COLORS.border}` }}>
+              <h4 style={{ marginTop: 0, fontSize: '1rem' }}>{editId ? 'Modifier le produit sélectionné' : 'Ajouter un nouveau produit'}</h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <input placeholder="Nom du produit" value={formProd.nom} onChange={e => setFormProd({ ...formProd, nom: e.target.value })} style={{ padding: '10px 12px', borderRadius: '8px', border: `1px solid ${COLORS.border}`, fontSize: '0.95rem' }} />
 
                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-                  <select value={formProd.categorie} onChange={handleCategoryChange} style={{ flex: 1, padding: '12px', borderRadius: '10px', border: `1px solid ${COLORS.border}`, fontSize: '1rem' }}>
+                  <select value={formProd.categorie} onChange={handleCategoryChange} style={{ flex: 1, padding: '10px 12px', borderRadius: '8px', border: `1px solid ${COLORS.border}`, fontSize: '0.95rem', background: 'white' }}>
                     {TOUTES_CATEGORIES.map(cat => <option key={cat}>{cat}</option>)}
                   </select>
 
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 'bold', color: COLORS.danger, padding: '10px 14px', background: '#FEF2F2', borderRadius: '10px', border: `1px solid ${COLORS.danger}` }}>
-                    <input type="checkbox" checked={formProd.excludeVIP} onChange={e => setFormProd({ ...formProd, excludeVIP: e.target.checked })} style={{ width: '18px', height: '18px' }} />
-                    🚫 Exclure des remises VIP
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '0.9rem', color: COLORS.textMain, padding: '9px 14px', background: 'white', borderRadius: '8px', border: `1px solid ${COLORS.border}` }}>
+                    <input type="checkbox" checked={formProd.excludeVIP} onChange={e => setFormProd({ ...formProd, excludeVIP: e.target.checked })} style={{ width: '16px', height: '16px' }} />
+                    Exclure des remises fidélité VIP
                   </label>
                 </div>
 
                 {formProd.variantes && formProd.variantes.length > 0 ? (
-                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px' }}>
                     {formProd.variantes.map((v, index) => (
-                      <div key={index} style={{ flex: 1, minWidth: '120px', background: 'white', padding: '12px', borderRadius: '10px', border: `1px solid ${COLORS.border}` }}>
-                        <label style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>Taille {v.nom}</label>
+                      <div key={index} style={{ background: 'white', padding: '12px', borderRadius: '8px', border: `1px solid ${COLORS.border}` }}>
+                        <label style={{ fontSize: '0.85rem', fontWeight: '600' }}>Taille {v.nom}</label>
                         <input type="number" className="num-tabular" placeholder="Prix DH" value={v.prix} onChange={(e) => {
                           const newVars = [...formProd.variantes];
                           newVars[index].prix = Number(e.target.value);
                           setFormProd({ ...formProd, variantes: newVars });
                         }} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: `1px solid ${COLORS.border}`, marginTop: '6px', boxSizing: 'border-box' }} />
-                        <label style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '8px', cursor: 'pointer' }}>
+                        <label style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '8px', cursor: 'pointer', color: COLORS.textMuted }}>
                           <input type="checkbox" checked={v.available !== false} onChange={(e) => {
                             const newVars = [...formProd.variantes];
                             newVars[index].available = e.target.checked;
                             setFormProd({ ...formProd, variantes: newVars });
-                          }} style={{ width: '16px', height: '16px' }} /> Disponible
+                          }} style={{ width: '15px', height: '15px' }} /> Disponible
                         </label>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <input type="number" className="num-tabular" placeholder="Prix unique en DH (ex: 45)" value={formProd.prixBase} onChange={e => setFormProd({ ...formProd, prixBase: e.target.value })} style={{ padding: '12px', borderRadius: '10px', border: `1px solid ${COLORS.border}`, fontSize: '1rem' }} />
+                  <input type="number" className="num-tabular" placeholder="Prix unique en DH (ex: 45)" value={formProd.prixBase} onChange={e => setFormProd({ ...formProd, prixBase: e.target.value })} style={{ padding: '10px 12px', borderRadius: '8px', border: `1px solid ${COLORS.border}`, fontSize: '0.95rem' }} />
                 )}
 
                 <div style={{ display: 'flex', gap: '10px' }}>
-                  <button className="pos-btn" onClick={saveProduit} style={{ flex: 1, padding: '14px', background: COLORS.primary, color: 'white', border: 'none', borderRadius: '10px', fontSize: '1.05rem', fontWeight: 'bold', cursor: 'pointer' }}>{editId ? 'Enregistrer les modifications' : 'Ajouter à la carte'}</button>
-                  {editId && <button className="pos-btn" onClick={() => { setEditId(null); setFormProd({ nom: '', description: '', categorie: 'Panuozzo', prixBase: '', variantes: [], excludeVIP: false }); }} style={{ padding: '14px 24px', background: COLORS.textLight, color: 'white', border: 'none', borderRadius: '10px', fontSize: '1.05rem', fontWeight: 'bold', cursor: 'pointer' }}>Annuler</button>}
+                  <button className="pos-btn" onClick={saveProduit} style={{ flex: 1, padding: '12px', background: COLORS.secondary, color: 'white', border: 'none', borderRadius: '8px', fontSize: '0.95rem', fontWeight: '600', cursor: 'pointer' }}>{editId ? 'Enregistrer les modifications' : 'Ajouter à la carte'}</button>
+                  {editId && <button className="pos-btn" onClick={() => { setEditId(null); setFormProd({ nom: '', description: '', categorie: 'Panuozzo', prixBase: '', variantes: [], excludeVIP: false }); }} style={{ padding: '12px 20px', background: 'white', color: COLORS.textMain, border: `1px solid ${COLORS.border}`, borderRadius: '8px', fontSize: '0.95rem', fontWeight: '600', cursor: 'pointer' }}>Annuler</button>}
                 </div>
               </div>
             </div>
           </div>
 
-          <div style={{ background: 'white', padding: '24px', borderRadius: '16px', marginBottom: '40px', border: `1px solid ${COLORS.border}` }}>
-            <h3 style={{ marginTop: 0, color: COLORS.blue, fontSize: '1.25rem', letterSpacing: '-0.02em' }}>👥 CRM : Base Clients Fidèles</h3>
+          {/* CRM CLIENTS */}
+          <div style={{ background: 'white', padding: '24px', borderRadius: '12px', marginBottom: '40px', border: `1px solid ${COLORS.border}` }}>
+            <h3 style={{ marginTop: 0, color: COLORS.textMain, fontSize: '1.15rem', letterSpacing: '-0.02em' }}>Base Clients & Fidélité (CRM)</h3>
 
-            <div style={{ background: COLORS.bg, padding: '16px', borderRadius: '12px', marginBottom: '20px', border: `1px solid ${COLORS.border}` }}>
-              <h4 style={{ marginTop: 0, marginBottom: '12px' }}>➕ Ajouter un client manuellement</h4>
-              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
-                <input type="tel" className="num-tabular" placeholder="Tél (06...)" value={newClientPhone} onChange={e => setNewClientPhone(e.target.value)} style={{ flex: 1, minWidth: '150px', padding: '10px', borderRadius: '8px', border: `1px solid ${COLORS.border}` }} />
-                <input type="text" placeholder="Nom complet" value={newClientName} onChange={e => setNewClientName(e.target.value)} style={{ flex: 2, minWidth: '200px', padding: '10px', borderRadius: '8px', border: `1px solid ${COLORS.border}` }} />
-                <input type="number" className="num-tabular" placeholder="Commandes" value={newClientOrders} onChange={e => setNewClientOrders(e.target.value)} style={{ width: '120px', padding: '10px', borderRadius: '8px', border: `1px solid ${COLORS.border}` }} />
+            <div style={{ background: COLORS.bg, padding: '16px', borderRadius: '8px', marginBottom: '20px', border: `1px solid ${COLORS.border}` }}>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                <input type="tel" className="num-tabular" placeholder="Téléphone (06...)" value={newClientPhone} onChange={e => setNewClientPhone(e.target.value)} style={{ flex: 1, minWidth: '140px', padding: '10px', borderRadius: '8px', border: `1px solid ${COLORS.border}` }} />
+                <input type="text" placeholder="Nom complet" value={newClientName} onChange={e => setNewClientName(e.target.value)} style={{ flex: 2, minWidth: '180px', padding: '10px', borderRadius: '8px', border: `1px solid ${COLORS.border}` }} />
+                <input type="number" className="num-tabular" placeholder="Nb commandes" value={newClientOrders} onChange={e => setNewClientOrders(e.target.value)} style={{ width: '130px', padding: '10px', borderRadius: '8px', border: `1px solid ${COLORS.border}` }} />
                 <input type="number" className="num-tabular" placeholder="Remise (%)" value={newClientRemise} onChange={e => setNewClientRemise(e.target.value)} style={{ width: '120px', padding: '10px', borderRadius: '8px', border: `1px solid ${COLORS.border}` }} />
-                <button className="pos-btn" onClick={ajouterClientManuel} disabled={loading} style={{ padding: '10px 20px', background: COLORS.blue, color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Ajouter</button>
+                <button className="pos-btn" onClick={ajouterClientManuel} disabled={loading} style={{ padding: '10px 18px', background: COLORS.secondary, color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}>Ajouter</button>
               </div>
             </div>
 
-            <div style={{ maxHeight: '300px', overflowY: 'auto', border: `1px solid ${COLORS.border}`, borderRadius: '12px' }}>
-              <table className="num-tabular" style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
-                <thead style={{ position: 'sticky', top: 0, background: 'white', zIndex: 10 }}>
-                  <tr style={{ borderBottom: `2px solid ${COLORS.border}` }}>
-                    <th style={{ padding: '12px' }}>Téléphone</th>
-                    <th style={{ padding: '12px' }}>Nom</th>
-                    <th style={{ padding: '12px' }}>Commandes</th>
-                    <th style={{ padding: '12px' }}>Remise Auto (%)</th>
-                    <th style={{ padding: '12px' }}>Action</th>
+            <div style={{ maxHeight: '320px', overflowY: 'auto', border: `1px solid ${COLORS.border}`, borderRadius: '8px' }}>
+              <table className="num-tabular" style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', fontSize: '0.92rem' }}>
+                <thead style={{ position: 'sticky', top: 0, background: COLORS.bg, zIndex: 10 }}>
+                  <tr style={{ borderBottom: `1px solid ${COLORS.border}` }}>
+                    <th style={{ padding: '10px 12px' }}>Téléphone</th>
+                    <th style={{ padding: '10px 12px' }}>Client</th>
+                    <th style={{ padding: '10px 12px' }}>Commandes</th>
+                    <th style={{ padding: '10px 12px' }}>Remise Auto (%)</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'right' }}>Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {[...clientsDB].sort((a, b) => (b.totalCommandes || 0) - (a.totalCommandes || 0)).map(client => (
                     <tr key={client.id} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
-                      <td style={{ padding: '12px', fontWeight: 'bold' }}>{client.tel}</td>
-                      <td style={{ padding: '12px' }}>
+                      <td style={{ padding: '10px 12px', fontWeight: '600' }}>{client.tel}</td>
+                      <td style={{ padding: '10px 12px' }}>
                         {client.nom}
-                        {client.totalCommandes >= 10 && <span style={{ background: COLORS.promo, color: 'white', padding: '2px 8px', borderRadius: '6px', fontSize: '0.75rem', marginLeft: '8px', fontWeight: 'bold' }}>VIP</span>}
+                        {client.totalCommandes >= 10 && <span style={{ background: COLORS.secondary, color: 'white', padding: '2px 7px', borderRadius: '6px', fontSize: '0.7rem', marginLeft: '8px', fontWeight: '700' }}>VIP</span>}
                       </td>
-                      <td style={{ padding: '12px', fontWeight: 'bold' }}>{client.totalCommandes || 0}</td>
-                      <td style={{ padding: '12px' }}>
+                      <td style={{ padding: '10px 12px', fontWeight: '600' }}>{client.totalCommandes || 0}</td>
+                      <td style={{ padding: '10px 12px' }}>
                         <input
                           type="number"
                           min="0"
@@ -2092,11 +2411,17 @@ function FoodjiSystem() {
                             const val = Math.min(100, Math.max(0, Number(e.target.value) || 0));
                             updateDoc(doc(db, "clients", client.id), { remiseAuto: val });
                           }}
-                          style={{ width: '64px', padding: '6px', borderRadius: '6px', border: `1px solid ${COLORS.border}`, fontWeight: 'bold' }}
+                          style={{ width: '60px', padding: '6px', borderRadius: '6px', border: `1px solid ${COLORS.border}`, fontWeight: '600' }}
                         /> %
                       </td>
-                      <td style={{ padding: '12px' }}>
-                        <button className="pos-btn" onClick={() => { if (window.confirm("Supprimer ce client ?")) deleteDoc(doc(db, "clients", client.id)); }} style={{ background: '#FEE2E2', color: COLORS.danger, border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>Supprimer</button>
+                      <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                        <button
+                          className="pos-btn"
+                          onClick={() => requestConfirm("Supprimer le client", `Retirer ${client.nom} (${client.tel}) de la base CRM ?`, () => deleteDoc(doc(db, "clients", client.id)), true, "Supprimer")}
+                          style={{ background: 'white', color: COLORS.danger, border: `1px solid ${COLORS.border}`, padding: '6px 10px', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '0.82rem' }}
+                        >
+                          Supprimer
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -2111,7 +2436,6 @@ function FoodjiSystem() {
   );
 }
 
-// STYLES PHYSIQUES (EMIL KOWALSKI MOTION + IMPECCABLE TYPOGRAPHY + PRINT 80MM)
 const printStyles = `
   body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -2124,7 +2448,7 @@ const printStyles = `
   }
 
   .pos-btn {
-    transition: transform 150ms cubic-bezier(0.22, 1, 0.36, 1), opacity 150ms ease, box-shadow 150ms ease;
+    transition: transform 150ms cubic-bezier(0.22, 1, 0.36, 1), opacity 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
     will-change: transform;
     user-select: none;
   }
@@ -2133,20 +2457,20 @@ const printStyles = `
   }
 
   .pos-card {
-    transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 180ms cubic-bezier(0.22, 1, 0.36, 1), border-color 180ms ease;
+    transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 160ms cubic-bezier(0.22, 1, 0.36, 1), border-color 160ms ease;
   }
   .pos-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 20px -4px rgba(0, 0, 0, 0.08);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px -4px rgba(0, 0, 0, 0.06);
     border-color: #D4D4D8 !important;
   }
 
   @keyframes modalIn {
-    from { opacity: 0; transform: scale(0.96) translateY(6px); }
+    from { opacity: 0; transform: scale(0.97) translateY(4px); }
     to { opacity: 1; transform: scale(1) translateY(0); }
   }
   .modal-box {
-    animation: modalIn 180ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation: modalIn 160ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
   }
 
   @media print {
@@ -2160,11 +2484,11 @@ const printStyles = `
   @media screen { .print-only { display: none !important; } }
 
   @keyframes blinkAlert {
-    0% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.75; transform: scale(1.03); }
-    100% { opacity: 1; transform: scale(1); }
+    0% { opacity: 1; }
+    50% { opacity: 0.72; }
+    100% { opacity: 1; }
   }
-  .blink-alert { animation: blinkAlert 1s infinite cubic-bezier(0.22, 1, 0.36, 1); }
+  .blink-alert { animation: blinkAlert 1.2s infinite ease-in-out; }
 `;
 
 export default function App() {
