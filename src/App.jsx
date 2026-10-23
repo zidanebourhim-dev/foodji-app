@@ -76,14 +76,16 @@ const Icon = ({ name, size = 16, color = "currentColor", style = {} }) => {
       return <svg {...props}><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>;
     case 'edit':
       return <svg {...props}><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>;
-    case 'phone':
-      return <svg {...props}><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>;
     case 'alert':
       return <svg {...props}><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
     case 'ban':
       return <svg {...props}><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>;
-    case 'layers':
-      return <svg {...props}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>;
+    case 'bell':
+      return <svg {...props}><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>;
+    case 'image':
+      return <svg {...props}><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>;
+    case 'shield':
+      return <svg {...props}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>;
     case 'logOut':
       return <svg {...props}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
     default:
@@ -91,7 +93,7 @@ const Icon = ({ name, size = 16, color = "currentColor", style = {} }) => {
   }
 };
 
-// PASTILLE GÉOMÉTRIQUE D'ÉTAT (REMPLACE LES ÉMOJIS 🟢 / 🔴)
+// PASTILLE GÉOMÉTRIQUE D'ÉTAT
 const StatusDot = ({ active, colorActive = COLORS.success, colorInactive = '#A1A1AA' }) => (
   <span style={{
     display: 'inline-block',
@@ -110,7 +112,9 @@ const INIT_SAUCES = [{ nom: "Algérienne", available: true }, { nom: "Biggy", av
 const INIT_PATES = [{ nom: "Penne", available: true }, { nom: "Tagliatelle", available: true }, { nom: "Spaghetti", available: true }];
 const INIT_TAILLES_PIZZA = [{ nom: "M", available: true }, { nom: "L", available: true }];
 
-const TOUTES_CATEGORIES = ["Tacos", "Pizzas", "Burgers", "Panuozzo", "Pâtes", "Sides", "Les Burritos", "Koniks", "Plats", "Salades", "Boissons", "Suppléments"];
+const CATEGORIES_DEFAUT = ["Tacos", "Pizzas", "Burgers", "Panuozzo", "Pâtes", "Sides", "Les Burritos", "Koniks", "Plats", "Salades", "Boissons", "Suppléments"];
+const CAISSIERES_DEFAUT = ["Fatima Zahra", "Nada", "Manager"];
+
 const STOCK_TABS = [
   { id: 'viandes', label: 'Viandes' },
   { id: 'garnitures', label: 'Garnitures Pizza' },
@@ -118,7 +122,7 @@ const STOCK_TABS = [
   { id: 'pates', label: 'Pâtes' },
   { id: 'tailles_pizza', label: 'Tailles Pizza' }
 ];
-const CAISSIERES = ["Fatima Zahra", "Nada", "Manager"];
+
 const NOTIF_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
 
 const EXTRAS_BASE = { "Champignons": 10, "Mozzarella": 10, "Parmesan": 15, "Cheddar": 15 };
@@ -126,9 +130,9 @@ const TACOS_EXTRAS = { "Sauce Fromagère": 10, "Supplément Cheddar": 7, "Suppl�
 
 const ACCOMPAGNEMENTS_PLATS = ["Frites", "Légumes Sautés", "Pâtes"];
 const EXCLUSIONS_BURGER = ["Sans Oignons", "Sans Tomates", "Sans Salade", "Sans Fromage", "Sans Sauce", "Sans Cornichons"];
-
-// Seules Fruits de mer et Cannibale sont exclues de la Promo Dimanche (4 saisons et 2 saisons sont incluses)
 const PIZZAS_EXCLUES_PROMO = ["fruits de mer", "cannibale"];
+
+const EXPIRATION_VIP_MS = 30 * 24 * 60 * 60 * 1000; // 30 jours en millisecondes
 
 const toJSDate = (d) => {
   if (!d) return new Date();
@@ -136,6 +140,90 @@ const toJSDate = (d) => {
   if (typeof d.seconds === 'number') return new Date(d.seconds * 1000);
   const parsed = new Date(d);
   return isNaN(parsed.getTime()) ? new Date() : parsed;
+};
+
+// ÉVALUATION DU STATUT VIP (AVEC EXPIRATION 30 JOURS & PROTECTION VIP MANUEL)
+const evaluerStatutVIP = (client) => {
+  if (!client) return { isVipActif: false, isExpired: false, label: 'Standard' };
+  if (client.isManualVIP) {
+    return { isVipActif: true, isExpired: false, label: 'VIP Fixe' };
+  }
+  const nb = Number(client.totalCommandes) || 0;
+  const lastDate = client.lastOrder ? toJSDate(client.lastOrder) : new Date(0);
+  const isExpired = (Date.now() - lastDate.getTime()) > EXPIRATION_VIP_MS;
+
+  if (isExpired && nb > 0) {
+    return { isVipActif: false, isExpired: true, label: 'Expiré (+30j)' };
+  }
+  if (nb >= 10) {
+    return { isVipActif: true, isExpired: false, label: 'VIP Actif' };
+  }
+  return { isVipActif: false, isExpired: false, label: 'Standard' };
+};
+
+// SYNTHÉTISEUR AUDIO NATIF ("LE BANG" DE CUISINE) + FALLBACK MP3
+const declencherSonNotification = (audioRef) => {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (AudioCtx) {
+      const ctx = new AudioCtx();
+      const now = ctx.currentTime;
+
+      // Note 1 : Attaque franche (880 Hz)
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'triangle';
+      osc1.frequency.setValueAtTime(880, now);
+      gain1.gain.setValueAtTime(0.45, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.35);
+
+      // Note 2 : Résonance haute "Bang" (1174.66 Hz - Ré6)
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'triangle';
+      osc2.frequency.setValueAtTime(1174.66, now + 0.14);
+      gain2.gain.setValueAtTime(0.55, now + 0.14);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.85);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.14);
+      osc2.stop(now + 0.85);
+    }
+  } catch (e) {
+    console.error("Erreur WebAudio:", e);
+  }
+
+  try {
+    if (!audioRef.current) audioRef.current = new Audio(NOTIF_SOUND);
+    audioRef.current.currentTime = 0;
+    audioRef.current.play().catch(() => {});
+  } catch (e) {}
+};
+
+// COMPRESSEUR D'IMAGE CÔTÉ CLIENT (JPEG 800PX - RESPECTE LA LIMITE 1MB FIRESTORE)
+const compresserImageProduit = (file, callback) => {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.readAsDataURL(file);
+  reader.onload = (e) => {
+    const img = document.createElement("img");
+    img.src = e.target.result;
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      const maxWidth = 800;
+      const scale = img.width > maxWidth ? maxWidth / img.width : 1;
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.75);
+      callback(dataUrl);
+    };
+  };
 };
 
 class ErrorBoundary extends React.Component {
@@ -158,7 +246,7 @@ function FoodjiSystem() {
   const [authState, setAuthState] = useState("LOADING");
   const [appMode, setAppMode] = useState('ADMIN');
 
-  // SYSTÈME DE TOASTS & MODALE DE CONFIRMATION (ZÉRO ALERT / CONFIRM / PROMPT NATIFS)
+  // SYSTÈME DE TOASTS & MODALE DE CONFIRMATION
   const [toasts, setToasts] = useState([]);
   const [confirmModal, setConfirmModal] = useState({ active: false, title: '', message: '', confirmLabel: 'Confirmer', danger: false, onConfirm: null });
 
@@ -178,6 +266,14 @@ function FoodjiSystem() {
   const [commandes, setCommandes] = useState([]);
   const [clientsDB, setClientsDB] = useState([]);
   const [promotions, setPromotions] = useState([]);
+
+  // CONFIGURATION DYNAMIQUE SANS CODE (CAISSIÈRES & CATÉGORIES)
+  const [caissieresList, setCaissieresList] = useState(CAISSIERES_DEFAUT);
+  const [categoriesList, setCategoriesList] = useState(CATEGORIES_DEFAUT);
+  const [showSystemConfig, setShowSystemConfig] = useState(false);
+  const [newCaissiereInput, setNewCaissiereInput] = useState('');
+  const [newCategoryInput, setNewCategoryInput] = useState('');
+
   const [parametres, setParametres] = useState({
     isOuvert: true,
     rushMode: 'standard',
@@ -223,7 +319,6 @@ function FoodjiSystem() {
   const [customizeItem, setCustomizeItem] = useState(null);
   const [customOptions, setCustomOptions] = useState({ garnitures: [], sauces: [], viandes: [], extras: [], cheesyCrust: false, typePate: '', accompagnements: [], exclusions: [] });
 
-  // Configurateur Pack Promo 2 Tacos (L = 55 DH / XL = 89 DH)
   const [promoTacosModal, setPromoTacosModal] = useState({
     active: false,
     taille: 'L',
@@ -241,9 +336,13 @@ function FoodjiSystem() {
   const [newClientName, setNewClientName] = useState('');
   const [newClientOrders, setNewClientOrders] = useState('');
   const [newClientRemise, setNewClientRemise] = useState('');
+  const [newClientManualVIP, setNewClientManualVIP] = useState(true);
 
-  const prevCommandesLength = useRef(null);
+  // Références pour la détection infaillible des nouvelles commandes (même avec limit 150)
+  const isInitialCmdLoad = useRef(true);
+  const knownCmdIds = useRef(new Set());
   const audioRef = useRef(null);
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -291,26 +390,49 @@ function FoodjiSystem() {
       }
     });
 
+    // Écouteur de la configuration dynamique (Caissières & Catégories modifiables sans code)
+    const unsubConfig = onSnapshot(doc(db, "parametres", "config"), (s) => {
+      if (s.exists()) {
+        const data = s.data();
+        if (Array.isArray(data.caissieres) && data.caissieres.length > 0) setCaissieresList(data.caissieres);
+        if (Array.isArray(data.categories) && data.categories.length > 0) setCategoriesList(data.categories);
+      } else {
+        setDoc(doc(db, "parametres", "config"), { caissieres: CAISSIERES_DEFAUT, categories: CATEGORIES_DEFAUT });
+      }
+    });
+
     const unsubMenu = onSnapshot(collection(db, "produits"), (snap) => setMenu(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
     const unsubPromos = onSnapshot(collection(db, "promotions"), (snap) => setPromotions(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
     const unsubClients = onSnapshot(collection(db, "clients"), (snap) => setClientsDB(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
 
+    // Détection infaillible des nouvelles commandes entrantes par ID (fonctionne même quand la limite de 150 est atteinte)
     const qCmd = query(collection(db, "commandes"), orderBy("date", "desc"), limit(150));
     const unsubCmd = onSnapshot(qCmd, (snap) => {
       try {
         const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         list.sort((a, b) => (b.date?.seconds || 0) - (a.date?.seconds || 0));
 
-        if (prevCommandesLength.current !== null && list.length > prevCommandesLength.current) {
-          if (!audioRef.current) audioRef.current = new Audio(NOTIF_SOUND);
-          audioRef.current.play().catch(() => {});
+        if (isInitialCmdLoad.current) {
+          list.forEach(c => knownCmdIds.current.add(c.id));
+          isInitialCmdLoad.current = false;
+        } else {
+          let hasNewOrder = false;
+          list.forEach(c => {
+            if (!knownCmdIds.current.has(c.id)) {
+              knownCmdIds.current.add(c.id);
+              if (c.type !== 'depense') hasNewOrder = true;
+            }
+          });
+          if (hasNewOrder) {
+            declencherSonNotification(audioRef);
+            notify("Nouvelle commande reçue !", "success");
+          }
         }
-        prevCommandesLength.current = list.length;
         setCommandes(list);
       } catch (e) { console.error("Erreur tri commandes:", e); }
     });
 
-    return () => { unsubStatus(); unsubHoraires(); unsubStocks(); unsubSession(); unsubServiceGlobal(); unsubMenu(); unsubPromos(); unsubClients(); unsubCmd(); };
+    return () => { unsubStatus(); unsubHoraires(); unsubStocks(); unsubSession(); unsubServiceGlobal(); unsubConfig(); unsubMenu(); unsubPromos(); unsubClients(); unsubCmd(); };
   }, [authState]);
 
   useEffect(() => {
@@ -323,6 +445,15 @@ function FoodjiSystem() {
     }));
   }, [posOrderType]);
 
+  // Synchronise clientActif si clientsDB est modifié en temps réel
+  useEffect(() => {
+    if (posPhone.replace(/\s+/g, '').length >= 9) {
+      const clean = posPhone.replace(/\s+/g, '');
+      const found = clientsDB.find(c => (c.tel || '').replace(/\s+/g, '') === clean);
+      setClientActif(found || null);
+    }
+  }, [clientsDB, posPhone]);
+
   const handleLogin = async (e) => {
     e.preventDefault();
     if (!email || !password) return;
@@ -333,6 +464,56 @@ function FoodjiSystem() {
       notify(`Identifiants incorrects (${err.code})`, 'error');
     }
     setLoading(false);
+  };
+
+  // GESTION DYNAMIQUE DES CAISSIÈRES ET DES CATÉGORIES (SANS CODE)
+  const ajouterCaissiereConfig = async () => {
+    const nomClean = newCaissiereInput.trim();
+    if (!nomClean) return;
+    if (caissieresList.includes(nomClean)) return notify("Cette caissière figure déjà dans la liste", "error");
+    const updated = [...caissieresList, nomClean];
+    await setDoc(doc(db, "parametres", "config"), { caissieres: updated, categories: categoriesList }, { merge: true });
+    setNewCaissiereInput('');
+    notify(`Opérateur "${nomClean}" ajouté`, "success");
+  };
+
+  const supprimerCaissiereConfig = (nomC) => {
+    if (caissieresList.length <= 1) return notify("Il doit rester au moins un opérateur", "error");
+    requestConfirm(
+      "Retirer l'opérateur",
+      `Voulez-vous retirer "${nomC}" de la liste d'ouverture de caisse ?`,
+      async () => {
+        const updated = caissieresList.filter(c => c !== nomC);
+        await setDoc(doc(db, "parametres", "config"), { caissieres: updated, categories: categoriesList }, { merge: true });
+        notify(`Opérateur "${nomC}" retiré`, "info");
+      },
+      true,
+      "Retirer"
+    );
+  };
+
+  const ajouterCategorieConfig = async () => {
+    const catClean = newCategoryInput.trim();
+    if (!catClean) return;
+    if (categoriesList.includes(catClean)) return notify("Cette catégorie existe déjà", "error");
+    const updated = [...categoriesList, catClean];
+    await setDoc(doc(db, "parametres", "config"), { caissieres: caissieresList, categories: updated }, { merge: true });
+    setNewCategoryInput('');
+    notify(`Catégorie "${catClean}" ajoutée`, "success");
+  };
+
+  const supprimerCategorieConfig = (catName) => {
+    requestConfirm(
+      "Supprimer la catégorie",
+      `Voulez-vous retirer l'onglet de catégorie "${catName}" de l'interface ?`,
+      async () => {
+        const updated = categoriesList.filter(c => c !== catName);
+        await setDoc(doc(db, "parametres", "config"), { caissieres: caissieresList, categories: updated }, { merge: true });
+        notify(`Catégorie "${catName}" supprimée`, "info");
+      },
+      true,
+      "Supprimer"
+    );
   };
 
   const toggleAvailability = async (item) => {
@@ -351,6 +532,13 @@ function FoodjiSystem() {
       true,
       "Supprimer"
     );
+  };
+
+  const handleDirectProductImageUpload = (prodId, file) => {
+    compresserImageProduit(file, async (base64Img) => {
+      await updateDoc(doc(db, "produits", prodId), { image: base64Img });
+      notify("Photo du produit enregistrée", "success");
+    });
   };
 
   const toggleStockItem = async (listName, index) => {
@@ -394,31 +582,73 @@ function FoodjiSystem() {
   const togglePromoDimancheAdmin = async () => await updateDoc(doc(db, "parametres", "status"), { promoDimancheActive: !parametres.promoDimancheActive });
   const togglePromoTacosAdmin = async () => await updateDoc(doc(db, "parametres", "status"), { promoTacosActive: !parametres.promoTacosActive });
 
+  // CRÉDIT FIDÉLITÉ INTELLIGENT : MISE À JOUR DU NOM + GESTION EXPIRATION 30 JOURS
   const crediterPointsFidelite = async (telRaw, nomClient) => {
     if (!telRaw || telRaw.trim().length < 9) return;
     const telClean = telRaw.replace(/\s+/g, '');
+    const nomPropre = (nomClient || '').trim();
+    const isValidNewName = nomPropre.length > 1 && !['non spécifié', 'client', 'inconnu', 'client web', 'client livraison'].includes(nomPropre.toLowerCase());
+
     const exist = clientsDB.find(c => (c.tel || '').replace(/\s+/g, '') === telClean);
     if (exist) {
-      await updateDoc(doc(db, "clients", exist.id), { totalCommandes: (exist.totalCommandes || 0) + 1, lastOrder: new Date() });
+      const statut = evaluerStatutVIP(exist);
+      // Si le client n'est pas un VIP Fixe manuel et n'a pas commandé depuis plus de 30 jours, son compteur repart à 1
+      const nouveauTotal = (!exist.isManualVIP && statut.isExpired) ? 1 : ((Number(exist.totalCommandes) || 0) + 1);
+      const updatedFields = {
+        totalCommandes: nouveauTotal,
+        lastOrder: new Date()
+      };
+      // Si un vrai nom est renseigné en caisse, on écrase "Non spécifié" / "Client" ou on met à jour le nom
+      if (isValidNewName) {
+        updatedFields.nom = nomPropre;
+      }
+      if (!exist.isManualVIP && statut.isExpired) {
+        updatedFields.remiseAuto = 0;
+      }
+      await updateDoc(doc(db, "clients", exist.id), updatedFields);
     } else {
-      await addDoc(collection(db, "clients"), { tel: telClean, nom: nomClient || "Client", totalCommandes: 1, remiseAuto: 0, lastOrder: new Date() });
+      await addDoc(collection(db, "clients"), {
+        tel: telClean,
+        nom: isValidNewName ? nomPropre : "Non spécifié",
+        totalCommandes: 1,
+        remiseAuto: 0,
+        isManualVIP: false,
+        lastOrder: new Date()
+      });
+    }
+  };
+
+  // RETRAIT DU POINT DE FIDÉLITÉ LORSQU'UNE COMMANDE TERMINÉE EST ANNULÉE
+  const retirerPointFideliteAnnulation = async (telRaw) => {
+    if (!telRaw || telRaw.trim().length < 9) return;
+    const telClean = telRaw.replace(/\s+/g, '');
+    const exist = clientsDB.find(c => (c.tel || '').replace(/\s+/g, '') === telClean);
+    if (exist && (Number(exist.totalCommandes) || 0) > 0) {
+      await updateDoc(doc(db, "clients", exist.id), {
+        totalCommandes: Math.max(0, (Number(exist.totalCommandes) || 0) - 1)
+      });
     }
   };
 
   const executerChangementStatus = async (cmd, st) => {
+    const etaitTermine = cmd.status === 'Terminé';
     await updateDoc(doc(db, "commandes", cmd.id), { status: st });
-    if (st === 'Terminé') await crediterPointsFidelite(cmd.tel, cmd.client || "Client Web");
+    if (st === 'Terminé' && !etaitTermine) {
+      await crediterPointsFidelite(cmd.tel, cmd.client || "Non spécifié");
+    } else if (st === 'Annulé' && etaitTermine) {
+      await retirerPointFideliteAnnulation(cmd.tel);
+    }
     notify(`Commande #${(cmd.id || '').substring(0, 4).toUpperCase()} : ${st}`, st === 'Annulé' ? 'error' : 'success');
   };
 
   const changerStatus = (cmd, st) => {
-    if (st === 'Annulé' && cmd.total > 100) {
+    if (st === 'Annulé') {
       requestConfirm(
-        "Annulation de commande importante",
-        `Confirmez-vous l'annulation de cette commande de ${cmd.total} DH (${cmd.client || 'Client'}) ?`,
-        () => executerChangementStatus(cmd, st),
+        "Annuler la commande",
+        `Confirmez-vous l'annulation de la commande de ${cmd.total} DH (${cmd.client || 'Client'}) ? Le montant sera automatiquement déduit du bilan de caisse.`,
+        () => executerChangementStatus(cmd, 'Annulé'),
         true,
-        "Annuler la commande"
+        "Confirmer l'annulation"
       );
       return;
     }
@@ -431,7 +661,7 @@ function FoodjiSystem() {
       `Confirmer la réception de ${cmd.total} DH en espèces pour la commande de ${cmd.client} ?`,
       async () => {
         await updateDoc(doc(db, "commandes", cmd.id), { status: 'Terminé', methodePaiement: 'Espèces' });
-        await crediterPointsFidelite(cmd.tel, cmd.client || "Client Livraison");
+        await crediterPointsFidelite(cmd.tel, cmd.client || "Non spécifié");
         notify(`${cmd.total} DH encaissés en caisse`, 'success');
       },
       false,
@@ -469,7 +699,7 @@ function FoodjiSystem() {
       await addDoc(collection(db, "produits"), data);
       notify("Produit ajouté à la carte", "success");
     }
-    setFormProd({ nom: '', description: '', image: '', categorie: 'Panuozzo', prixBase: '', variantes: [], excludeVIP: false });
+    setFormProd({ nom: '', description: '', image: '', categorie: categoriesList[0] || 'Burgers', prixBase: '', variantes: [], excludeVIP: false });
     setLoading(false);
   };
 
@@ -482,12 +712,13 @@ function FoodjiSystem() {
     try {
       await addDoc(collection(db, "clients"), {
         tel: telClean,
-        nom: newClientName.trim() || "Client",
+        nom: newClientName.trim() || "Non spécifié",
         totalCommandes: Number(newClientOrders) || 0,
         remiseAuto: Math.min(100, Math.max(0, Number(newClientRemise) || 0)),
+        isManualVIP: newClientManualVIP,
         lastOrder: new Date()
       });
-      setNewClientPhone(''); setNewClientName(''); setNewClientOrders(''); setNewClientRemise('');
+      setNewClientPhone(''); setNewClientName(''); setNewClientOrders(''); setNewClientRemise(''); setNewClientManualVIP(true);
       notify("Client enregistré dans le CRM", "success");
     } catch (e) { notify("Erreur lors de l'ajout du client", "error"); }
     setLoading(false);
@@ -654,8 +885,17 @@ function FoodjiSystem() {
     const valTrim = val.replace(/\s+/g, '');
     if (valTrim.length >= 9) {
       const found = clientsDB.find(c => (c.tel || '').replace(/\s+/g, '') === valTrim);
-      if (found) { setPosClientName(found.nom || ''); setClientActif(found); } else setClientActif(null);
-    } else setClientActif(null);
+      if (found) {
+        const nomActuel = (found.nom || '').trim();
+        const isGeneric = ['non spécifié', 'client', 'inconnu'].includes(nomActuel.toLowerCase());
+        setPosClientName(isGeneric ? '' : nomActuel);
+        setClientActif(found);
+      } else {
+        setClientActif(null);
+      }
+    } else {
+      setClientActif(null);
+    }
   };
 
   const triggerAddToCart = (produit, variante = null) => {
@@ -674,7 +914,6 @@ function FoodjiSystem() {
     });
   };
 
-  // Configurateur Pack Promo 2 Tacos
   const openPromoTacosBuilder = (taille) => {
     setPromoTacosModal({
       active: true,
@@ -850,7 +1089,6 @@ function FoodjiSystem() {
   let promoDuoDiscount = 0;
   let promoTacosDiscount = 0;
 
-  // 1. MOTEUR PROMO DIMANCHE (2 Pizzas M achetées = 3ème offerte, inclut 2 saisons et 4 saisons)
   if (parametres.promoDimancheActive) {
     let pizzasDimanchePrices = [];
     posCart.forEach(item => {
@@ -869,7 +1107,6 @@ function FoodjiSystem() {
     }
   }
 
-  // 2. MOTEUR PROMO TACOS AUTOMATIQUE (2 Tacos L = 55 DH / 2 Tacos XL = 89 DH)
   if (parametres.promoTacosActive) {
     let tacosLBasePrices = [];
     let tacosXLBasePrices = [];
@@ -898,7 +1135,6 @@ function FoodjiSystem() {
     }
   }
 
-  // 3. MOTEUR PROMO DUO (-50% sur le 2ème)
   if (parametres.promoDuoActive) {
     let eligiblePrices = [];
     posCart.forEach(item => {
@@ -919,7 +1155,13 @@ function FoodjiSystem() {
   }
 
   const montantRemiseGlobale = Math.round(sousTotalCart * ((Number(remiseGlobale) || 0) / 100));
-  const remiseCRM = clientActif && clientActif.remiseAuto ? Math.round(sousTotalEligibleVIP * (clientActif.remiseAuto / 100)) : 0;
+
+  // Vérification de non-expiration (30 jours) avant d'appliquer la remise CRM
+  const statutClientActif = evaluerStatutVIP(clientActif);
+  const remiseCRM = (clientActif && clientActif.remiseAuto && !statutClientActif.isExpired)
+    ? Math.round(sousTotalEligibleVIP * (clientActif.remiseAuto / 100))
+    : 0;
+
   const totalRemises = montantRemiseGlobale + remiseCRM + promoDuoDiscount + promoDimancheDiscount + promoTacosDiscount;
   const totalCart = Math.max(0, sousTotalCart + fraisLivraison - totalRemises);
 
@@ -958,6 +1200,7 @@ function FoodjiSystem() {
         date: new Date()
       };
       const docRef = await addDoc(collection(db, "commandes"), newDepense);
+      knownCmdIds.current.add(docRef.id);
       newDepense.id = docRef.id;
       newDepense.isDepense = true;
       setOrderToPrint(newDepense);
@@ -970,7 +1213,7 @@ function FoodjiSystem() {
 
   const executerValidationCommandePOS = async (methodePaiement, especeRecue = null, forceStatus = "Terminé") => {
     setLoading(true);
-    const finalClientName = posClientName.trim() ? posClientName.trim() : "Non spécifié";
+    const finalClientName = posClientName.trim() ? posClientName.trim() : (clientActif?.nom || "Non spécifié");
 
     const hasOptionFritesBoisson = posCart.some(it => it.id === 'supplement_promo_tacos_menu');
     const itemsFinal = posCart.map(it => {
@@ -1009,10 +1252,18 @@ function FoodjiSystem() {
 
     try {
       const docRef = await addDoc(collection(db, "commandes"), newCmd);
+      knownCmdIds.current.add(docRef.id);
       newCmd.id = docRef.id;
 
       if (forceStatus === 'Terminé') {
         await crediterPointsFidelite(posPhone, finalClientName);
+      } else if (posPhone.trim().length >= 9 && posClientName.trim()) {
+        // Même en départ livraison, si un nouveau prénom est tapé, on met à jour le nom du client
+        const telClean = posPhone.replace(/\s+/g, '');
+        const exist = clientsDB.find(c => (c.tel || '').replace(/\s+/g, '') === telClean);
+        if (exist && posClientName.trim() !== exist.nom) {
+          await updateDoc(doc(db, "clients", exist.id), { nom: posClientName.trim() });
+        }
       }
 
       setOrderToPrint(newCmd);
@@ -1059,7 +1310,6 @@ function FoodjiSystem() {
   const commandesWebEnAttente = commandes.filter(c => c.status === 'En attente' || c.status === 'En cours de validation').length;
   const commandesEnLivraison = commandes.filter(c => c.status === 'En Livraison');
 
-  // RENDU DES TOASTS FLOTTANTS ET DE LA MODALE DE CONFIRMATION
   const renderSystemOverlays = () => (
     <>
       <div className="no-print" style={{ position: 'fixed', top: '16px', right: '16px', zIndex: 9999, display: 'flex', flexDirection: 'column', gap: '8px', pointerEvents: 'none' }}>
@@ -1336,7 +1586,7 @@ function FoodjiSystem() {
               <h2 style={{ marginTop: 0, letterSpacing: '-0.02em', fontSize: '1.3rem' }}>Ouvrir un service</h2>
               <p style={{ color: COLORS.textLight, fontSize: '0.95rem', marginBottom: '20px' }}>Sélectionnez l'opérateur responsable du tiroir :</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {CAISSIERES.map(nom => (
+                {caissieresList.map(nom => (
                   <button key={nom} className="pos-btn" onClick={() => demanderOuvertureCaisse(nom)} style={{ padding: '15px 18px', fontSize: '1.05rem', fontWeight: '600', borderRadius: '8px', border: `1px solid ${COLORS.border}`, background: COLORS.bg, cursor: 'pointer', color: COLORS.textMain, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span>{nom}</span>
                     <Icon name="user" size={16} color={COLORS.textLight} />
@@ -1365,7 +1615,7 @@ function FoodjiSystem() {
         {renderTickets()}
         {renderSystemOverlays()}
 
-        {/* MODALE CONFIGURATEUR PACK PROMO 2 TACOS (L = 55 DH / XL = 89 DH) */}
+        {/* MODALE CONFIGURATEUR PACK PROMO 2 TACOS */}
         {promoTacosModal.active && (
           <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(9, 9, 11, 0.78)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2500 }}>
             <div className="modal-box" style={{ background: 'white', width: '92%', maxWidth: '880px', borderRadius: '16px', padding: '24px', display: 'flex', flexDirection: 'column', maxHeight: '92vh', border: `1px solid ${COLORS.border}` }}>
@@ -1392,19 +1642,11 @@ function FoodjiSystem() {
                   className="pos-btn num-tabular"
                   onClick={() => setPromoTacosModal(p => ({ ...p, avecFritesBoisson: !p.avecFritesBoisson }))}
                   style={{
-                    width: '100%',
-                    padding: '14px 18px',
-                    borderRadius: '12px',
+                    width: '100%', padding: '14px 18px', borderRadius: '12px',
                     border: `1px solid ${promoTacosModal.avecFritesBoisson ? COLORS.success : COLORS.borderStrong}`,
                     background: promoTacosModal.avecFritesBoisson ? '#ECFDF5' : COLORS.bg,
-                    color: COLORS.textMain,
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    fontWeight: '600',
-                    fontSize: '1rem',
-                    cursor: 'pointer',
-                    marginBottom: '18px'
+                    color: COLORS.textMain, display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    fontWeight: '600', fontSize: '1rem', cursor: 'pointer', marginBottom: '18px'
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -1534,7 +1776,6 @@ function FoodjiSystem() {
           </div>
         )}
 
-        {/* PAVÉ NUMÉRIQUE AVEC CHAMP MOTIF INTÉGRÉ POUR LES DÉCAISSEMENTS */}
         {numpad.active && (
           <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(9, 9, 11, 0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3000 }}>
             <div className="modal-box" style={{ background: 'white', width: '360px', borderRadius: '16px', padding: '24px', display: 'flex', flexDirection: 'column', border: `1px solid ${COLORS.border}` }}>
@@ -1724,7 +1965,7 @@ function FoodjiSystem() {
         )}
 
         <div className="no-print" style={{ display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', background: COLORS.bg }}>
-          {/* COLONNE GAUCHE : CATALOGUE POS (90% NEUTRAL / 10% ACCENT) */}
+          {/* COLONNE GAUCHE : CATALOGUE POS */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '12px', height: '100%', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'white', padding: '12px 16px', borderRadius: '12px', marginBottom: '12px', flexShrink: 0, border: `1px solid ${COLORS.border}` }}>
 
@@ -1771,14 +2012,12 @@ function FoodjiSystem() {
               </div>
             </div>
 
-            {/* BARRE DES CATÉGORIES */}
             <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '8px', marginBottom: '8px', flexShrink: 0, scrollbarWidth: 'none' }}>
-              {TOUTES_CATEGORIES.map(c => (
+              {categoriesList.map(c => (
                 <button key={c} className="pos-btn" onClick={() => setPosCategory(c)} style={{ padding: '10px 18px', fontSize: '0.95rem', fontWeight: '600', borderRadius: '8px', border: posCategory === c ? 'none' : `1px solid ${COLORS.border}`, background: posCategory === c ? COLORS.secondary : 'white', color: posCategory === c ? 'white' : COLORS.textMain, cursor: 'pointer', flexShrink: 0 }}>{c}</button>
               ))}
             </div>
 
-            {/* BANNIÈRE BENTO PROMO TACOS (SOBRE, HAUT CONTRASTE) */}
             {posCategory === 'Tacos' && (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '10px', marginBottom: '12px', flexShrink: 0 }}>
                 <button className="pos-btn num-tabular" onClick={() => openPromoTacosBuilder('L')} style={{ padding: '14px 16px', borderRadius: '12px', border: `1px solid ${COLORS.darkBorder}`, background: COLORS.secondary, color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', textAlign: 'left' }}>
@@ -1799,7 +2038,6 @@ function FoodjiSystem() {
               </div>
             )}
 
-            {/* GRILLE DES PRODUITS : ALIGNEMENT À GAUCHE + GRILLE 2x2 POUR LES TAILLES */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(185px, 1fr))', gap: '10px' }}>
               {menu.filter(p => p.categorie === posCategory && p.available !== false).map(p => (
                 <div key={p.id} className="pos-card" style={{ background: 'white', borderRadius: '12px', overflow: 'hidden', border: `1px solid ${COLORS.border}`, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
@@ -1826,7 +2064,7 @@ function FoodjiSystem() {
             </div>
           </div>
 
-          {/* COLONNE DROITE : PANIER DE COMMANDE EN DARK UI (ZINC 950 / 900) */}
+          {/* COLONNE DROITE : PANIER DE COMMANDE EN DARK UI */}
           <div style={{ width: '420px', flexShrink: 0, background: COLORS.darkBg, color: '#FAFAFA', display: 'flex', flexDirection: 'column', height: '100%', borderLeft: `1px solid ${COLORS.darkBorder}` }}>
             <div style={{ padding: '14px', background: COLORS.darkCard, color: 'white', flexShrink: 0, borderBottom: `1px solid ${COLORS.darkBorder}` }}>
               <div style={{ display: 'flex', gap: '4px', marginBottom: '12px', background: '#09090B', padding: '4px', borderRadius: '8px', border: `1px solid ${COLORS.darkBorder}` }}>
@@ -1838,8 +2076,11 @@ function FoodjiSystem() {
               <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
                 <div style={{ position: 'relative', flex: 1 }}>
                   <input type="tel" className="num-tabular" placeholder="Téléphone (06...)" value={posPhone} onChange={e => handlePhoneInput(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${COLORS.darkBorder}`, background: '#09090B', color: '#FAFAFA', fontSize: '0.95rem', boxSizing: 'border-box', fontWeight: '600' }} />
-                  {clientActif && clientActif.totalCommandes >= 10 && (
-                    <span style={{ position: 'absolute', right: '8px', top: '9px', background: COLORS.promo, color: 'white', padding: '2px 7px', borderRadius: '6px', fontWeight: '700', fontSize: '0.7rem' }}>VIP</span>
+                  {clientActif && statutClientActif.isVipActif && (
+                    <span style={{ position: 'absolute', right: '8px', top: '9px', background: COLORS.promo, color: 'white', padding: '2px 7px', borderRadius: '6px', fontWeight: '700', fontSize: '0.7rem' }}>{statutClientActif.label}</span>
+                  )}
+                  {clientActif && statutClientActif.isExpired && (
+                    <span style={{ position: 'absolute', right: '8px', top: '9px', background: '#3F3F46', color: '#F87171', padding: '2px 7px', borderRadius: '6px', fontWeight: '700', fontSize: '0.7rem' }}>Expiré +30j</span>
                   )}
                 </div>
                 <select value={posBipeur} onChange={e => setPosBipeur(e.target.value)} style={{ width: '96px', padding: '10px', borderRadius: '8px', border: `1px solid ${COLORS.darkBorder}`, background: '#09090B', color: '#FAFAFA', fontSize: '0.9rem', fontWeight: '600', cursor: 'pointer' }}>
@@ -1848,14 +2089,13 @@ function FoodjiSystem() {
                 </select>
               </div>
 
-              <input type="text" placeholder="Nom du client" value={posClientName} onChange={e => setPosClientName(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${COLORS.darkBorder}`, background: '#09090B', color: '#FAFAFA', marginBottom: posOrderType === 'livraison' ? '8px' : '0', fontSize: '0.9rem', boxSizing: 'border-box' }} />
+              <input type="text" placeholder={clientActif && ['non spécifié', 'client', 'inconnu'].includes((clientActif.nom || '').toLowerCase()) ? "Saisir le prénom pour mettre à jour la fiche..." : "Nom du client"} value={posClientName} onChange={e => setPosClientName(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${COLORS.darkBorder}`, background: '#09090B', color: '#FAFAFA', marginBottom: posOrderType === 'livraison' ? '8px' : '0', fontSize: '0.9rem', boxSizing: 'border-box' }} />
 
               {posOrderType === 'livraison' && (
                 <input type="text" placeholder="Adresse complète de livraison" value={posAddress} onChange={e => setPosAddress(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${COLORS.darkBorder}`, background: '#09090B', color: '#FAFAFA', fontSize: '0.9rem', boxSizing: 'border-box' }} />
               )}
             </div>
 
-            {/* LISTE DES ARTICLES CHOISIS (DARK UI) */}
             <div style={{ flex: 1, overflowY: 'auto', padding: '12px', background: COLORS.darkBg }}>
               {posCart.length === 0 ? (
                 <div style={{ textAlign: 'center', color: '#52525B', marginTop: '60px', fontSize: '0.95rem', padding: '24px' }}>
@@ -1901,19 +2141,10 @@ function FoodjiSystem() {
                   className="pos-btn num-tabular"
                   onClick={ajouterOptionFritesBoissonPromo}
                   style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    borderRadius: '8px',
-                    border: `1px solid ${COLORS.darkBorder}`,
-                    background: COLORS.darkCard,
-                    color: '#FBBF24',
-                    fontWeight: '600',
-                    fontSize: '0.85rem',
-                    cursor: 'pointer',
-                    marginTop: '4px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between'
+                    width: '100%', padding: '10px 12px', borderRadius: '8px',
+                    border: `1px solid ${COLORS.darkBorder}`, background: COLORS.darkCard,
+                    color: '#FBBF24', fontWeight: '600', fontSize: '0.85rem',
+                    cursor: 'pointer', marginTop: '4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
                   }}
                 >
                   <span>+ Ajouter Frites & Boisson 1L (Promo Tacos)</span>
@@ -1922,7 +2153,6 @@ function FoodjiSystem() {
               )}
             </div>
 
-            {/* PIED DE CAISSE SOMBRE */}
             <div style={{ padding: '14px', borderTop: `1px solid ${COLORS.darkBorder}`, background: COLORS.darkCard, flexShrink: 0 }}>
               <textarea placeholder="Note cuisine / instructions..." value={posNote} onChange={e => setPosNote(e.target.value)} rows={2} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: `1px solid ${COLORS.darkBorder}`, background: '#09090B', color: '#FAFAFA', marginBottom: '10px', resize: 'none', boxSizing: 'border-box', fontFamily: 'inherit', fontSize: '0.88rem' }} />
 
@@ -2010,19 +2240,25 @@ function FoodjiSystem() {
       <div className="no-print" style={{ background: COLORS.bg, minHeight: '100vh', paddingBottom: '100px', color: COLORS.textMain }}>
         <div style={{ padding: '24px', maxWidth: '1240px', margin: '0 auto' }}>
 
-          {/* BARRE SUPÉRIEURE ADMIN (HIÉRARCHIE MONOCHROME 90/10) */}
+          {/* BARRE SUPÉRIEURE ADMIN */}
           <div style={{ marginBottom: '24px', display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <h2 style={{ margin: 0, letterSpacing: '-0.03em', fontSize: '1.6rem' }}>Administration Foodji</h2>
             </div>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              <button className="pos-btn" onClick={() => setShowPromoManager(!showPromoManager)} style={{ padding: '10px 14px', borderRadius: '8px', border: `1px solid ${COLORS.border}`, background: showPromoManager ? COLORS.secondary : 'white', color: showPromoManager ? 'white' : COLORS.textMain, fontWeight: '600', fontSize: '0.9rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <button className="pos-btn" onClick={() => declencherSonNotification(audioRef)} style={{ padding: '10px 14px', borderRadius: '8px', border: `1px solid ${COLORS.border}`, background: 'white', color: COLORS.textMain, fontWeight: '600', fontSize: '0.88rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Icon name="bell" size={15} color={COLORS.primary} /> Tester le son
+              </button>
+              <button className="pos-btn" onClick={() => setShowSystemConfig(!showSystemConfig)} style={{ padding: '10px 14px', borderRadius: '8px', border: `1px solid ${COLORS.border}`, background: showSystemConfig ? COLORS.secondary : 'white', color: showSystemConfig ? 'white' : COLORS.textMain, fontWeight: '600', fontSize: '0.88rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Icon name="users" size={15} /> Équipe & Catégories
+              </button>
+              <button className="pos-btn" onClick={() => setShowPromoManager(!showPromoManager)} style={{ padding: '10px 14px', borderRadius: '8px', border: `1px solid ${COLORS.border}`, background: showPromoManager ? COLORS.secondary : 'white', color: showPromoManager ? 'white' : COLORS.textMain, fontWeight: '600', fontSize: '0.88rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <Icon name="tag" size={15} /> Offres & Deals
               </button>
-              <button className="pos-btn" onClick={() => setShowHistory(!showHistory)} style={{ padding: '10px 14px', borderRadius: '8px', border: `1px solid ${COLORS.border}`, background: showHistory ? COLORS.secondary : 'white', color: showHistory ? 'white' : COLORS.textMain, fontWeight: '600', fontSize: '0.9rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Icon name="clock" size={15} /> Historique
+              <button className="pos-btn" onClick={() => setShowHistory(!showHistory)} style={{ padding: '10px 14px', borderRadius: '8px', border: `1px solid ${COLORS.border}`, background: showHistory ? COLORS.secondary : 'white', color: showHistory ? 'white' : COLORS.textMain, fontWeight: '600', fontSize: '0.88rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Icon name="clock" size={15} /> {showHistory ? 'Masquer Historique' : 'Historique'}
               </button>
-              <button className="pos-btn" onClick={() => setShowBilanGlobal(true)} style={{ padding: '10px 14px', borderRadius: '8px', border: `1px solid ${COLORS.border}`, background: 'white', color: COLORS.textMain, fontWeight: '600', fontSize: '0.9rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <button className="pos-btn" onClick={() => setShowBilanGlobal(true)} style={{ padding: '10px 14px', borderRadius: '8px', border: `1px solid ${COLORS.border}`, background: 'white', color: COLORS.textMain, fontWeight: '600', fontSize: '0.88rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <Icon name="chart" size={15} /> Bilan (Z)
               </button>
               <button className="pos-btn" onClick={() => setAppMode('POS')} style={{ padding: '10px 16px', borderRadius: '8px', border: 'none', background: COLORS.primary, color: 'white', fontWeight: '600', fontSize: '0.9rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -2033,6 +2269,55 @@ function FoodjiSystem() {
               </button>
             </div>
           </div>
+
+          {/* PANNEAU DE CONFIGURATION DYNAMIQUE SANS CODE (CAISSIÈRES & CATÉGORIES) */}
+          {showSystemConfig && (
+            <div style={{ background: 'white', padding: '24px', borderRadius: '12px', marginBottom: '24px', border: `1px solid ${COLORS.borderStrong}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h3 style={{ margin: 0, fontSize: '1.15rem', letterSpacing: '-0.02em' }}>Configuration Système (Sans passer par le code)</h3>
+                <button className="pos-btn" onClick={() => setShowSystemConfig(false)} style={{ background: COLORS.bg, border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}>Fermer</button>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+                {/* GESTION CAISSIÈRES */}
+                <div style={{ background: COLORS.bg, padding: '16px', borderRadius: '10px', border: `1px solid ${COLORS.border}` }}>
+                  <h4 style={{ marginTop: 0, marginBottom: '10px', fontSize: '0.95rem' }}>Équipe Caisse (Opérateurs)</h4>
+                  <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                    <input type="text" placeholder="Prénom du nouvel opérateur..." value={newCaissiereInput} onChange={e => setNewCaissiereInput(e.target.value)} style={{ flex: 1, padding: '9px 12px', borderRadius: '8px', border: `1px solid ${COLORS.border}` }} />
+                    <button className="pos-btn" onClick={ajouterCaissiereConfig} style={{ padding: '9px 16px', background: COLORS.secondary, color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}>Ajouter</button>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    {caissieresList.map(nomC => (
+                      <div key={nomC} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'white', padding: '6px 12px', borderRadius: '8px', border: `1px solid ${COLORS.border}`, fontWeight: '600', fontSize: '0.88rem' }}>
+                        <span>{nomC}</span>
+                        <button onClick={() => supprimerCaissiereConfig(nomC)} style={{ border: 'none', background: 'transparent', color: COLORS.danger, cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}>
+                          <Icon name="x" size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* GESTION CATÉGORIES */}
+                <div style={{ background: COLORS.bg, padding: '16px', borderRadius: '10px', border: `1px solid ${COLORS.border}` }}>
+                  <h4 style={{ marginTop: 0, marginBottom: '10px', fontSize: '0.95rem' }}>Catégories du Menu</h4>
+                  <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                    <input type="text" placeholder="Nouvelle catégorie (ex: Desserts)..." value={newCategoryInput} onChange={e => setNewCategoryInput(e.target.value)} style={{ flex: 1, padding: '9px 12px', borderRadius: '8px', border: `1px solid ${COLORS.border}` }} />
+                    <button className="pos-btn" onClick={ajouterCategorieConfig} style={{ padding: '9px 16px', background: COLORS.secondary, color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}>Ajouter</button>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    {categoriesList.map(cat => (
+                      <div key={cat} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'white', padding: '6px 12px', borderRadius: '8px', border: `1px solid ${COLORS.border}`, fontWeight: '600', fontSize: '0.88rem' }}>
+                        <span>{cat}</span>
+                        <button onClick={() => supprimerCategorieConfig(cat)} style={{ border: 'none', background: 'transparent', color: COLORS.danger, cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}>
+                          <Icon name="x" size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {commandesEnLivraison.length > 0 && (
             <div style={{ background: 'white', padding: '20px', borderRadius: '12px', marginBottom: '28px', border: `1px solid ${COLORS.borderStrong}`, borderLeft: `4px solid ${COLORS.blue}` }}>
@@ -2052,9 +2337,14 @@ function FoodjiSystem() {
                         {cmd.total} DH
                       </div>
                     </div>
-                    <button className="pos-btn" onClick={() => encaisserRetourLivreur(cmd)} style={{ width: '100%', padding: '10px', background: COLORS.secondary, color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                      <Icon name="check" size={15} /> Encaisser les espèces
-                    </button>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button className="pos-btn" onClick={() => encaisserRetourLivreur(cmd)} style={{ flex: 2, padding: '10px', background: COLORS.secondary, color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                        <Icon name="check" size={15} /> Encaisser
+                      </button>
+                      <button className="pos-btn" onClick={() => changerStatus(cmd, 'Annulé')} style={{ flex: 1, padding: '10px', background: 'white', color: COLORS.danger, border: `1px solid ${COLORS.border}`, borderRadius: '8px', fontWeight: '600', cursor: 'pointer', fontSize: '0.85rem' }}>
+                        Annuler
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -2096,7 +2386,7 @@ function FoodjiSystem() {
             </div>
           )}
 
-          {/* BARRE DE CONTRÔLE OPÉRATIONNELLE (AVEC PASTILLES GÉOMÉTRIQUES) */}
+          {/* BARRE DE CONTRÔLE OPÉRATIONNELLE */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', marginBottom: '24px', background: 'white', padding: '14px 20px', borderRadius: '12px', alignItems: 'center', border: `1px solid ${COLORS.border}` }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ color: COLORS.textLight, fontSize: '0.9rem', fontWeight: '600' }}>Restaurant :</span>
@@ -2169,96 +2459,114 @@ function FoodjiSystem() {
             </div>
           )}
 
-          {showHistory ? (
+          {/* 1. FILE D'ATTENTE CUISINE ÉPINGLÉE EN HAUT EN PERMANENCE (JAMAIS MASQUÉE PAR L'HISTORIQUE) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+            <h3 style={{ margin: 0, letterSpacing: '-0.02em' }}>File d'attente Cuisine (Commandes Web en direct)</h3>
+            <span className="num-tabular" style={{ background: commandesWebEnAttente > 0 ? COLORS.danger : COLORS.secondary, color: 'white', padding: '2px 8px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '600' }}>{commandesWebEnAttente}</span>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '14px', marginBottom: '32px' }}>
+            {commandesWebEnAttente === 0 ? (
+              <div style={{ gridColumn: '1 / -1', background: 'white', padding: '20px', borderRadius: '12px', border: `1px solid ${COLORS.border}`, color: COLORS.textLight, fontSize: '0.92rem', textAlign: 'center' }}>
+                Aucune commande Web en attente pour le moment.
+              </div>
+            ) : (
+              commandes.filter(c => c.status === 'En attente' || c.status === 'En cours de validation').map(cmd => (
+                <div key={cmd.id} style={{ background: 'white', borderRadius: '12px', padding: '16px', border: `1px solid ${COLORS.border}`, borderLeft: `4px solid ${COLORS.pending}` }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', borderBottom: `1px solid ${COLORS.border}`, paddingBottom: '10px', marginBottom: '10px' }}>
+                    <div>
+                      <strong style={{ fontSize: '1.05rem' }}>{cmd.client || 'Client'}</strong>
+                      <div className="num-tabular" style={{ color: COLORS.textMuted, fontSize: '0.88rem', marginTop: '2px' }}>{cmd.tel || 'Sans téléphone'}</div>
+                      <div style={{ fontSize: '0.82rem', color: COLORS.textLight, marginTop: '2px' }}>{cmd.type === 'livraison' ? `Livraison : ${cmd.adresse}` : 'À emporter / Sur place'}</div>
+                    </div>
+                    <div className="num-tabular" style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: COLORS.textMain }}>{cmd.total} DH</div>
+                      <div style={{ fontSize: '0.78rem', color: COLORS.textLight }}>{cmd.status}</div>
+                    </div>
+                  </div>
+
+                  {cmd.commentaire && <div style={{ background: COLORS.bg, color: COLORS.textMain, padding: '8px 10px', borderRadius: '8px', fontSize: '0.85rem', fontWeight: '600', marginBottom: '10px', border: `1px solid ${COLORS.border}` }}>Note : {cmd.commentaire}</div>}
+
+                  <ul style={{ listStyle: 'none', padding: 0, marginBottom: '14px' }}>
+                    {cmd.items?.map((it, i) => {
+                      const details = getDetaisImpression(it);
+                      return (
+                        <li key={i} style={{ padding: '6px 0', borderBottom: `1px solid ${COLORS.border}`, fontSize: '0.9rem' }}>
+                          <div className="num-tabular" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <strong><span style={{ color: COLORS.primary }}>{it.qte > 1 ? `${it.qte}x ` : ''}</span>{it.nom}</strong>
+                            <span>{it.prixFinal * (it.qte || 1)} DH</span>
+                          </div>
+                          {details.length > 0 && <div style={{ color: COLORS.textLight, fontSize: '0.8rem', marginTop: '2px' }}>{details.join(' / ')}</div>}
+                        </li>
+                      );
+                    })}
+                  </ul>
+
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <button className="pos-btn" onClick={() => imprimerCommandeExistante(cmd)} style={{ width: '100%', padding: '9px', background: COLORS.bg, color: COLORS.textMain, border: `1px solid ${COLORS.border}`, borderRadius: '8px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                      <Icon name="printer" size={14} /> Imprimer le bon
+                    </button>
+                    <button className="pos-btn" onClick={() => changerStatus(cmd, cmd.type === 'livraison' ? 'En Livraison' : 'Terminé')} style={{ flex: 2, padding: '9px', background: COLORS.secondary, color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer' }}>
+                      {cmd.type === 'livraison' ? 'Expédier en livraison' : 'Marquer comme servi'}
+                    </button>
+                    <button className="pos-btn" onClick={() => changerStatus(cmd, 'Annulé')} style={{ flex: 1, padding: '9px', background: 'white', color: COLORS.danger, border: `1px solid ${COLORS.border}`, borderRadius: '8px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer' }}>Annuler</button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* 2. HISTORIQUE DES 50 DERNIÈRES COMMANDES (AVEC BOUTON ANNULER À CÔTÉ DE RÉ-IMPRIMER) */}
+          {showHistory && (
             <div style={{ background: 'white', padding: '24px', borderRadius: '12px', marginBottom: '36px', border: `1px solid ${COLORS.border}` }}>
-              <h3 style={{ marginTop: 0, color: COLORS.textMain, letterSpacing: '-0.02em' }}>50 Dernières Commandes</h3>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h3 style={{ margin: 0, color: COLORS.textMain, letterSpacing: '-0.02em' }}>Historique des 50 Dernières Commandes</h3>
+                <button className="pos-btn" onClick={() => setShowHistory(false)} style={{ background: COLORS.bg, border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}>Fermer l'historique</button>
+              </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '14px' }}>
                 {commandes.filter(c => c.status === 'Terminé' || c.status === 'En Livraison' || c.status === 'Annulé').slice(0, 50).map(cmd => (
-                  <div key={cmd.id} style={{ border: `1px solid ${COLORS.border}`, borderRadius: '12px', padding: '16px', opacity: cmd.status === 'Annulé' ? 0.6 : 1, background: COLORS.bg }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `1px solid ${COLORS.border}`, paddingBottom: '10px', marginBottom: '10px' }}>
-                      <div>
-                        <strong>{cmd.client}</strong>
-                        <div style={{ fontSize: '0.8rem', color: COLORS.textLight }}>{toJSDate(cmd.date).toLocaleString()}</div>
-                        {cmd.caissiere && <div style={{ fontSize: '0.8rem', color: COLORS.textMuted, fontWeight: '500' }}>Opérateur : {cmd.caissiere}</div>}
+                  <div key={cmd.id} style={{ border: `1px solid ${COLORS.border}`, borderRadius: '12px', padding: '16px', opacity: cmd.status === 'Annulé' ? 0.6 : 1, background: COLORS.bg, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `1px solid ${COLORS.border}`, paddingBottom: '10px', marginBottom: '10px' }}>
+                        <div>
+                          <strong style={{ textDecoration: cmd.status === 'Annulé' ? 'line-through' : 'none' }}>{cmd.client}</strong>
+                          <div style={{ fontSize: '0.8rem', color: COLORS.textLight }}>{toJSDate(cmd.date).toLocaleString()}</div>
+                          {cmd.caissiere && <div style={{ fontSize: '0.8rem', color: COLORS.textMuted, fontWeight: '500' }}>Opérateur : {cmd.caissiere}</div>}
+                        </div>
+                        <div className="num-tabular" style={{ textAlign: 'right' }}>
+                          <strong style={{ color: COLORS.textMain, fontSize: '1.05rem', textDecoration: cmd.status === 'Annulé' ? 'line-through' : 'none' }}>{cmd.total} DH</strong>
+                          <div style={{ fontSize: '0.8rem', fontWeight: '600', color: cmd.status === 'Annulé' ? COLORS.danger : COLORS.success }}>{cmd.status}</div>
+                        </div>
                       </div>
-                      <div className="num-tabular" style={{ textAlign: 'right' }}>
-                        <strong style={{ color: COLORS.textMain, fontSize: '1.05rem' }}>{cmd.total} DH</strong>
-                        <div style={{ fontSize: '0.8rem', fontWeight: '600', color: cmd.status === 'Annulé' ? COLORS.danger : COLORS.success }}>{cmd.status}</div>
-                      </div>
+                      <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: '0.88rem' }}>
+                        {cmd.items?.map((it, i) => {
+                          const details = getDetaisImpression(it);
+                          return (
+                            <li key={i} style={{ borderBottom: `1px solid ${COLORS.border}`, padding: '5px 0' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: '500' }}>
+                                <span>{it.qte > 1 ? `${it.qte}x ` : ''}{it.nom}</span>
+                              </div>
+                              {details.length > 0 && <div style={{ color: COLORS.textLight, fontSize: '0.8rem', marginTop: '2px' }}>{details.join(' / ')}</div>}
+                            </li>
+                          );
+                        })}
+                      </ul>
                     </div>
-                    <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: '0.88rem' }}>
-                      {cmd.items?.map((it, i) => {
-                        const details = getDetaisImpression(it);
-                        return (
-                          <li key={i} style={{ borderBottom: `1px solid ${COLORS.border}`, padding: '5px 0' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: '500' }}>
-                              <span>{it.qte > 1 ? `${it.qte}x ` : ''}{it.nom}</span>
-                            </div>
-                            {details.length > 0 && <div style={{ color: COLORS.textLight, fontSize: '0.8rem', marginTop: '2px' }}>{details.join(' / ')}</div>}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                    <div style={{ marginTop: '12px' }}>
-                      <button className="pos-btn" onClick={() => imprimerCommandeExistante(cmd)} style={{ width: '100%', padding: '9px', background: 'white', color: COLORS.textMain, border: `1px solid ${COLORS.border}`, borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                        <Icon name="printer" size={14} /> Ré-imprimer le ticket
+
+                    <div style={{ marginTop: '14px', display: 'flex', gap: '8px' }}>
+                      <button className="pos-btn" onClick={() => imprimerCommandeExistante(cmd)} style={{ flex: 1, padding: '9px', background: 'white', color: COLORS.textMain, border: `1px solid ${COLORS.border}`, borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '0.84rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                        <Icon name="printer" size={14} /> Ré-imprimer
                       </button>
+                      {cmd.status !== 'Annulé' && (
+                        <button className="pos-btn" onClick={() => changerStatus(cmd, 'Annulé')} style={{ padding: '9px 12px', background: 'white', color: COLORS.danger, border: `1px solid ${COLORS.border}`, borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '0.84rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                          <Icon name="ban" size={14} /> Annuler
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
               </div>
             </div>
-          ) : (
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
-                <h3 style={{ margin: 0, letterSpacing: '-0.02em' }}>File d'attente Cuisine</h3>
-                <span className="num-tabular" style={{ background: COLORS.secondary, color: 'white', padding: '2px 8px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '600' }}>{commandesWebEnAttente}</span>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '14px', marginBottom: '36px' }}>
-                {commandes.filter(c => c.status === 'En attente' || c.status === 'En cours de validation').map(cmd => (
-                  <div key={cmd.id} style={{ background: 'white', borderRadius: '12px', padding: '16px', border: `1px solid ${COLORS.border}`, borderLeft: `4px solid ${COLORS.pending}` }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', borderBottom: `1px solid ${COLORS.border}`, paddingBottom: '10px', marginBottom: '10px' }}>
-                      <div>
-                        <strong style={{ fontSize: '1.05rem' }}>{cmd.client || 'Client'}</strong>
-                        <div className="num-tabular" style={{ color: COLORS.textMuted, fontSize: '0.88rem', marginTop: '2px' }}>{cmd.tel || 'Sans téléphone'}</div>
-                        <div style={{ fontSize: '0.82rem', color: COLORS.textLight, marginTop: '2px' }}>{cmd.type === 'livraison' ? `Livraison : ${cmd.adresse}` : 'À emporter / Sur place'}</div>
-                      </div>
-                      <div className="num-tabular" style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: COLORS.textMain }}>{cmd.total} DH</div>
-                        <div style={{ fontSize: '0.78rem', color: COLORS.textLight }}>{cmd.status}</div>
-                      </div>
-                    </div>
-
-                    {cmd.commentaire && <div style={{ background: COLORS.bg, color: COLORS.textMain, padding: '8px 10px', borderRadius: '8px', fontSize: '0.85rem', fontWeight: '600', marginBottom: '10px', border: `1px solid ${COLORS.border}` }}>Note : {cmd.commentaire}</div>}
-
-                    <ul style={{ listStyle: 'none', padding: 0, marginBottom: '14px' }}>
-                      {cmd.items?.map((it, i) => {
-                        const details = getDetaisImpression(it);
-                        return (
-                          <li key={i} style={{ padding: '6px 0', borderBottom: `1px solid ${COLORS.border}`, fontSize: '0.9rem' }}>
-                            <div className="num-tabular" style={{ display: 'flex', justifyContent: 'space-between' }}>
-                              <strong><span style={{ color: COLORS.primary }}>{it.qte > 1 ? `${it.qte}x ` : ''}</span>{it.nom}</strong>
-                              <span>{it.prixFinal * (it.qte || 1)} DH</span>
-                            </div>
-                            {details.length > 0 && <div style={{ color: COLORS.textLight, fontSize: '0.8rem', marginTop: '2px' }}>{details.join(' / ')}</div>}
-                          </li>
-                        );
-                      })}
-                    </ul>
-
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                      <button className="pos-btn" onClick={() => imprimerCommandeExistante(cmd)} style={{ width: '100%', padding: '9px', background: COLORS.bg, color: COLORS.textMain, border: `1px solid ${COLORS.border}`, borderRadius: '8px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                        <Icon name="printer" size={14} /> Imprimer le bon
-                      </button>
-                      <button className="pos-btn" onClick={() => changerStatus(cmd, cmd.type === 'livraison' ? 'En Livraison' : 'Terminé')} style={{ flex: 2, padding: '9px', background: COLORS.secondary, color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer' }}>
-                        {cmd.type === 'livraison' ? 'Expédier en livraison' : 'Marquer comme servi'}
-                      </button>
-                      <button className="pos-btn" onClick={() => changerStatus(cmd, 'Annulé')} style={{ flex: 1, padding: '9px', background: 'white', color: COLORS.danger, border: `1px solid ${COLORS.border}`, borderRadius: '8px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer' }}>Annuler</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
           )}
 
           {/* GESTION DES STOCKS */}
@@ -2286,30 +2594,42 @@ function FoodjiSystem() {
             </div>
           </div>
 
-          {/* GESTION DE LA CARTE (PRODUITS) */}
+          {/* GESTION DE LA CARTE (PRODUITS + UPLOAD PHOTO DIRECT SANS CODE) */}
           <div style={{ background: 'white', padding: '24px', borderRadius: '12px', marginBottom: '32px', border: `1px solid ${COLORS.border}` }}>
-            <h3 style={{ margin: '0 0 16px 0', letterSpacing: '-0.02em', fontSize: '1.15rem' }}>Catalogue des Produits</h3>
+            <h3 style={{ margin: '0 0 16px 0', letterSpacing: '-0.02em', fontSize: '1.15rem' }}>Catalogue des Produits & Photos</h3>
             <div style={{ overflowX: 'auto', display: 'flex', gap: '6px', paddingBottom: '12px', marginBottom: '12px' }}>
-              {TOUTES_CATEGORIES.map(c => (
+              {categoriesList.map(c => (
                 <button key={c} className="pos-btn" onClick={() => setAdminCategorie(c)} style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: adminCategorie === c ? COLORS.secondary : COLORS.bg, color: adminCategorie === c ? 'white' : COLORS.textMain, cursor: 'pointer', fontWeight: '600', fontSize: '0.9rem', flexShrink: 0 }}>{c}</button>
               ))}
             </div>
 
             {menu.filter(p => p.categorie === adminCategorie).map(p => (
-              <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', borderBottom: `1px solid ${COLORS.border}`, background: p.available === false ? COLORS.bg : 'white' }}>
+              <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', borderBottom: `1px solid ${COLORS.border}`, background: p.available === false ? COLORS.bg : 'white', gap: '12px', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  {/* Vignette cliquable pour changer l'image directement */}
+                  <label title="Cliquer pour ajouter ou changer la photo" style={{ width: '44px', height: '44px', borderRadius: '8px', background: COLORS.bg, border: `1px solid ${COLORS.border}`, overflow: 'hidden', position: 'relative', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    {p.image ? (
+                      <img src={p.image} alt={p.nom} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <Icon name="image" size={18} color={COLORS.textLight} />
+                    )}
+                    <input type="file" accept="image/*" onChange={(e) => handleDirectProductImageUpload(p.id, e.target.files[0])} style={{ display: 'none' }} />
+                  </label>
+
                   <button className="pos-btn" onClick={() => toggleAvailability(p)} style={{ padding: '6px 12px', border: `1px solid ${COLORS.border}`, borderRadius: '8px', background: 'white', color: COLORS.textMain, fontWeight: '600', fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <StatusDot active={p.available !== false} colorInactive={COLORS.danger} />
                     <span>{p.available !== false ? 'En ligne' : 'Rupture'}</span>
                   </button>
+
                   <div className="num-tabular" style={{ fontWeight: '600', fontSize: '0.98rem', textDecoration: p.available === false ? 'line-through' : 'none', color: p.available === false ? COLORS.textLight : COLORS.textMain }}>
                     {p.nom}
                     {p.excludeVIP && <span style={{ fontSize: '0.75rem', color: COLORS.danger, marginLeft: '8px', fontWeight: '600' }}>[Hors VIP]</span>}
                     <span style={{ color: COLORS.textLight, fontWeight: 'normal', marginLeft: '8px' }}>— {p.variantes?.length > 0 ? 'Multi-tailles' : `${p.prix} DH`}</span>
                   </div>
                 </div>
+
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <button className="pos-btn" onClick={() => { setEditId(p.id); setFormProd({ nom: p.nom, description: p.description || '', categorie: p.categorie, prixBase: p.prix || '', variantes: p.variantes || [], excludeVIP: p.excludeVIP || false }); window.scrollTo({ top: 0, behavior: 'smooth' }); }} style={{ border: `1px solid ${COLORS.border}`, background: 'white', padding: '7px 12px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <button className="pos-btn" onClick={() => { setEditId(p.id); setFormProd({ nom: p.nom, description: p.description || '', image: p.image || '', categorie: p.categorie, prixBase: p.prix || '', variantes: p.variantes || [], excludeVIP: p.excludeVIP || false }); window.scrollTo({ top: 0, behavior: 'smooth' }); }} style={{ border: `1px solid ${COLORS.border}`, background: 'white', padding: '7px 12px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <Icon name="edit" size={14} /> Modifier
                   </button>
                   <button className="pos-btn" onClick={() => supprimerProduit(p.id, p.nom)} style={{ color: COLORS.danger, border: `1px solid ${COLORS.border}`, background: 'white', padding: '7px 10px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
@@ -2322,14 +2642,23 @@ function FoodjiSystem() {
             <div style={{ marginTop: '24px', background: COLORS.bg, padding: '20px', borderRadius: '12px', border: `1px solid ${COLORS.border}` }}>
               <h4 style={{ marginTop: 0, fontSize: '1rem' }}>{editId ? 'Modifier le produit sélectionné' : 'Ajouter un nouveau produit'}</h4>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <input placeholder="Nom du produit" value={formProd.nom} onChange={e => setFormProd({ ...formProd, nom: e.target.value })} style={{ padding: '10px 12px', borderRadius: '8px', border: `1px solid ${COLORS.border}`, fontSize: '0.95rem' }} />
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                  <input placeholder="Nom du produit" value={formProd.nom} onChange={e => setFormProd({ ...formProd, nom: e.target.value })} style={{ flex: 2, minWidth: '200px', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${COLORS.border}`, fontSize: '0.95rem' }} />
+                  <input placeholder="Description / ingrédients (affiché sur l'App Client)" value={formProd.description} onChange={e => setFormProd({ ...formProd, description: e.target.value })} style={{ flex: 3, minWidth: '240px', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${COLORS.border}`, fontSize: '0.95rem' }} />
+                </div>
 
                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-                  <select value={formProd.categorie} onChange={handleCategoryChange} style={{ flex: 1, padding: '10px 12px', borderRadius: '8px', border: `1px solid ${COLORS.border}`, fontSize: '0.95rem', background: 'white' }}>
-                    {TOUTES_CATEGORIES.map(cat => <option key={cat}>{cat}</option>)}
+                  <select value={formProd.categorie} onChange={handleCategoryChange} style={{ flex: 1, minWidth: '180px', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${COLORS.border}`, fontSize: '0.95rem', background: 'white' }}>
+                    {categoriesList.map(cat => <option key={cat}>{cat}</option>)}
                   </select>
 
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '0.9rem', color: COLORS.textMain, padding: '9px 14px', background: 'white', borderRadius: '8px', border: `1px solid ${COLORS.border}` }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '0.88rem', color: COLORS.textMain, padding: '9px 14px', background: 'white', borderRadius: '8px', border: `1px solid ${COLORS.border}` }}>
+                    <Icon name="image" size={15} color={COLORS.primary} />
+                    <span>{formProd.image ? 'Photo chargée (Changer)' : 'Uploader une photo'}</span>
+                    <input type="file" accept="image/*" onChange={(e) => compresserImageProduit(e.target.files[0], (b64) => setFormProd(prev => ({ ...prev, image: b64 })))} style={{ display: 'none' }} />
+                  </label>
+
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '0.88rem', color: COLORS.textMain, padding: '9px 14px', background: 'white', borderRadius: '8px', border: `1px solid ${COLORS.border}` }}>
                     <input type="checkbox" checked={formProd.excludeVIP} onChange={e => setFormProd({ ...formProd, excludeVIP: e.target.checked })} style={{ width: '16px', height: '16px' }} />
                     Exclure des remises fidélité VIP
                   </label>
@@ -2361,70 +2690,109 @@ function FoodjiSystem() {
 
                 <div style={{ display: 'flex', gap: '10px' }}>
                   <button className="pos-btn" onClick={saveProduit} style={{ flex: 1, padding: '12px', background: COLORS.secondary, color: 'white', border: 'none', borderRadius: '8px', fontSize: '0.95rem', fontWeight: '600', cursor: 'pointer' }}>{editId ? 'Enregistrer les modifications' : 'Ajouter à la carte'}</button>
-                  {editId && <button className="pos-btn" onClick={() => { setEditId(null); setFormProd({ nom: '', description: '', categorie: 'Panuozzo', prixBase: '', variantes: [], excludeVIP: false }); }} style={{ padding: '12px 20px', background: 'white', color: COLORS.textMain, border: `1px solid ${COLORS.border}`, borderRadius: '8px', fontSize: '0.95rem', fontWeight: '600', cursor: 'pointer' }}>Annuler</button>}
+                  {editId && <button className="pos-btn" onClick={() => { setEditId(null); setFormProd({ nom: '', description: '', image: '', categorie: categoriesList[0] || 'Panuozzo', prixBase: '', variantes: [], excludeVIP: false }); }} style={{ padding: '12px 20px', background: 'white', color: COLORS.textMain, border: `1px solid ${COLORS.border}`, borderRadius: '8px', fontSize: '0.95rem', fontWeight: '600', cursor: 'pointer' }}>Annuler</button>}
                 </div>
               </div>
             </div>
           </div>
 
-          {/* CRM CLIENTS */}
+          {/* CRM CLIENTS (AVEC ÉDITION DU NOM EN DIRECT + STATUT VIP FIXE vs AUTO 30 JOURS) */}
           <div style={{ background: 'white', padding: '24px', borderRadius: '12px', marginBottom: '40px', border: `1px solid ${COLORS.border}` }}>
-            <h3 style={{ marginTop: 0, color: COLORS.textMain, fontSize: '1.15rem', letterSpacing: '-0.02em' }}>Base Clients & Fidélité (CRM)</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+              <h3 style={{ margin: 0, color: COLORS.textMain, fontSize: '1.15rem', letterSpacing: '-0.02em' }}>Base Clients & Fidélité (CRM)</h3>
+              <span style={{ fontSize: '0.82rem', color: COLORS.textLight }}>Expiration automatique après 30 jours sans commande (sauf VIP Fixe protégé)</span>
+            </div>
 
             <div style={{ background: COLORS.bg, padding: '16px', borderRadius: '8px', marginBottom: '20px', border: `1px solid ${COLORS.border}` }}>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
                 <input type="tel" className="num-tabular" placeholder="Téléphone (06...)" value={newClientPhone} onChange={e => setNewClientPhone(e.target.value)} style={{ flex: 1, minWidth: '140px', padding: '10px', borderRadius: '8px', border: `1px solid ${COLORS.border}` }} />
                 <input type="text" placeholder="Nom complet" value={newClientName} onChange={e => setNewClientName(e.target.value)} style={{ flex: 2, minWidth: '180px', padding: '10px', borderRadius: '8px', border: `1px solid ${COLORS.border}` }} />
-                <input type="number" className="num-tabular" placeholder="Nb commandes" value={newClientOrders} onChange={e => setNewClientOrders(e.target.value)} style={{ width: '130px', padding: '10px', borderRadius: '8px', border: `1px solid ${COLORS.border}` }} />
-                <input type="number" className="num-tabular" placeholder="Remise (%)" value={newClientRemise} onChange={e => setNewClientRemise(e.target.value)} style={{ width: '120px', padding: '10px', borderRadius: '8px', border: `1px solid ${COLORS.border}` }} />
+                <input type="number" className="num-tabular" placeholder="Nb commandes" value={newClientOrders} onChange={e => setNewClientOrders(e.target.value)} style={{ width: '120px', padding: '10px', borderRadius: '8px', border: `1px solid ${COLORS.border}` }} />
+                <input type="number" className="num-tabular" placeholder="Remise (%)" value={newClientRemise} onChange={e => setNewClientRemise(e.target.value)} style={{ width: '110px', padding: '10px', borderRadius: '8px', border: `1px solid ${COLORS.border}` }} />
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'white', padding: '9px 12px', borderRadius: '8px', border: `1px solid ${COLORS.border}`, fontSize: '0.85rem', fontWeight: '600', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={newClientManualVIP} onChange={e => setNewClientManualVIP(e.target.checked)} />
+                  VIP Fixe (Sans expiration)
+                </label>
                 <button className="pos-btn" onClick={ajouterClientManuel} disabled={loading} style={{ padding: '10px 18px', background: COLORS.secondary, color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}>Ajouter</button>
               </div>
             </div>
 
-            <div style={{ maxHeight: '320px', overflowY: 'auto', border: `1px solid ${COLORS.border}`, borderRadius: '8px' }}>
-              <table className="num-tabular" style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', fontSize: '0.92rem' }}>
+            <div style={{ maxHeight: '380px', overflowY: 'auto', border: `1px solid ${COLORS.border}`, borderRadius: '8px' }}>
+              <table className="num-tabular" style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
                 <thead style={{ position: 'sticky', top: 0, background: COLORS.bg, zIndex: 10 }}>
                   <tr style={{ borderBottom: `1px solid ${COLORS.border}` }}>
                     <th style={{ padding: '10px 12px' }}>Téléphone</th>
-                    <th style={{ padding: '10px 12px' }}>Client</th>
+                    <th style={{ padding: '10px 12px' }}>Nom (Modifiable)</th>
+                    <th style={{ padding: '10px 12px' }}>Statut VIP</th>
                     <th style={{ padding: '10px 12px' }}>Commandes</th>
-                    <th style={{ padding: '10px 12px' }}>Remise Auto (%)</th>
-                    <th style={{ padding: '10px 12px', textAlign: 'right' }}>Action</th>
+                    <th style={{ padding: '10px 12px' }}>Remise (%)</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'right' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {[...clientsDB].sort((a, b) => (b.totalCommandes || 0) - (a.totalCommandes || 0)).map(client => (
-                    <tr key={client.id} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
-                      <td style={{ padding: '10px 12px', fontWeight: '600' }}>{client.tel}</td>
-                      <td style={{ padding: '10px 12px' }}>
-                        {client.nom}
-                        {client.totalCommandes >= 10 && <span style={{ background: COLORS.secondary, color: 'white', padding: '2px 7px', borderRadius: '6px', fontSize: '0.7rem', marginLeft: '8px', fontWeight: '700' }}>VIP</span>}
-                      </td>
-                      <td style={{ padding: '10px 12px', fontWeight: '600' }}>{client.totalCommandes || 0}</td>
-                      <td style={{ padding: '10px 12px' }}>
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          value={client.remiseAuto || 0}
-                          onChange={(e) => {
-                            const val = Math.min(100, Math.max(0, Number(e.target.value) || 0));
-                            updateDoc(doc(db, "clients", client.id), { remiseAuto: val });
-                          }}
-                          style={{ width: '60px', padding: '6px', borderRadius: '6px', border: `1px solid ${COLORS.border}`, fontWeight: '600' }}
-                        /> %
-                      </td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                        <button
-                          className="pos-btn"
-                          onClick={() => requestConfirm("Supprimer le client", `Retirer ${client.nom} (${client.tel}) de la base CRM ?`, () => deleteDoc(doc(db, "clients", client.id)), true, "Supprimer")}
-                          style={{ background: 'white', color: COLORS.danger, border: `1px solid ${COLORS.border}`, padding: '6px 10px', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '0.82rem' }}
-                        >
-                          Supprimer
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {[...clientsDB].sort((a, b) => (b.totalCommandes || 0) - (a.totalCommandes || 0)).map(client => {
+                    const stVip = evaluerStatutVIP(client);
+                    return (
+                      <tr key={client.id} style={{ borderBottom: `1px solid ${COLORS.border}`, opacity: stVip.isExpired ? 0.65 : 1 }}>
+                        <td style={{ padding: '10px 12px', fontWeight: '600' }}>{client.tel}</td>
+                        <td style={{ padding: '10px 12px' }}>
+                          <input
+                            type="text"
+                            defaultValue={client.nom || ''}
+                            placeholder="Saisir un nom..."
+                            onBlur={(e) => {
+                              const newVal = e.target.value.trim();
+                              if (newVal && newVal !== client.nom) {
+                                updateDoc(doc(db, "clients", client.id), { nom: newVal });
+                                notify(`Nom mis à jour : ${newVal}`, "success");
+                              }
+                            }}
+                            style={{ padding: '6px 10px', borderRadius: '6px', border: `1px solid ${COLORS.border}`, fontWeight: '600', width: '170px', fontSize: '0.88rem' }}
+                          />
+                        </td>
+                        <td style={{ padding: '10px 12px' }}>
+                          <button
+                            className="pos-btn"
+                            title="Cliquer pour activer/désactiver la protection VIP Fixe (sans expiration 30j)"
+                            onClick={() => updateDoc(doc(db, "clients", client.id), { isManualVIP: !client.isManualVIP })}
+                            style={{
+                              padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontWeight: '700', fontSize: '0.75rem',
+                              border: `1px solid ${client.isManualVIP ? COLORS.secondary : COLORS.border}`,
+                              background: client.isManualVIP ? COLORS.secondary : (stVip.isVipActif ? '#ECFDF5' : (stVip.isExpired ? '#FEF2F2' : 'white')),
+                              color: client.isManualVIP ? 'white' : (stVip.isVipActif ? COLORS.success : (stVip.isExpired ? COLORS.danger : COLORS.textLight)),
+                              display: 'inline-flex', alignItems: 'center', gap: '5px'
+                            }}
+                          >
+                            {client.isManualVIP && <Icon name="shield" size={12} color="white" />}
+                            <span>{stVip.label}</span>
+                          </button>
+                        </td>
+                        <td style={{ padding: '10px 12px', fontWeight: '600' }}>{client.totalCommandes || 0}</td>
+                        <td style={{ padding: '10px 12px' }}>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={client.remiseAuto || 0}
+                            onChange={(e) => {
+                              const val = Math.min(100, Math.max(0, Number(e.target.value) || 0));
+                              updateDoc(doc(db, "clients", client.id), { remiseAuto: val });
+                            }}
+                            style={{ width: '56px', padding: '6px', borderRadius: '6px', border: `1px solid ${COLORS.border}`, fontWeight: '600' }}
+                          /> %
+                        </td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                          <button
+                            className="pos-btn"
+                            onClick={() => requestConfirm("Supprimer le client", `Retirer ${client.nom} (${client.tel}) de la base CRM ?`, () => deleteDoc(doc(db, "clients", client.id)), true, "Supprimer")}
+                            style={{ background: 'white', color: COLORS.danger, border: `1px solid ${COLORS.border}`, padding: '6px 10px', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '0.82rem' }}
+                          >
+                            Supprimer
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
